@@ -1,0 +1,43 @@
+# dsh-password-gate bundle patch.
+#
+# Mounted as a bundle layer (package.json "dsh.bundle"), applied after
+# dsh-base / dsh-web-app. Two effects:
+#
+#   1. Move the real webserver to a loopback-only internal port. This is the
+#      security-critical half of the design: with host 127.0.0.1 the internal
+#      port is unreachable from other machines, so the login gateway (which
+#      owns the external port) is the only way in.
+#   2. Insert the login gateway plugin itself.
+#
+# Ports follow `dsh web --port <N>` (the web-startup service, the same
+# mechanism the web-app bundle uses): the gateway serves the URL port N
+# (default 3080) and the internal webserver sits at N+1 (default 3081).
+# `--host 0.0.0.0` is refused by dsh itself; the gateway's listenHost
+# (default 0.0.0.0) is what exposes the service. Do not use `--port 0`
+# (OS-assigned) — the gateway needs a fixed internal port to forward to.
+
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: !!js (ctx.webStartup.port ?? 3080) + 1
+
+# web-app's own URL line prints the INTERNAL webserver address
+# (http://127.0.0.1:<internal port>), which is loopback-only by design and
+# would mislead; the login gateway prints the real URL instead. The whole
+# config is restated because a patch replaces it: surfaceContext stays on,
+# and --trusted-host must keep flowing through ctx.webStartup.trustedHosts.
+- id: web-runtime
+  config:
+    printUrl: false
+    surfaceContext: true
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+
+- insert:
+    - id: dsh-password-gate
+      name: dsh-password-gate
+      inject: [webStartup]
+      config:
+        listenHost: 0.0.0.0
+        listenPort: !!js ctx.webStartup.port ?? 3080
+        upstreamHost: 127.0.0.1
+        upstreamPort: !!js (ctx.webStartup.port ?? 3080) + 1

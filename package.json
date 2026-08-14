@@ -1,0 +1,37 @@
+{
+  "name": "dsh-password-gate",
+  "version": "0.1.0",
+  "description": "Password login gateway plugin for dsh web: first-open password setup, login, and password change with real request interception.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "cordis.patch.yml",
+    "scripts/uninstall.mjs",
+    "scripts/reset.mjs",
+    "README.md"
+  ],
+  "bin": {
+    "dsh-password-gate-uninstall": "./scripts/uninstall.mjs",
+    "dsh-password-gate-reset": "./scripts/reset.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

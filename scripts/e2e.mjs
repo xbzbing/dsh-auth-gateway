@@ -77,17 +77,30 @@ try {
     `homepage must load with zero JS errors, got: ${jsErrors.join(' | ')}`)
   ok('homepage UI loaded with zero JS errors (randomUUID polyfill works)')
 
-  // The injected floating shortcut must appear on the authenticated SPA page.
-  await page.waitForSelector('#dsh-password-gate-shortcut', { timeout: 10000 })
-  assert.equal(await page.textContent('#dsh-password-gate-shortcut'), '修改密码')
-  ok('authenticated homepage shows the injected "修改密码" floating shortcut')
+  // ── 3. the settings panel must offer the injected 修改密码 entry ──────
+  // dsh may pop its first-open "内测声明" modal; dismiss it so the settings
+  // trigger is reachable.
+  const notice = page.locator('[role="dialog"] button:has-text("继续")')
+  if (await notice.count() > 0) {
+    await notice.click()
+    await page.waitForTimeout(500)
+  }
+  // Open the settings dialog (sidebar trigger), assert the rail button
+  // exists, and follow it — it must land on the change-password form.
+  // (force: dsh UI keeps animating, so Playwright's stability check stalls.)
+  await page.waitForSelector('button:has-text("设置")', { timeout: 10000 })
+  await page.click('button:has-text("设置")', { force: true })
+  await page.waitForSelector('[role="dialog"][aria-modal="true"]', { timeout: 10000 })
+  await page.waitForSelector('[role="dialog"] button:has-text("修改密码")', { timeout: 10000 })
+  ok('settings panel shows the injected "修改密码" entry in the section rail')
+  await page.click('[role="dialog"] button:has-text("修改密码")')
+  await page.waitForSelector('#change', { timeout: 10000 })
+  ok('settings entry opens the change-password form at /login')
 
-  // ── 3. logout -> login page -> wrong password -> login ────────────────
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#logout', { timeout: 10000 })
+  // ── 4. logout -> login page -> wrong password -> login ────────────────
   await page.click('#logout')
   await page.waitForSelector('#auth', { timeout: 10000 })
-  ok('logged-in /login shows change form; logout returns to login form')
+  ok('logout returns to the login form')
 
   await page.fill('#password', 'definitely-wrong')
   await page.click('button[type=submit]')
@@ -101,7 +114,7 @@ try {
   await page.waitForURL(`${BASE}/`, { timeout: 15000 })
   ok('correct password logs in and lands on /')
 
-  // ── 4. change password revokes the session ────────────────────────────
+  // ── 5. change password revokes the session ────────────────────────────
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#change', { timeout: 10000 })
   // A weak new password must be rejected client-side before any request.

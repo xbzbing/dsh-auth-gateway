@@ -26,15 +26,16 @@ export const inject = ['webServer']
 export async function apply(ctx, config) {
   const gateway = createGateway(config)
 
-  // Browser-side injections into every index.html response:
+  // Browser-side injection into every index.html response:
   //   1. crypto.randomUUID polyfill — the API exists only in secure contexts
   //      (HTTPS or localhost); the gateway is meant to be reached over plain
   //      HTTP on a LAN IP, where dsh's frontend would crash on it. A small
   //      polyfill over getRandomValues (always available) restores it.
-  //   2. Floating "change password" shortcut — authenticated SPA pages get a
-  //      corner button that opens the change-password form, so users are not
-  //      left typing /login by hand. Probes GET /login/status (same-origin,
-  //      carries the session cookie); never shows on /login itself.
+  //   2. "修改密码" entry inside the dsh settings panel — a MutationObserver
+  //      watches for the settings dialog (stable anchors: [role=dialog]
+  //      + aria-modal + the section rail's button[aria-current]) and appends
+  //      a change-password button to the rail, next to 通用/模型/插件. The
+  //      panel remounts on every open, so the observer re-injects each time.
   const injectedScript = '<script>'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'
     + 'crypto.randomUUID = function () {'
@@ -47,26 +48,29 @@ export async function apply(ctx, config) {
     + '}'
     + '(function () {'
     + 'if (location.pathname === "/login") return;'
-    + 'fetch("/login/status", { headers: { accept: "application/json" } })'
-    + '.then(function (r) { return r.json(); })'
-    + '.then(function (s) {'
-    + 'if (!s || !s.authenticated) return;'
+    + 'new MutationObserver(function () {'
+    + 'var rail = document.querySelector("[role=dialog][aria-modal=true] button[aria-current]");'
+    + 'var list = rail ? rail.parentElement : null;'
+    + 'if (!list || list.dataset.pwGateInjected) return;'
+    + 'list.dataset.pwGateInjected = "1";'
     + 'var btn = document.createElement("button");'
-    + 'btn.id = "dsh-password-gate-shortcut";'
+    + 'btn.type = "button";'
     + 'btn.textContent = "修改密码";'
-    + 'btn.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:2147483000;'
-    + 'padding:9px 16px;font-size:13px;color:#fff;background:#4d6bfe;border:0;border-radius:8px;'
-    + 'cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);";'
+    + 'btn.title = "打开密码修改页";'
+    + 'btn.style.cssText = "display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;"'
+    + ' + "border:0;border-radius:8px;background:transparent;color:inherit;font-size:13px;"'
+    + ' + "cursor:pointer;text-align:left;";'
+    + 'btn.addEventListener("mouseenter", function () { btn.style.background = "rgba(127,127,127,.14)"; });'
+    + 'btn.addEventListener("mouseleave", function () { btn.style.background = "transparent"; });'
     + 'btn.addEventListener("click", function () { location.href = "/login"; });'
-    + 'document.body.appendChild(btn);'
-    + '})'
-    + '.catch(function () {});'
+    + 'list.appendChild(btn);'
+    + '}).observe(document.documentElement, { childList: true, subtree: true });'
     + '})();'
     + '</script>'
   ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
     '<head>',
     `<head>${injectedScript}`,
-  )), 'dsh-password-gate: index injections (randomUUID polyfill + password shortcut)')
+  )), 'dsh-password-gate: index injections (randomUUID polyfill + settings entry)')
 
   // Safety net: the whole design assumes the internal webserver is loopback-only.
   // The bundle patch enforces it, but a manual composition may forget.

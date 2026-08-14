@@ -61,6 +61,15 @@ export async function apply(ctx, config) {
     ctx.logger.warn('[dsh-password-gate] %s', err instanceof Error ? err.message : String(err))
   }
 
+  // Brute-force alerts, through dsh's official channels only: a Host log
+  // line plus a Cordis event (`dsh-password-gate/brute-force`) any plugin
+  // can listen to. No DOM/UI poking — surfacing this in the GUI would be a
+  // client-plugin slot registration (out of scope for the host-only plugin).
+  gateway.onSecurityEvent = (payload) => {
+    ctx.logger.warn('[dsh-password-gate] 疑似暴力破解: %s', JSON.stringify(payload))
+    ctx.emit('dsh-password-gate/brute-force', payload)
+  }
+
   // Fail loud on a taken port (misconfiguration), like the webserver does.
   await gateway.start()
 

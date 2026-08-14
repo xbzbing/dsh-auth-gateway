@@ -18,7 +18,7 @@ test('undefined/null config gets defaults', () => {
   assert.deepEqual(validate(undefined), {
     value: {
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60,
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -29,7 +29,7 @@ test('partial config keeps defaults for omitted fields', () => {
   assert.deepEqual(result, {
     value: {
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60,
     },
   })
 })

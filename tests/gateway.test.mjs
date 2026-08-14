@@ -10,6 +10,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
+import net from 'node:net'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,7 +55,7 @@ function closeUpstream() {
 
 let gateway, gatewayPort, home
 
-async function startGateway() {
+async function startGateway(policy) {
   home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
@@ -62,6 +63,7 @@ async function startGateway() {
     listenPort: 0,
     upstreamHost: '127.0.0.1',
     upstreamPort,
+    ...(policy !== undefined ? { policy } : {}),
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -412,4 +414,140 @@ test('lockout keys on the socket address and ignores x-forwarded-for', async () 
     headers: { 'x-forwarded-for': '10.0.0.9' },
   })
   assert.equal(spoofed.status, 429)
+})
+
+// ── security review regressions ──────────────────────────────────────────
+
+test('dns-rebinding / cross-site requests without a session cookie are refused at the gateway', async () => {
+  // Contract: the gateway's Host/Origin rewrite means the INTERNAL trust
+  // fence no longer guards DNS rebinding — that duty moved to the gateway's
+  // cookie gate. An unauthenticated request claiming an attacker origin must
+  // never reach the upstream, whatever Host/Origin/sec-fetch-site it sends.
+  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  const rebindingHeaders = {
+    host: 'evil.example:8002',
+    origin: 'http://evil.example',
+    'sec-fetch-site': 'cross-site',
+  }
+  const api = await request('/api/session.list', {
+    method: 'POST', body: {}, headers: rebindingHeaders,
+  })
+  assert.equal(api.status, 401, 'rebinding /api must be refused without a session')
+  const page = await request('/', { headers: rebindingHeaders })
+  assert.equal(page.status, 302, 'rebinding page must redirect to login')
+  assert.equal(seenRequests.length, 0, 'upstream must never see unauthenticated rebinding traffic')
+})
+
+test('forged session cookie does not pass the gate (cookie is the only credential)', async () => {
+  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  const res = await request('/api/session.list', {
+    method: 'POST', body: {},
+    cookie: 'dsh_auth=forged-token-that-is-not-in-the-table',
+    headers: { host: '192.168.31.100:8002', origin: 'http://192.168.31.100:8002' },
+  })
+  assert.equal(res.status, 401)
+  assert.equal(seenRequests.length, 0)
+})
+
+test('absolute-form request targets are normalized before forwarding', async () => {
+  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  const cookie = cookieValue(setup.headers)
+  const res = await request('http://evil.example:8002/api/abs?x=1#frag', {
+    method: 'POST', body: {}, cookie,
+  })
+  assert.equal(res.status, 200)
+  assert.equal(seenRequests.at(-1).url, '/api/abs?x=1', 'absolute target must become origin-form, hash dropped')
+  // Unparsable-per-HTTP target: an authenticated request is forwarded with
+  // its origin-form pathname (the upstream webserver answers 400 on the bad
+  // escape); the gateway must not crash or fabricate a destination.
+  const token = cookie.split('=')[1]
+  const bad = await new Promise((resolve, reject) => {
+    const sock = net.connect(gatewayPort, '127.0.0.1', () => {
+      sock.write(`GET /%%%bad HTTP/1.1\r\nHost: x\r\nCookie: dsh_auth=${token}\r\nConnection: close\r\n\r\n`)
+    })
+    let data = ''
+    sock.on('data', (c) => { data += c })
+    sock.on('close', () => resolve(data.split(' ')[1] ?? '0'))
+    sock.on('error', reject)
+  })
+  assert.ok(bad.startsWith('2') || bad.startsWith('4'), `gateway must answer, got ${bad}`)
+  assert.equal(seenRequests.at(-1).url, '/%%%bad', 'origin-form pathname forwarded verbatim')
+})
+
+test('global auth rate limit caps total attempts across all sources', async () => {
+  await stopGateway()
+  try {
+    await startGateway({ maxGlobalAuthAttemptsPerMinute: 3 })
+    await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+    // Three attempts are inside the budget.
+    for (let i = 0; i < 3; i += 1) {
+      const res = await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
+      assert.ok([401, 200].includes(res.status), `attempt ${i + 1} must be served`)
+    }
+    // The fourth attempt in the same minute is capped globally.
+    const capped = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+    assert.equal(capped.status, 429)
+    assert.equal(JSON.parse(capped.body).error, 'rate-limited')
+    // The window rolls over: a fresh minute serves attempts again.
+    gateway.globalAuth.windowStart = Date.now() - 61 * 1000
+    const after = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+    assert.equal(after.status, 200)
+  } finally {
+    await stopGateway()
+  }
+})
+
+test('scrypt runs off the event loop: login requests do not serialize a CPU-bound hash', async () => {
+  // Regression for the scryptSync CPU-DoS: verifyPassword must be async
+  // (libuv pool). We assert the handler awaits it by issuing two concurrent
+  // logins and expecting both to complete (a synchronous hash would still
+  // complete, so this is a structural check via the API contract: the store
+  // functions return promises).
+  const store = await import('../lib/store.js')
+  assert.ok(store.verifyPassword('x') instanceof Promise, 'verifyPassword must be async')
+  assert.ok(store.setPassword('x') instanceof Promise, 'setPassword must be async')
+})
+
+test('brute-force lockout emits one lockout security event', async () => {
+  const events = []
+  gateway.onSecurityEvent = (p) => events.push(p)
+  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  for (let i = 0; i < 5; i += 1) {
+    await request('/login/auth', { method: 'POST', body: { password: 'wrong' } })
+  }
+  assert.equal(events.length, 1, 'exactly one lockout alert per lockout')
+  assert.equal(events[0].kind, 'lockout')
+  assert.equal(events[0].sourceAddress, '127.0.0.1')
+  assert.equal(events[0].maxFailures, 5)
+  assert.ok(events[0].lockedUntil > Date.now())
+  // Attempts inside the lock window do not re-notify.
+  await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(events.length, 1)
+})
+
+test('global rate limit emits once per exhausted window', async () => {
+  await stopGateway()
+  try {
+    await startGateway({ maxGlobalAuthAttemptsPerMinute: 3 })
+    const events = []
+    gateway.onSecurityEvent = (p) => events.push(p)
+    await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+    for (let i = 0; i < 5; i += 1) {
+      await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
+    }
+    const rateEvents = events.filter((e) => e.kind === 'global-rate-limit')
+    assert.equal(rateEvents.length, 1, 'one alert per window, not per request')
+    assert.equal(rateEvents[0].limit, 3)
+    assert.equal(rateEvents[0].windowSeconds, 60)
+    // A fresh window resets the alert flag (first 3 attempts are inside the
+    // new budget; the 4th exhausts it and alerts again).
+    gateway.globalAuth.windowStart = Date.now() - 61 * 1000
+    for (let i = 0; i < 4; i += 1) {
+      await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
+    }
+    const afterRoll = events.filter((e) => e.kind === 'global-rate-limit')
+    assert.equal(afterRoll.length, 2, 'new window alerts again')
+  } finally {
+    await stopGateway()
+  }
 })

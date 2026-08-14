@@ -15,8 +15,45 @@
   - WebSocket 升级（`/api/events.mux`、`/api/events.host`）→ 拒绝连接
 - **设置/登录成功** → 直接跳转 dsh 首页（`/`）。
 - **修改密码** → 校验旧密码后更新，并**吊销全部会话**（所有端下线）。
+- **OTP 双因素认证**（可选）→ 启用后，登录需要密码 + OTP 验证码，支持：
+  - TOTP（基于时间的一次性密码），兼容 Google Authenticator、Authy 等认证器应用
+  - 备份代码，用于设备丢失时恢复访问
+  - 可配置为强制或可选启用
 
 这是真正的服务端门禁，不是仅限前端的 UI 锁：未认证的客户端根本到不了后端。
+
+### OTP 双因素认证
+
+启用 OTP 后，登录流程变为：**密码 + OTP 验证码**。OTP 基于 TOTP（RFC 6238），兼容所有主流认证器应用（Google Authenticator、Authy、1Password 等）。
+
+**用户流程：**
+
+1. **设置 OTP**：已登录用户访问 `/otp/setup`，扫描 QR 码或手动输入密钥，输入验证码确认。
+2. **登录验证**：密码验证后，系统提示输入 OTP 验证码。
+3. **备份代码**：如果丢失认证器设备，可以使用一次性备份代码登录。
+
+**安全特性：**
+
+- OTP 密钥使用 Base32 编码存储
+- 备份代码使用 scrypt 哈希存储（与密码相同的安全级别）
+- 验证时使用时间窗口防止重放攻击
+- 每个备份代码只能使用一次
+
+**配置示例：**
+
+```yaml
+# 启用 OTP（可选）
+dsh-password-gate:
+  config:
+    otpEnabled: true
+    otpRequired: false  # 设为 true 强制所有用户启用
+    otpIssuer: my-dsh-instance
+    otpPeriod: 30
+    otpDigits: 6
+    otpWindow: 1
+    backupCodeCount: 10
+    backupCodeLength: 8
+```
 
 > **非安全上下文兼容**：通过 `http://<局域网 IP>`（而非 localhost）访问时，浏览器 Web Crypto 的
 > `crypto.randomUUID` 不可用，会导致 dsh 前端报"crypto.randomUUID is not a function"。
@@ -55,6 +92,14 @@
 | `maxLoginFailures` | `5` | 连续错误多少次后锁定（1–100） |
 | `lockMinutes` | `5` | 锁定分钟数（1–1440） |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | 全局每分钟最大登录尝试次数（1–10000） |
+| `otpEnabled` | `false` | 是否启用 OTP 双因素认证 |
+| `otpRequired` | `false` | 是否强制所有用户启用 OTP |
+| `otpIssuer` | `dsh-password-gate` | OTP 发行者名称（显示在认证器应用中） |
+| `otpPeriod` | `30` | TOTP 周期（秒，10–120） |
+| `otpDigits` | `6` | OTP 位数（4–10） |
+| `otpWindow` | `1` | OTP 验证窗口（±N 个周期，0–5） |
+| `backupCodeCount` | `10` | 备份代码数量（5–20） |
+| `backupCodeLength` | `8` | 备份代码长度（6–12） |
 
 ## 安装
 
@@ -248,6 +293,8 @@ None；本包既不组装也不发送 provider 请求。
 - **明文 HTTP**：密码与 cookie 在网络中明文传输。局域网部署应保持在可信网络内，或为网关前置 TLS。
 - **暴力破解防护有限**：有按来源的失败锁定（默认 5 次/5 分钟）+ 全局限速（默认 60 次/分钟），均可配置；无分布式/换 IP 绕过全局限速的防护（攻击者可等待窗口重置或分布到多机）。
 - **内存会话**：dsh 重启后全员下线。
+- **OTP 密钥存储**：当前 OTP 密钥以明文 Base32 存储在 `otp.json` 文件中。生产环境建议加密存储。
+- **OTP 无多用户支持**：当前 OTP 配置为全局共享，不支持多用户独立的 OTP 密钥。
 - 后续工作：TLS、多用户、SPA 内嵌设置项（UI 级爆破提醒需 client 插件 slot 注册）。
 
 ## 开发统计

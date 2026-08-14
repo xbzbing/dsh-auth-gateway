@@ -1,0 +1,284 @@
+/**
+ * OTP (TOTP) tests.
+ *
+ * Covers: TOTP generation/verification, base32 encoding, backup codes,
+ * OTP store operations, and OTP gateway routes.
+ */
+
+import { test, before, after, beforeEach, afterEach } from 'node:test'
+import assert from 'node:assert/strict'
+import http from 'node:http'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  base32Encode,
+  base32Decode,
+  generateSecret,
+  generateTOTP,
+  verifyTOTP,
+  generateOTPAuthURI,
+  generateBackupCodes,
+  hashBackupCode,
+  verifyBackupCode,
+} from '../lib/totp.js'
+import {
+  enableOTP,
+  disableOTP,
+  getOTPStatus,
+  getOTPSecret,
+  verifyAndUseBackupCode,
+  hasOTP,
+} from '../lib/otp-store.js'
+import { LoginGateway } from '../lib/gateway.js'
+import { hasPassword } from '../lib/store.js'
+
+// ── TOTP algorithm tests ────────────────────────────────────────────────
+
+test('base32 encode/decode round-trip', () => {
+  const original = Buffer.from('Hello, World!')
+  const encoded = base32Encode(original)
+  const decoded = base32Decode(encoded)
+  assert.deepEqual(decoded, original)
+})
+
+test('generateSecret produces valid base32', () => {
+  const secret = generateSecret()
+  assert.equal(typeof secret, 'string')
+  assert.ok(secret.length > 0)
+  // Should be valid base32
+  const decoded = base32Decode(secret)
+  assert.ok(decoded.length > 0)
+})
+
+test('generateTOTP produces 6-digit code', () => {
+  const secret = generateSecret()
+  const code = generateTOTP(secret)
+  assert.equal(typeof code, 'string')
+  assert.equal(code.length, 6)
+  assert.ok(/^\d{6}$/.test(code))
+})
+
+test('verifyTOTP accepts valid code', () => {
+  const secret = generateSecret()
+  const code = generateTOTP(secret)
+  const result = verifyTOTP(secret, code)
+  assert.ok(result.valid)
+  assert.equal(result.delta, 0)
+})
+
+test('verifyTOTP rejects invalid code', () => {
+  const secret = generateSecret()
+  const result = verifyTOTP(secret, '000000')
+  assert.ok(!result.valid)
+  assert.equal(result.delta, null)
+})
+
+test('verifyTOTP with window tolerance', () => {
+  const secret = generateSecret()
+  const now = Date.now()
+  // Generate code for previous time step
+  const previousCode = generateTOTP(secret, { timestamp: now - 30000 })
+  // Verify with window=1 should accept previous code
+  const result = verifyTOTP(secret, previousCode, { window: 1, timestamp: now })
+  assert.ok(result.valid)
+  assert.equal(result.delta, -1)
+})
+
+test('generateOTPAuthURI creates valid URI', () => {
+  const secret = generateSecret()
+  const uri = generateOTPAuthURI(secret, {
+    issuer: 'test-issuer',
+    account: 'test@example.com',
+  })
+  assert.ok(uri.startsWith('otpauth://totp/'))
+  assert.ok(uri.includes('secret=' + secret))
+  assert.ok(uri.includes('issuer=test-issuer'))
+})
+
+test('generateBackupCodes produces correct count', () => {
+  const codes = generateBackupCodes(5, 8)
+  assert.equal(codes.length, 5)
+  for (const code of codes) {
+    assert.ok(code.includes('-'))
+    assert.equal(code.length, 9) // XXXX-XXXX
+  }
+})
+
+test('hashBackupCode and verifyBackupCode round-trip', async () => {
+  const code = 'ABCD-1234'
+  const { hash, salt } = await hashBackupCode(code)
+  assert.ok(typeof hash === 'string')
+  assert.ok(typeof salt === 'string')
+  
+  const valid = await verifyBackupCode(code, hash, salt)
+  assert.ok(valid)
+  
+  const invalid = await verifyBackupCode('WRNG-5678', hash, salt)
+  assert.ok(!invalid)
+})
+
+// ── OTP store tests ─────────────────────────────────────────────────────
+
+let home
+
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-otp-test-'))
+  process.env.DSH_HOME = home
+})
+
+afterEach(() => {
+  delete process.env.DSH_HOME
+  rmSync(home, { recursive: true, force: true })
+})
+
+test('hasOTP returns false initially', () => {
+  assert.ok(!hasOTP())
+})
+
+test('enableOTP creates secret and backup codes', async () => {
+  const result = await enableOTP({
+    backupCodeCount: 5,
+    backupCodeLength: 8,
+  })
+  assert.ok(typeof result.secret === 'string')
+  assert.equal(result.backupCodes.length, 5)
+  assert.ok(hasOTP())
+})
+
+test('getOTPStatus returns correct status', async () => {
+  await enableOTP()
+  const status = getOTPStatus()
+  assert.ok(status.enabled)
+  assert.equal(status.algorithm, 'SHA1')
+  assert.equal(status.digits, 6)
+  assert.equal(status.period, 30)
+})
+
+test('getOTPSecret returns secret when enabled', async () => {
+  await enableOTP()
+  const secret = getOTPSecret()
+  assert.ok(typeof secret === 'string')
+})
+
+test('disableOTP clears OTP data', async () => {
+  await enableOTP()
+  assert.ok(hasOTP())
+  
+  disableOTP()
+  assert.ok(!hasOTP())
+  assert.equal(getOTPSecret(), null)
+})
+
+test('verifyAndUseBackupCode works correctly', async () => {
+  const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
+  const firstCode = backupCodes[0]
+  
+  const valid = await verifyAndUseBackupCode(firstCode)
+  assert.ok(valid)
+  
+  // Same code should not work twice
+  const secondTry = await verifyAndUseBackupCode(firstCode)
+  assert.ok(!secondTry)
+})
+
+// ── Gateway OTP route tests ─────────────────────────────────────────────
+
+let gateway, gatewayPort
+
+async function startGateway(policy, otpConfig) {
+  gateway = new LoginGateway({
+    listenHost: '127.0.0.1',
+    listenPort: 0,
+    upstreamHost: '127.0.0.1',
+    upstreamPort: 9999, // Dummy port, not used in these tests
+    policy,
+    otp: otpConfig || {},
+  })
+  await gateway.start()
+  gatewayPort = gateway.address().port
+}
+
+async function stopGateway() {
+  await gateway.close()
+}
+
+function request(path, { method = 'GET', cookie, body, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port: gatewayPort,
+      path,
+      method,
+      headers: {
+        host: 'test-host:3080',
+        ...(cookie !== undefined ? { cookie } : {}),
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...headers,
+      },
+    }, (res) => {
+      const chunks = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        headers: res.headers,
+        body: Buffer.concat(chunks).toString('utf8'),
+      }))
+    })
+    req.on('error', reject)
+    if (body !== undefined) req.write(JSON.stringify(body))
+    req.end()
+  })
+}
+
+test('OTP setup page returns 401 when not authenticated', async () => {
+  await startGateway({}, { otpEnabled: true })
+  const res = await request('/otp/setup')
+  assert.equal(res.status, 401)
+  await stopGateway()
+})
+
+test('OTP setup page returns 400 when OTP not enabled', async () => {
+  await startGateway({}, { otpEnabled: false })
+  
+  // First set up password
+  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
+  
+  // Try to access OTP setup
+  const res = await request('/otp/setup')
+  assert.equal(res.status, 400)
+  await stopGateway()
+})
+
+test('OTP verify page returns 401 when not authenticated', async () => {
+  await startGateway({}, { otpEnabled: true })
+  const res = await request('/otp/verify')
+  assert.equal(res.status, 401)
+  await stopGateway()
+})
+
+test('OTP verify returns 400 when OTP not enabled', async () => {
+  await startGateway({}, { otpEnabled: false })
+  
+  // First set up password
+  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
+  
+  // Try to verify OTP
+  const res = await request('/otp/verify', { method: 'POST', body: { otp: '123456' } })
+  assert.equal(res.status, 400)
+  await stopGateway()
+})
+
+test('OTP enable returns 401 when not authenticated', async () => {
+  await startGateway({}, { otpEnabled: true })
+  const res = await request('/otp/enable', { method: 'POST', body: {} })
+  assert.equal(res.status, 401)
+  await stopGateway()
+})
+
+test('OTP disable returns 401 when not authenticated', async () => {
+  await startGateway({}, { otpEnabled: true })
+  const res = await request('/otp/disable', { method: 'POST', body: { password: 'test' } })
+  assert.equal(res.status, 401)
+  await stopGateway()
+})

@@ -88,6 +88,11 @@ export async function apply(ctx, config) {
   console.log(`dsh web: http://127.0.0.1:${gateway.listenPort}${lanHint}`)
   ctx.logger.info('[dsh-password-gate] gateway listening on http://%s:%s -> http://%s:%s',
     gateway.listenHost, gateway.listenPort, gateway.upstreamHost, gateway.upstreamPort)
+
+  // Log OTP configuration
+  if (config?.otpEnabled) {
+    ctx.logger.info('[dsh-password-gate] OTP enabled (required: %s)', config.otpRequired ? 'yes' : 'no')
+  }
 }
 
 export default { name, inject, apply, Config }

@@ -18,7 +18,7 @@ test('undefined/null config gets defaults', () => {
   assert.deepEqual(validate(undefined), {
     value: {
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, maxLoginFailures: 5, lockMinutes: 5,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5,
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -29,7 +29,7 @@ test('partial config keeps defaults for omitted fields', () => {
   assert.deepEqual(result, {
     value: {
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, maxLoginFailures: 5, lockMinutes: 5,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5,
     },
   })
 })
@@ -64,6 +64,8 @@ test('policy fields are validated', () => {
   assert.ok(validate({ minPasswordLength: '8' }).issues, 'must be integer')
   assert.equal(validate({ requireMixedCase: false }).value.requireMixedCase, false)
   assert.ok(validate({ requireMixedCase: 'yes' }).issues)
+  assert.equal(validate({ requireSpecial: false }).value.requireSpecial, false)
+  assert.ok(validate({ requireSpecial: 'yes' }).issues)
   assert.equal(validate({ maxLoginFailures: 3 }).value.maxLoginFailures, 3)
   assert.ok(validate({ maxLoginFailures: 0 }).issues)
   assert.equal(validate({ lockMinutes: 10 }).value.lockMinutes, 10)

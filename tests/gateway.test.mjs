@@ -304,6 +304,23 @@ test('bad gateway: upstream down answers 502, not a crash', async () => {
   }
 })
 
+test('GET /login/status reports setup and authentication state', async () => {
+  // Fresh deployment: no password, not authenticated.
+  const fresh = await request('/login/status')
+  assert.equal(fresh.status, 200)
+  assert.deepEqual(JSON.parse(fresh.body), { ok: true, setup: false, authenticated: false })
+
+  // After setup the request that set it up is authenticated.
+  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  const cookie = cookieValue(setup.headers)
+  const authed = await request('/login/status', { cookie })
+  assert.deepEqual(JSON.parse(authed.body), { ok: true, setup: true, authenticated: true })
+
+  // An anonymous request on the configured deployment: setup true, not authed.
+  const anon = await request('/login/status')
+  assert.deepEqual(JSON.parse(anon.body), { ok: true, setup: true, authenticated: false })
+})
+
 test('malformed json body answers 400', async () => {
   const res = await new Promise((resolve, reject) => {
     const req = http.request({
@@ -342,8 +359,8 @@ test('duplicate mount: a second gateway on the same port fails loud', async () =
 test('setup rejects weak passwords with a stable reason', async () => {
   for (const [pw, reason] of [
     ['short1A', 'password-too-short'],
-    ['abcdefgh', 'password-needs-case'],
-    ['ABCDEFGH', 'password-needs-case'],
+    ['abcdefgh', 'password-too-simple'],
+    ['ABCDEFGH', 'password-too-simple'],
   ]) {
     const res = await request('/login/setup', { method: 'POST', body: { password: pw } })
     assert.equal(res.status, 400, `${pw} must be rejected`)

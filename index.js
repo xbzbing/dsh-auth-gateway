@@ -26,14 +26,16 @@ export const inject = ['webServer']
 export async function apply(ctx, config) {
   const gateway = createGateway(config)
 
-  // crypto.randomUUID exists only in secure contexts (HTTPS or localhost).
-  // The gateway is meant to be reached over plain HTTP on a LAN IP, where
-  // dsh's frontend would crash on it ("crypto.randomUUID is not a function").
-  // getRandomValues is always available, so a small polyfill injected into
-  // every index.html response restores the API without touching dsh.
-  ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
-    '<head>',
-    '<head><script>'
+  // Browser-side injections into every index.html response:
+  //   1. crypto.randomUUID polyfill — the API exists only in secure contexts
+  //      (HTTPS or localhost); the gateway is meant to be reached over plain
+  //      HTTP on a LAN IP, where dsh's frontend would crash on it. A small
+  //      polyfill over getRandomValues (always available) restores it.
+  //   2. Floating "change password" shortcut — authenticated SPA pages get a
+  //      corner button that opens the change-password form, so users are not
+  //      left typing /login by hand. Probes GET /login/status (same-origin,
+  //      carries the session cookie); never shows on /login itself.
+  const injectedScript = '<script>'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'
     + 'crypto.randomUUID = function () {'
     + 'var b = crypto.getRandomValues(new Uint8Array(16));'
@@ -42,8 +44,29 @@ export async function apply(ctx, config) {
     + 'for (var i = 0; i < 16; i++) h += (i === 4 || i === 6 || i === 8 || i === 10 ? "-" : "") + b[i].toString(16).padStart(2, "0");'
     + 'return h;'
     + '};'
-    + '}</script>',
-  )), 'dsh-password-gate: crypto.randomUUID polyfill')
+    + '}'
+    + '(function () {'
+    + 'if (location.pathname === "/login") return;'
+    + 'fetch("/login/status", { headers: { accept: "application/json" } })'
+    + '.then(function (r) { return r.json(); })'
+    + '.then(function (s) {'
+    + 'if (!s || !s.authenticated) return;'
+    + 'var btn = document.createElement("button");'
+    + 'btn.id = "dsh-password-gate-shortcut";'
+    + 'btn.textContent = "修改密码";'
+    + 'btn.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:2147483000;'
+    + 'padding:9px 16px;font-size:13px;color:#fff;background:#4d6bfe;border:0;border-radius:8px;'
+    + 'cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);";'
+    + 'btn.addEventListener("click", function () { location.href = "/login"; });'
+    + 'document.body.appendChild(btn);'
+    + '})'
+    + '.catch(function () {});'
+    + '})();'
+    + '</script>'
+  ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
+    '<head>',
+    `<head>${injectedScript}`,
+  )), 'dsh-password-gate: index injections (randomUUID polyfill + password shortcut)')
 
   // Safety net: the whole design assumes the internal webserver is loopback-only.
   // The bundle patch enforces it, but a manual composition may forget.

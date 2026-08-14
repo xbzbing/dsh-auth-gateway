@@ -37,17 +37,19 @@
 **关于转发时的 Host/Origin 改写**：dsh 内部 `/api` trust fence 的 LAN 信任列表是根据 webserver 的监听地址（`0.0.0.0`）采样的；插件把 webserver 钉在 `127.0.0.1` 后该列表恒为空，外部地址（LAN IP）的请求会被内部 fence 以 403 拒绝。网关因此在转发时把 `Host`/`Origin` 改写为回环地址——安全上成立，因为 fence 的"远程可达性防护"已由网关认证层接管：跨站/DNS-rebinding 请求没有会话 cookie（HttpOnly + SameSite=Strict），在网关层即被拒绝，到不了内部。
 
 - **密码**：scrypt 哈希（`node:crypto`），存于 `$DSH_HOME/login-plugin/password.json`（仅属主可读写）。
-- **密码策略**：至少 8 位且同时包含大小写字母（服务端强制 + 登录页即时反馈；可通过配置调整，见下）。
+- **密码策略**：至少 8 位，且包含**大小写字母或特殊字符**（服务端强制 + 登录页即时反馈；可通过配置调整，见下）。
 - **失败锁定**：同一来源连续输错 5 次密码后锁定 5 分钟（期间正确密码也拒绝），登录成功即清零计数；按客户端 socket 地址计数，`x-forwarded-for` 伪造无效。
 - **会话**：随机 256-bit token，存于内存，**30 天有效期**；dsh 重启后全员下线；修改密码吊销全部会话。
 - **Cookie**：`dsh_auth`，`HttpOnly; SameSite=Strict`（未加 `Secure`——MVP 走明文 HTTP）。
+- **修改密码入口**：访问 `/login`（已登录时显示改密表单）；另外插件会向 dsh 首页注入一个右下角"修改密码"悬浮按钮（仅已登录会话可见），无需手动输入地址。
 
 以上策略均为可配置项（bundle patch 或 profile patch 中覆盖 `dsh-password-gate` 行的 config）：
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
-| `requireMixedCase` | `true` | 是否要求同时包含大小写字母 |
+| `requireMixedCase` | `true` | 是否要求大小写混合（与特殊字符二选一满足即可） |
+| `requireSpecial` | `true` | 是否要求特殊字符（与大小写混合二选一满足即可） |
 | `maxLoginFailures` | `5` | 连续错误多少次后锁定（1–100） |
 | `lockMinutes` | `5` | 锁定分钟数（1–1440） |
 

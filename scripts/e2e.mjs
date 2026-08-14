@@ -59,6 +59,7 @@ try {
   const pageText = await page.evaluate(() => document.body.innerText)
   if (pageText.includes('设置密码')) {
     await page.fill('#password', PASSWORD)
+    await page.fill('#confirm', PASSWORD)
     await page.click('button[type=submit]')
     ok('first open shows setup page; password set')
   } else {
@@ -75,6 +76,11 @@ try {
   assert.equal(jsErrors.length, 0,
     `homepage must load with zero JS errors, got: ${jsErrors.join(' | ')}`)
   ok('homepage UI loaded with zero JS errors (randomUUID polyfill works)')
+
+  // The injected floating shortcut must appear on the authenticated SPA page.
+  await page.waitForSelector('#dsh-password-gate-shortcut', { timeout: 10000 })
+  assert.equal(await page.textContent('#dsh-password-gate-shortcut'), '修改密码')
+  ok('authenticated homepage shows the injected "修改密码" floating shortcut')
 
   // ── 3. logout -> login page -> wrong password -> login ────────────────
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
@@ -101,12 +107,19 @@ try {
   // A weak new password must be rejected client-side before any request.
   await page.fill('#oldPassword', PASSWORD)
   await page.fill('#newPassword', 'weak')
+  await page.fill('#confirm', 'weak')
   await page.click('#change button[type=submit]')
   await page.waitForFunction(() => document.getElementById('error')?.textContent?.length > 0)
   const weakErr = await page.evaluate(() => document.getElementById('error').textContent)
   assert.ok(weakErr.includes('8'), `weak password must show a strength error, got: ${weakErr}`)
   ok(`weak new password rejected client-side (${weakErr})`)
+  // Mismatched confirmation must be rejected without a request.
   await page.fill('#newPassword', NEW_PASSWORD)
+  await page.fill('#confirm', 'Different1!')
+  await page.click('#change button[type=submit]')
+  await page.waitForFunction(() => document.getElementById('error')?.textContent?.includes('不一致'))
+  ok('mismatched password confirmation rejected client-side')
+  await page.fill('#confirm', NEW_PASSWORD)
   await page.click('#change button[type=submit]')
   await page.waitForFunction(() => document.body.innerText.includes('重新登录'))
   ok('password changed; session revoked; re-login prompt shown')

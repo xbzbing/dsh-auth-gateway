@@ -26,16 +26,11 @@ export const inject = ['webServer']
 export async function apply(ctx, config) {
   const gateway = createGateway(config)
 
-  // Browser-side injection into every index.html response:
-  //   1. crypto.randomUUID polyfill — the API exists only in secure contexts
-  //      (HTTPS or localhost); the gateway is meant to be reached over plain
-  //      HTTP on a LAN IP, where dsh's frontend would crash on it. A small
-  //      polyfill over getRandomValues (always available) restores it.
-  //   2. "修改密码" entry inside the dsh settings panel — a MutationObserver
-  //      watches for the settings dialog (stable anchors: [role=dialog]
-  //      + aria-modal + the section rail's button[aria-current]) and appends
-  //      a change-password button to the rail, next to 通用/模型/插件. The
-  //      panel remounts on every open, so the observer re-injects each time.
+  // Browser-side injection into every index.html response: the
+  // crypto.randomUUID polyfill — the API exists only in secure contexts
+  // (HTTPS or localhost); the gateway is meant to be reached over plain HTTP
+  // on a LAN IP, where dsh's frontend would crash on it. A small polyfill
+  // over getRandomValues (always available) restores it.
   const injectedScript = '<script>'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'
     + 'crypto.randomUUID = function () {'
@@ -46,31 +41,11 @@ export async function apply(ctx, config) {
     + 'return h;'
     + '};'
     + '}'
-    + '(function () {'
-    + 'if (location.pathname === "/login") return;'
-    + 'new MutationObserver(function () {'
-    + 'var rail = document.querySelector("[role=dialog][aria-modal=true] button[aria-current]");'
-    + 'var list = rail ? rail.parentElement : null;'
-    + 'if (!list || list.dataset.pwGateInjected) return;'
-    + 'list.dataset.pwGateInjected = "1";'
-    + 'var btn = document.createElement("button");'
-    + 'btn.type = "button";'
-    + 'btn.textContent = "修改密码";'
-    + 'btn.title = "打开密码修改页";'
-    + 'btn.style.cssText = "display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;"'
-    + ' + "border:0;border-radius:8px;background:transparent;color:inherit;font-size:13px;"'
-    + ' + "cursor:pointer;text-align:left;";'
-    + 'btn.addEventListener("mouseenter", function () { btn.style.background = "rgba(127,127,127,.14)"; });'
-    + 'btn.addEventListener("mouseleave", function () { btn.style.background = "transparent"; });'
-    + 'btn.addEventListener("click", function () { location.href = "/login"; });'
-    + 'list.appendChild(btn);'
-    + '}).observe(document.documentElement, { childList: true, subtree: true });'
-    + '})();'
     + '</script>'
   ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
     '<head>',
     `<head>${injectedScript}`,
-  )), 'dsh-password-gate: index injections (randomUUID polyfill + settings entry)')
+  )), 'dsh-password-gate: crypto.randomUUID polyfill')
 
   // Safety net: the whole design assumes the internal webserver is loopback-only.
   // The bundle patch enforces it, but a manual composition may forget.

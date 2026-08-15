@@ -259,17 +259,6 @@ window.__ModuleLoader__.load({
 										children: [
 											(0, react_jsx_runtime.jsx)("input", {
 												type: "checkbox",
-												checked: config.otpEnabled,
-												onChange: (e) => setConfig(prev => ({ ...prev, otpEnabled: e.target.checked })),
-											}),
-											"启用 OTP"
-										]
-									}),
-									(0, react_jsx_runtime.jsxs)("label", {
-										style: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
-										children: [
-											(0, react_jsx_runtime.jsx)("input", {
-												type: "checkbox",
 												checked: config.otpRequired,
 												onChange: (e) => setConfig(prev => ({ ...prev, otpRequired: e.target.checked })),
 											}),
@@ -315,32 +304,19 @@ window.__ModuleLoader__.load({
 												},
 												children: saving ? "保存中..." : "保存设置"
 											}),
-											(0, react_jsx_runtime.jsx)("button", {
-												onClick: enableOTP,
-												style: {
-													background: '#52c41a',
-													color: 'white',
-													border: 'none',
-													borderRadius: '6px',
-													padding: '6px 16px',
-													fontSize: '13px',
-													cursor: 'pointer',
-												},
-												children: "启用 OTP"
-											}),
-											(0, react_jsx_runtime.jsx)("button", {
-												onClick: disableOTP,
-												style: {
-													background: '#ff4d4f',
-													color: 'white',
-													border: 'none',
-													borderRadius: '6px',
-													padding: '6px 16px',
-													fontSize: '13px',
-													cursor: 'pointer',
-												},
-												children: "禁用 OTP"
-											}),
+									(0, react_jsx_runtime.jsx)("button", {
+										onClick: config.otpEnabled ? disableOTP : enableOTP,
+										style: {
+											background: config.otpEnabled ? '#ff4d4f' : '#52c41a',
+											color: 'white',
+											border: 'none',
+											borderRadius: '6px',
+											padding: '6px 16px',
+											fontSize: '13px',
+											cursor: 'pointer',
+										},
+										children: config.otpEnabled ? "禁用 OTP" : "启用 OTP"
+									}),
 										]
 									}),
 									status && (0, react_jsx_runtime.jsx)("div", {

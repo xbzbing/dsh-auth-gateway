@@ -756,11 +756,12 @@ window.__ModuleLoader__.load({
 											color: '#ff4d4f',
 											border: '1px solid #ff4d4f',
 											borderRadius: '6px',
-											padding: '8px 16px',
+											padding: '7px 15px',
 											fontSize: '13px',
 											fontWeight: '500',
 											cursor: 'pointer',
 											transition: 'all 0.2s',
+											boxSizing: 'border-box',
 										},
 										onMouseEnter: (e) => {
 											e.target.style.background = '#ff4d4f';

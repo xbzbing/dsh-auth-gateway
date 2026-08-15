@@ -254,35 +254,6 @@ window.__ModuleLoader__.load({
 							(0, react_jsx_runtime.jsxs)("div", {
 								style: { display: 'flex', flexDirection: 'column', gap: '12px' },
 								children: [
-									(0, react_jsx_runtime.jsxs)("label", {
-										style: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
-										children: [
-											(0, react_jsx_runtime.jsx)("input", {
-												type: "checkbox",
-												checked: config.otpRequired,
-												onChange: (e) => setConfig(prev => ({ ...prev, otpRequired: e.target.checked })),
-											}),
-											"强制所有用户启用"
-										]
-									}),
-									(0, react_jsx_runtime.jsxs)("div", {
-										style: { display: 'flex', gap: '8px', marginTop: '8px' },
-										children: [
-											(0, react_jsx_runtime.jsx)("button", {
-												onClick: saveSettings,
-												disabled: saving,
-												style: {
-													background: '#1677ff',
-													color: 'white',
-													border: 'none',
-													borderRadius: '6px',
-													padding: '6px 16px',
-													fontSize: '13px',
-													cursor: saving ? 'not-allowed' : 'pointer',
-													opacity: saving ? 0.6 : 1,
-												},
-												children: saving ? "保存中..." : "保存设置"
-											}),
 									(0, react_jsx_runtime.jsx)("button", {
 										onClick: config.otpEnabled ? disableOTP : enableOTP,
 										style: {
@@ -290,13 +261,12 @@ window.__ModuleLoader__.load({
 											color: 'white',
 											border: 'none',
 											borderRadius: '6px',
-											padding: '6px 16px',
+											padding: '8px 16px',
 											fontSize: '13px',
 											cursor: 'pointer',
+											alignSelf: 'flex-start',
 										},
 										children: config.otpEnabled ? "禁用 OTP" : "启用 OTP"
-									}),
-										]
 									}),
 									status && (0, react_jsx_runtime.jsx)("div", {
 										style: {

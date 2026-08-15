@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		// Minimal QR code encoder (version 2, 25x25)
+		// Minimal QR code encoder
 		function encodeQR(text) {
 			const len = text.length;
 			const data = [];
@@ -51,7 +51,6 @@ window.__ModuleLoader__.load({
 			const modules = Array.from({ length: size }, () => Array(size).fill(false));
 			const reserved = Array.from({ length: size }, () => Array(size).fill(false));
 
-			// Finder patterns
 			function drawFinder(row, col) {
 				for (let r = -1; r <= 7; r++) {
 					for (let c = -1; c <= 7; c++) {
@@ -68,7 +67,6 @@ window.__ModuleLoader__.load({
 			drawFinder(0, size - 7);
 			drawFinder(size - 7, 0);
 
-			// Timing patterns
 			for (let i = 8; i < size - 8; i++) {
 				modules[6][i] = i % 2 === 0;
 				reserved[6][i] = true;
@@ -76,13 +74,6 @@ window.__ModuleLoader__.load({
 				reserved[i][6] = true;
 			}
 
-			// Format info (simplified)
-			reserved[8][0] = reserved[8][1] = reserved[8][2] = reserved[8][3] = true;
-			reserved[8][4] = reserved[8][5] = reserved[8][7] = reserved[8][8] = true;
-			reserved[0][8] = reserved[1][8] = reserved[2][8] = reserved[3][8] = true;
-			reserved[4][8] = reserved[5][8] = reserved[7][8] = reserved[8][8] = true;
-
-			// Data encoding (simplified byte mode)
 			let bitIndex = 0;
 			const dataBits = [];
 			for (const byte of data) {
@@ -91,7 +82,6 @@ window.__ModuleLoader__.load({
 				}
 			}
 
-			// Place data in zigzag pattern
 			let row = size - 1;
 			let col = size - 1;
 			let direction = -1;
@@ -111,7 +101,6 @@ window.__ModuleLoader__.load({
 				}
 			}
 
-			// Apply mask pattern 0
 			for (let r = 0; r < size; r++) {
 				for (let c = 0; c < size; c++) {
 					if (!reserved[r][c] && (r + c) % 2 === 0) {
@@ -124,20 +113,22 @@ window.__ModuleLoader__.load({
 		}
 
 		/**
-		 * OTP Settings Panel component.
+		 * User Settings Panel component.
 		 */
-		function OTPSettingsPanel({ ctx }) {
-			const [config, setConfig] = react.useState({
-				otpEnabled: false,
-				otpRequired: false,
-				otpIssuer: 'dsh-password-gate',
-			});
+		function UserSettingsPanel({ ctx }) {
+			const [otpEnabled, setOtpEnabled] = react.useState(false);
 			const [loading, setLoading] = react.useState(true);
-			const [saving, setSaving] = react.useState(false);
 			const [status, setStatus] = react.useState(null);
 			const [showQRModal, setShowQRModal] = react.useState(false);
 			const [qrData, setQrData] = react.useState(null);
 			const canvasRef = react.useRef(null);
+
+			// Change password state
+			const [showChangePassword, setShowChangePassword] = react.useState(false);
+			const [oldPassword, setOldPassword] = react.useState('');
+			const [newPassword, setNewPassword] = react.useState('');
+			const [confirmPassword, setConfirmPassword] = react.useState('');
+			const [changingPassword, setChangingPassword] = react.useState(false);
 
 			react.useEffect(() => {
 				loadSettings();
@@ -154,39 +145,12 @@ window.__ModuleLoader__.load({
 					const res = await fetch('/api/settings');
 					const data = await res.json();
 					if (data.ok) {
-						const pluginConfig = data.config?.['dsh-password-gate'] || {};
-						setConfig({
-							otpEnabled: pluginConfig.otpEnabled || false,
-							otpRequired: pluginConfig.otpRequired || false,
-							otpIssuer: pluginConfig.otpIssuer || 'dsh-password-gate',
-						});
+						setOtpEnabled(data.config?.['dsh-password-gate']?.otpEnabled || false);
 					}
 				} catch (err) {
-					setStatus({ type: 'error', message: '加载设置失败: ' + err.message });
+					setStatus({ type: 'error', message: '加载失败: ' + err.message });
 				} finally {
 					setLoading(false);
-				}
-			}
-
-			async function saveSettings() {
-				setSaving(true);
-				setStatus(null);
-				try {
-					const res = await fetch('/api/settings', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ 'dsh-password-gate': config }),
-					});
-					const data = await res.json();
-					if (data.ok) {
-						setStatus({ type: 'success', message: '设置已保存' });
-					} else {
-						setStatus({ type: 'error', message: '保存失败: ' + (data.error || '未知错误') });
-					}
-				} catch (err) {
-					setStatus({ type: 'error', message: '保存失败: ' + err.message });
-				} finally {
-					setSaving(false);
 				}
 			}
 
@@ -202,7 +166,7 @@ window.__ModuleLoader__.load({
 							backupCodes: data.backupCodes,
 						});
 						setShowQRModal(true);
-						setConfig(prev => ({ ...prev, otpEnabled: true }));
+						setOtpEnabled(true);
 					} else {
 						setStatus({ type: 'error', message: '启用失败: ' + (data.error || '未知错误') });
 					}
@@ -219,7 +183,7 @@ window.__ModuleLoader__.load({
 					const data = await res.json();
 					if (data.ok) {
 						setStatus({ type: 'success', message: 'OTP 已禁用' });
-						setConfig(prev => ({ ...prev, otpEnabled: false }));
+						setOtpEnabled(false);
 					} else {
 						setStatus({ type: 'error', message: '禁用失败: ' + (data.error || '未知错误') });
 					}
@@ -231,12 +195,65 @@ window.__ModuleLoader__.load({
 			function closeQRModal() {
 				setShowQRModal(false);
 				setQrData(null);
-				setStatus({ type: 'success', message: 'OTP 已启用，请使用 authenticator 应用扫描二维码' });
+				setStatus({ type: 'success', message: 'OTP 已启用' });
+			}
+
+			async function changePassword() {
+				if (newPassword !== confirmPassword) {
+					setStatus({ type: 'error', message: '两次输入的密码不一致' });
+					return;
+				}
+				if (newPassword.length < 8) {
+					setStatus({ type: 'error', message: '密码至少需要 8 位' });
+					return;
+				}
+				setChangingPassword(true);
+				setStatus(null);
+				try {
+					const res = await fetch('/login/change', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ oldPassword, newPassword }),
+					});
+					const data = await res.json();
+					if (data.ok) {
+						setStatus({ type: 'success', message: '密码修改成功，请重新登录' });
+						setShowChangePassword(false);
+						setOldPassword('');
+						setNewPassword('');
+						setConfirmPassword('');
+						setTimeout(() => { location.href = '/login'; }, 1500);
+					} else {
+						setStatus({ type: 'error', message: '修改失败: ' + (data.error || '未知错误') });
+					}
+				} catch (err) {
+					setStatus({ type: 'error', message: '修改失败: ' + err.message });
+				} finally {
+					setChangingPassword(false);
+				}
+			}
+
+			async function logout() {
+				try {
+					await fetch('/login/logout', { method: 'POST' });
+					location.href = '/login';
+				} catch (err) {
+					setStatus({ type: 'error', message: '退出失败: ' + err.message });
+				}
 			}
 
 			if (loading) {
 				return (0, react_jsx_runtime.jsx)("div", { children: "加载中..." });
 			}
+
+			const inputStyle = {
+				border: '1px solid #d9d9d9',
+				borderRadius: '6px',
+				padding: '8px 12px',
+				fontSize: '13px',
+				outline: 'none',
+				width: '100%',
+			};
 
 			return (0, react_jsx_runtime.jsxs)(react.Fragment, {
 				children: [
@@ -244,46 +261,161 @@ window.__ModuleLoader__.load({
 						style: { padding: '16px 0' },
 						children: [
 							(0, react_jsx_runtime.jsx)("h3", {
-								style: { margin: '0 0 12px 0', fontSize: '14px', fontWeight: '500' },
-								children: "OTP 双因素认证"
+								style: { margin: '0 0 16px 0', fontSize: '14px', fontWeight: '500' },
+								children: "用户设置"
 							}),
-							(0, react_jsx_runtime.jsx)("p", {
-								style: { margin: '0 0 16px 0', fontSize: '12px', color: '#666' },
-								children: "启用 OTP 后，登录需要密码 + 验证码，提高安全性。"
-							}),
+
+							// OTP Section
 							(0, react_jsx_runtime.jsxs)("div", {
-								style: { display: 'flex', flexDirection: 'column', gap: '12px' },
+								style: { marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e8e8e8' },
 								children: [
+									(0, react_jsx_runtime.jsx)("div", {
+										style: { fontSize: '13px', fontWeight: '500', marginBottom: '8px' },
+										children: "OTP 双因素认证"
+									}),
+									(0, react_jsx_runtime.jsx)("p", {
+										style: { margin: '0 0 12px 0', fontSize: '12px', color: '#666' },
+										children: "启用后登录需要密码 + 验证码，提高安全性。"
+									}),
 									(0, react_jsx_runtime.jsx)("button", {
-										onClick: config.otpEnabled ? disableOTP : enableOTP,
+										onClick: otpEnabled ? disableOTP : enableOTP,
 										style: {
-											background: config.otpEnabled ? '#ff4d4f' : '#52c41a',
+											background: otpEnabled ? '#ff4d4f' : '#52c41a',
 											color: 'white',
 											border: 'none',
 											borderRadius: '6px',
 											padding: '8px 16px',
 											fontSize: '13px',
 											cursor: 'pointer',
-											alignSelf: 'flex-start',
 										},
-										children: config.otpEnabled ? "禁用 OTP" : "启用 OTP"
-									}),
-									status && (0, react_jsx_runtime.jsx)("div", {
-										style: {
-											marginTop: '8px',
-											padding: '8px 12px',
-											borderRadius: '6px',
-											fontSize: '12px',
-											background: status.type === 'success' ? '#f6ffed' : '#fff2f0',
-											border: `1px solid ${status.type === 'success' ? '#b7eb8f' : '#ffccc7'}`,
-											color: status.type === 'success' ? '#52c41a' : '#ff4d4f',
-										},
-										children: status.message
+										children: otpEnabled ? "禁用 OTP" : "启用 OTP"
 									}),
 								]
 							}),
+
+							// Change Password Section
+							(0, react_jsx_runtime.jsxs)("div", {
+								style: { marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e8e8e8' },
+								children: [
+									(0, react_jsx_runtime.jsx)("div", {
+										style: { fontSize: '13px', fontWeight: '500', marginBottom: '8px' },
+										children: "修改密码"
+									}),
+									!showChangePassword ? (0, react_jsx_runtime.jsx)("button", {
+										onClick: () => setShowChangePassword(true),
+										style: {
+											background: '#1677ff',
+											color: 'white',
+											border: 'none',
+											borderRadius: '6px',
+											padding: '8px 16px',
+											fontSize: '13px',
+											cursor: 'pointer',
+										},
+										children: "修改密码"
+									}) : (0, react_jsx_runtime.jsxs)("div", {
+										style: { display: 'flex', flexDirection: 'column', gap: '12px' },
+										children: [
+											(0, react_jsx_runtime.jsx)("input", {
+												type: "password",
+												placeholder: "当前密码",
+												value: oldPassword,
+												onChange: (e) => setOldPassword(e.target.value),
+												style: inputStyle,
+											}),
+											(0, react_jsx_runtime.jsx)("input", {
+												type: "password",
+												placeholder: "新密码（至少 8 位）",
+												value: newPassword,
+												onChange: (e) => setNewPassword(e.target.value),
+												style: inputStyle,
+											}),
+											(0, react_jsx_runtime.jsx)("input", {
+												type: "password",
+												placeholder: "确认新密码",
+												value: confirmPassword,
+												onChange: (e) => setConfirmPassword(e.target.value),
+												style: inputStyle,
+											}),
+											(0, react_jsx_runtime.jsxs)("div", {
+												style: { display: 'flex', gap: '8px' },
+												children: [
+													(0, react_jsx_runtime.jsx)("button", {
+														onClick: changePassword,
+														disabled: changingPassword,
+														style: {
+															background: '#1677ff',
+															color: 'white',
+															border: 'none',
+															borderRadius: '6px',
+															padding: '8px 16px',
+															fontSize: '13px',
+															cursor: changingPassword ? 'not-allowed' : 'pointer',
+															opacity: changingPassword ? 0.6 : 1,
+														},
+														children: changingPassword ? "修改中..." : "确认修改"
+													}),
+													(0, react_jsx_runtime.jsx)("button", {
+														onClick: () => {
+															setShowChangePassword(false);
+															setOldPassword('');
+															setNewPassword('');
+															setConfirmPassword('');
+														},
+														style: {
+															background: '#f5f5f5',
+															color: '#666',
+															border: '1px solid #d9d9d9',
+															borderRadius: '6px',
+															padding: '8px 16px',
+															fontSize: '13px',
+															cursor: 'pointer',
+														},
+														children: "取消"
+													}),
+												]
+											}),
+										]
+									}),
+								]
+							}),
+
+							// Logout Section
+							(0, react_jsx_runtime.jsxs)("div", {
+								children: [
+									(0, react_jsx_runtime.jsx)("button", {
+										onClick: logout,
+										style: {
+											background: '#ff4d4f',
+											color: 'white',
+											border: 'none',
+											borderRadius: '6px',
+											padding: '8px 16px',
+											fontSize: '13px',
+											cursor: 'pointer',
+										},
+										children: "退出登录"
+									}),
+								]
+							}),
+
+							// Status message
+							status && (0, react_jsx_runtime.jsx)("div", {
+								style: {
+									marginTop: '16px',
+									padding: '8px 12px',
+									borderRadius: '6px',
+									fontSize: '12px',
+									background: status.type === 'success' ? '#f6ffed' : '#fff2f0',
+									border: `1px solid ${status.type === 'success' ? '#b7eb8f' : '#ffccc7'}`,
+									color: status.type === 'success' ? '#52c41a' : '#ff4d4f',
+								},
+								children: status.message
+							}),
 						]
 					}),
+
+					// QR Code Modal
 					showQRModal && qrData && (0, react_jsx_runtime.jsx)("div", {
 						style: {
 							position: 'fixed',
@@ -340,7 +472,6 @@ window.__ModuleLoader__.load({
 												fontFamily: 'monospace',
 												fontSize: '13px',
 												wordBreak: 'break-all',
-												selectAll: true,
 											},
 											children: qrData.secret
 										}),
@@ -398,11 +529,11 @@ window.__ModuleLoader__.load({
 		function apply(ctx) {
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
-				id: "otp",
+				id: "user-settings",
 				order: 20,
-				label: () => "OTP 认证",
+				label: () => "用户设置",
 				locale: "dsh-password-gate",
-			}, OTPSettingsPanel));
+			}, UserSettingsPanel));
 		}
 
 		exports.apply = apply;

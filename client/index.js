@@ -24,6 +24,8 @@ window.__ModuleLoader__.load({
 			const [newPassword, setNewPassword] = react.useState('');
 			const [confirmPassword, setConfirmPassword] = react.useState('');
 			const [changingPassword, setChangingPassword] = react.useState(false);
+			const [otpCode, setOtpCode] = react.useState('');
+			const [verifyingOtp, setVerifyingOtp] = react.useState(false);
 
 			react.useEffect(() => { loadSettings(); }, []);
 
@@ -64,8 +66,29 @@ window.__ModuleLoader__.load({
 			}
 
 			function closeQRModal() {
-				setShowQRModal(false); setQrData(null);
+				setShowQRModal(false); setQrData(null); setOtpCode('');
 				setStatus({ type: 'success', message: 'OTP 已启用' });
+			}
+
+			async function verifyOTPSetup() {
+				if (otpCode.length !== 6) { setStatus({ type: 'error', message: '请输入 6 位验证码' }); return; }
+				setVerifyingOtp(true); setStatus(null);
+				try {
+					const res = await fetch('/otp/verify-setup', {
+						method: 'POST', headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ otp: otpCode }),
+					});
+					const data = await res.json();
+					if (data.ok) {
+						closeQRModal();
+					} else {
+						setStatus({ type: 'error', message: '验证失败: ' + (data.error || '验证码错误') });
+					}
+				} catch (err) {
+					setStatus({ type: 'error', message: '验证失败: ' + err.message });
+				} finally {
+					setVerifyingOtp(false);
+				}
 			}
 
 			async function changePassword() {
@@ -192,10 +215,23 @@ window.__ModuleLoader__.load({
 									(0, react_jsx_runtime.jsx)("div", { style: { padding: '8px 12px', background: '#f6f8fa', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }, children: qrData.secret }),
 								] }),
 								(0, react_jsx_runtime.jsxs)("div", { style: { margin: '16px 0' }, children: [
-									(0, react_jsx_runtime.jsx)("div", { style: { fontSize: '12px', fontWeight: '500', marginBottom: '8px' }, children: "备份代码（请妥善保存）：" }),
-									(0, react_jsx_runtime.jsx)("div", { style: { padding: '8px 12px', background: '#f6f8fa', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap' }, children: qrData.backupCodes.join('\n') }),
+									(0, react_jsx_runtime.jsx)("div", { style: { fontSize: '12px', fontWeight: '500', marginBottom: '8px' }, children: "输入验证码以完成设置：" }),
+									(0, react_jsx_runtime.jsx)("input", {
+										type: "text", placeholder: "输入 6 位验证码", maxLength: 6,
+										value: otpCode, onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, '')),
+										style: { border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '13px', outline: 'none', width: '100%', textAlign: 'center', letterSpacing: '4px', fontFamily: 'monospace' },
+										onKeyDown: (e) => { if (e.key === 'Enter') verifyOTPSetup(); }
+									}),
 								] }),
-								(0, react_jsx_runtime.jsx)("button", { onClick: closeQRModal, style: { width: '100%', marginTop: '16px', padding: '10px', background: '#1677ff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }, children: "我已保存，关闭" }),
+								status && (0, react_jsx_runtime.jsx)("div", {
+									style: { margin: '12px 0', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', background: status.type === 'success' ? '#f6ffed' : '#fff2f0', border: `1px solid ${status.type === 'success' ? '#b7eb8f' : '#ffccc7'}`, color: status.type === 'success' ? '#52c41a' : '#ff4d4f' },
+									children: status.message
+								}),
+								(0, react_jsx_runtime.jsx)("button", {
+									onClick: verifyOTPSetup, disabled: verifyingOtp,
+									style: { width: '100%', marginTop: '8px', padding: '10px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: verifyingOtp ? 'not-allowed' : 'pointer', opacity: verifyingOtp ? 0.6 : 1 },
+									children: verifyingOtp ? "验证中..." : "验证并启用"
+								}),
 							]
 						})
 					})

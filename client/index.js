@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
 						if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
 						const inBorder = r === -1 || r === 7 || c === -1 || c === 7;
 						const inInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-					.modules[rr][cc] = inBorder || inInner;
+						modules[rr][cc] = inBorder || inInner;
 						reserved[rr][cc] = true;
 					}
 				}

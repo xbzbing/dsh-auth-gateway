@@ -47,7 +47,8 @@ window.__ModuleLoader__.load({
 					if (data.ok) {
 						setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes });
 						setShowQRModal(true);
-						setOtpEnabled(true);
+						// Do NOT flip the panel button here — OTP is not enabled
+						// until the 6-digit code is verified via verify-setup.
 					} else {
 						setStatus({ type: 'error', message: '启用失败: ' + (data.error || '未知错误') });
 					}
@@ -66,8 +67,10 @@ window.__ModuleLoader__.load({
 			}
 
 			function closeQRModal() {
-				setShowQRModal(false); setQrData(null); setOtpCode('');
-				setStatus({ type: 'success', message: 'OTP 已启用' });
+				// Cancel path: just close, keep the panel button in its
+				// current state (OTP was not verified here).
+				setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false);
+				setStatus(null);
 			}
 
 			async function verifyOTPSetup() {
@@ -80,7 +83,9 @@ window.__ModuleLoader__.load({
 					});
 					const data = await res.json();
 					if (data.ok) {
-						closeQRModal();
+						setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false);
+						setOtpEnabled(true);
+						setStatus({ type: 'success', message: 'OTP 已启用' });
 					} else {
 						setStatus({ type: 'error', message: '验证失败: ' + (data.error || '验证码错误') });
 					}

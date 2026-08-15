@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "dsh-password-gate/client",
+	id: "dsh-password-gate",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;

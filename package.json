@@ -6,7 +6,8 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./client": "./client/index.js"
+    "./client": "./client/index.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",

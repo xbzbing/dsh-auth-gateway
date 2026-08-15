@@ -552,7 +552,7 @@ window.__ModuleLoader__.load({
 			const inputStyle = {
 				border: '1px solid #d9d9d9',
 				borderRadius: '6px',
-				padding: '8px 12px',
+				padding: '8px 16px',
 				fontSize: '13px',
 				outline: 'none',
 				width: '100%',
@@ -843,7 +843,7 @@ window.__ModuleLoader__.load({
 										}),
 										(0, react_jsx_runtime.jsx)("div", {
 											style: {
-												padding: '8px 12px',
+												padding: '8px 16px',
 												background: '#f6f8fa',
 												borderRadius: '6px',
 												fontFamily: 'monospace',
@@ -863,7 +863,7 @@ window.__ModuleLoader__.load({
 										}),
 										(0, react_jsx_runtime.jsx)("div", {
 											style: {
-												padding: '8px 12px',
+												padding: '8px 16px',
 												background: '#f6f8fa',
 												borderRadius: '6px',
 												fontFamily: 'monospace',

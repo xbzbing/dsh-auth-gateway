@@ -266,27 +266,6 @@ window.__ModuleLoader__.load({
 										]
 									}),
 									(0, react_jsx_runtime.jsxs)("div", {
-										style: { display: 'flex', flexDirection: 'column', gap: '4px' },
-										children: [
-											(0, react_jsx_runtime.jsx)("label", {
-												style: { fontSize: '12px', fontWeight: '500' },
-												children: "发行者名称"
-											}),
-											(0, react_jsx_runtime.jsx)("input", {
-												type: "text",
-												value: config.otpIssuer,
-												onChange: (e) => setConfig(prev => ({ ...prev, otpIssuer: e.target.value })),
-												style: {
-													border: '1px solid #d9d9d9',
-													borderRadius: '6px',
-													padding: '6px 12px',
-													fontSize: '13px',
-													outline: 'none',
-												},
-											}),
-										]
-									}),
-									(0, react_jsx_runtime.jsxs)("div", {
 										style: { display: 'flex', gap: '8px', marginTop: '8px' },
 										children: [
 											(0, react_jsx_runtime.jsx)("button", {

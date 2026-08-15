@@ -231,6 +231,14 @@ function request(path, { method = 'GET', cookie, body, headers = {} } = {}) {
   })
 }
 
+/** Set up the initial password and return an authenticated session cookie. */
+async function loginCookie() {
+  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
+  const login = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!' } })
+  const setCookie = login.headers['set-cookie']
+  return (Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0]
+}
+
 test('OTP setup page returns 401 when not authenticated', async () => {
   await startGateway({}, { otpEnabled: true })
   const res = await request('/otp/setup')
@@ -240,12 +248,11 @@ test('OTP setup page returns 401 when not authenticated', async () => {
 
 test('OTP setup page returns 400 when OTP not enabled', async () => {
   await startGateway({}, { otpEnabled: false })
-  
-  // First set up password
-  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
-  
+
+  const cookie = await loginCookie()
+
   // Try to access OTP setup
-  const res = await request('/otp/setup')
+  const res = await request('/otp/setup', { cookie })
   assert.equal(res.status, 400)
   await stopGateway()
 })
@@ -259,12 +266,11 @@ test('OTP verify page returns 401 when not authenticated', async () => {
 
 test('OTP verify returns 400 when OTP not enabled', async () => {
   await startGateway({}, { otpEnabled: false })
-  
-  // First set up password
-  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
-  
+
+  const cookie = await loginCookie()
+
   // Try to verify OTP
-  const res = await request('/otp/verify', { method: 'POST', body: { otp: '123456' } })
+  const res = await request('/otp/verify', { method: 'POST', body: { otp: '123456' }, cookie })
   assert.equal(res.status, 400)
   await stopGateway()
 })

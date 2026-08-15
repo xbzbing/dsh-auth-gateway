@@ -217,9 +217,9 @@ window.__ModuleLoader__.load({
 								(0, react_jsx_runtime.jsxs)("div", { style: { margin: '16px 0' }, children: [
 									(0, react_jsx_runtime.jsx)("div", { style: { fontSize: '12px', fontWeight: '500', marginBottom: '8px' }, children: "输入验证码以完成设置：" }),
 									(0, react_jsx_runtime.jsx)("input", {
-										type: "text", placeholder: "输入 6 位验证码", maxLength: 6,
+										type: "text", placeholder: "6位验证码", maxLength: 6,
 										value: otpCode, onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, '')),
-										style: { border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '13px', outline: 'none', width: '100%', textAlign: 'center', letterSpacing: '4px', fontFamily: 'monospace' },
+										style: { border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', outline: 'none', width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: 'monospace' },
 										onKeyDown: (e) => { if (e.key === 'Enter') verifyOTPSetup(); }
 									}),
 								] }),

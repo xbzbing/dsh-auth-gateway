@@ -41,19 +41,24 @@ function done(name, file) {
 }
 
 try {
-  // ── 1. onboarding page (initial-password login) ──────────────────────
+  // ── 1. onboarding step 1 (optional OTP binding) after initial login ──
   assertInitial()
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#auth', { timeout: 10000 })
   await page.fill('#password', INITIAL)
   await page.click('button[type=submit]')
   await page.waitForURL('**/onboarding', { timeout: 15000 })
-  await page.waitForSelector('#change-form', { timeout: 10000 })
+  // The binding flow auto-starts on load (QR + secret + verify form).
+  await page.waitForSelector('#otp-setup', { state: 'visible', timeout: 10000 })
+  await page.waitForSelector('#qr[src]', { timeout: 10000 })
   await page.waitForTimeout(400)
   await page.screenshot({ path: path.join(OUT, 'onboarding.png') })
-  done('onboarding page (set personal password)', 'onboarding.png')
+  done('onboarding step 1 (optional OTP binding)', 'onboarding.png')
 
-  // ── 2. finish onboarding and land on the homepage ────────────────────
+  // ── 2. skip to the password step, finish onboarding, land on home ────
+  await page.click('button:has-text("跳过，直接设置密码")', { force: true })
+  await page.waitForURL('**/onboarding/password', { timeout: 15000 })
+  await page.waitForSelector('#change-form', { timeout: 10000 })
   await page.fill('#oldPassword', INITIAL)
   await page.fill('#newPassword', PASSWORD)
   await page.fill('#confirm', PASSWORD)
@@ -106,10 +111,9 @@ try {
   }, code)
   if (!verify.ok) throw new Error('OTP enable failed: ' + JSON.stringify(verify))
 
-  // ── 7. logout -> login page now carries the OTP field ────────────────
+  // ── 7. enabling OTP revoked every session: the login page now carries ──
+  // the OTP field (and the backup-code toggle)
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#logout', { timeout: 10000 })
-  await page.click('#logout')
   await page.waitForSelector('#auth', { timeout: 10000 })
   await page.waitForSelector('#otp', { timeout: 10000 })
   await page.waitForTimeout(300)

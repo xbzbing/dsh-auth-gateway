@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { localePreference, acceptLanguagePrimary, pageLocale } from '../lib/locale.js'
 import { loginPageHtml } from '../lib/login-page.js'
-import { onboardingPageHtml } from '../lib/onboarding-page.js'
+import { onboardingPageHtml, onboardingPasswordPageHtml } from '../lib/onboarding-page.js'
 import { otpSetupPage, otpVerifyPage } from '../lib/otp-page.js'
 
 let home
@@ -90,13 +90,27 @@ test('login page renders English copy with locale=en, zh stays the default', () 
   assert.ok(zh.includes('密码错误'), 'zh error map')
 })
 
-test('onboarding page renders English copy with locale=en', () => {
-  const en = onboardingPageHtml({ otpEnabled: true, locale: 'en' })
-  assert.ok(en.includes('Set your access password'), 'en title')
-  assert.ok(en.includes('Bind OTP'), 'en otp step button')
-  assert.ok(en.includes('The new passwords do not match'), 'en error map')
-  const zh = onboardingPageHtml({ otpEnabled: true })
-  assert.ok(zh.includes('设置你的访问密码'), 'zh default')
+test('onboarding pages render English copy with locale=en', () => {
+  // Step 1: the OTP binding flow is shown directly (auto-started on load),
+  // with a skip button to the password step.
+  const step1 = onboardingPageHtml({ locale: 'en' })
+  assert.ok(step1.includes('Bind a TOTP authenticator'), 'en step-1 title')
+  assert.ok(step1.includes('Skip — set the password'), 'en skip button')
+  assert.ok(step1.includes("location.href='/onboarding/password'"), 'skip links to the password step')
+  assert.ok(step1.includes('Verify & enable'), 'en binding-flow button')
+  assert.ok(step1.includes("post('/otp/enable', {}"), 'binding flow auto-starts on load')
+
+  // Step 2: mandatory personal password form (its script carries the errors).
+  const step2 = onboardingPasswordPageHtml({ locale: 'en' })
+  assert.ok(step2.includes('Set your access password'), 'en step-2 title')
+  assert.ok(step2.includes('Set new password'), 'en submit button')
+  assert.ok(step2.includes('The new passwords do not match'), 'en error map')
+
+  const zh1 = onboardingPageHtml()
+  assert.ok(zh1.includes('绑定 OTP 双因素认证'), 'zh step-1 default')
+  assert.ok(zh1.includes('验证并启用'), 'zh binding-flow button')
+  const zh2 = onboardingPasswordPageHtml()
+  assert.ok(zh2.includes('设置你的访问密码'), 'zh step-2 default')
 })
 
 test('otp pages render English copy with digits interpolation', () => {

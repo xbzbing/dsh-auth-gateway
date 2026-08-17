@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import { LoginGateway } from '../lib/gateway.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
 import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
+import { generateTOTP } from '../lib/totp.js'
 
 // ── fake upstream ───────────────────────────────────────────────────────
 
@@ -217,9 +218,14 @@ test('initial password: onboarding gate blocks everything until changed', async 
   assert.equal(root.headers.location, '/onboarding')
   assert.equal(seenRequests.length, 0, 'upstream must never see pre-onboarding traffic')
 
+  // Step 1 (optional OTP binding) is served; step 2 (password) is a
+  // separate page, both inside the onboarding flow.
   const onboarding = await request('/onboarding', { cookie })
   assert.equal(onboarding.status, 200)
-  assert.ok(onboarding.body.includes('设置你的访问密码'))
+  assert.ok(onboarding.body.includes('绑定 OTP 双因素认证'), 'step 1: optional OTP binding')
+  const step2 = await request('/onboarding/password', { cookie })
+  assert.equal(step2.status, 200)
+  assert.ok(step2.body.includes('设置你的访问密码'), 'step 2: mandatory password')
 
   // Set a personal password: the initial flag clears and every session dies.
   const change = await request('/login/change', {
@@ -290,11 +296,56 @@ test('onboarding and change-password pages follow the same language resolution',
   const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
   const cookie = cookieValue(loginRes.headers)
 
-  const onboarding = await request('/onboarding', { cookie })
-  assert.ok(onboarding.body.includes('Set your access password'), 'onboarding follows preference')
+  // Step 1 (OTP binding, auto-started) and step 2 (password) are separate
+  // pages now.
+  const step1 = await request('/onboarding', { cookie })
+  assert.ok(step1.body.includes('Bind a TOTP authenticator'), 'onboarding step 1 follows preference')
+  assert.ok(step1.body.includes('Verify & enable'), 'step 1 shows the binding flow')
+  assert.ok(step1.body.includes('/onboarding/password'), 'step 1 links to the password step')
+
+  const step2 = await request('/onboarding/password', { cookie })
+  assert.ok(step2.body.includes('Set your access password'), 'onboarding step 2 follows preference')
 
   const change = await request('/login', { cookie })
   assert.ok(change.body.includes('Change password'), 'change form follows preference')
+})
+
+test('binding OTP mid-onboarding does not revoke the session; the password step finishes and revokes once', async () => {
+  await startGateway({}, { otpEnabled: false })
+  await setPassword('Init1al!pw', { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'Init1al!pw' } })
+  const cookie = cookieValue(loginRes.headers)
+  assert.ok(cookie)
+
+  // Full HTTP binding flow while the session still owes onboarding.
+  const enable = await request('/otp/enable', { method: 'POST', cookie })
+  assert.equal(enable.status, 200)
+  const secret = JSON.parse(enable.body).secret
+  const code = generateTOTP(secret)
+  const verify = await request('/otp/verify-setup', { method: 'POST', cookie, body: { otp: code } })
+  assert.equal(verify.status, 200)
+  const vBody = JSON.parse(verify.body)
+  assert.equal(vBody.sessionRevoked, false, 'onboarding session must NOT be revoked by binding')
+  assert.equal(vBody.next, '/onboarding/password', 'response points back into onboarding')
+  assert.ok(vBody.backupCodes.length > 0)
+  // The onboarding branch must NOT clear the cookie either — otherwise the
+  // browser loses the session on the way to the password step.
+  const verifyCookies = Array.isArray(verify.headers['set-cookie']) ? verify.headers['set-cookie'] : []
+  assert.equal(verifyCookies.some((c) => c.startsWith('dsh_auth=')), false,
+    'onboarding verify-setup must not expire the session cookie')
+
+  // The session survives and reaches the password step.
+  const step2 = await request('/onboarding/password', { cookie })
+  assert.equal(step2.status, 200)
+
+  // Finishing the password step revokes everything (single revocation point).
+  const change = await request('/login/change', {
+    method: 'POST', cookie,
+    body: { oldPassword: 'Init1al!pw', newPassword: 'Personal1' },
+  })
+  assert.equal(change.status, 200)
+  const after = await request('/login-api/settings', { cookie })
+  assert.equal(after.status, 401, 'session revoked after the password step')
 })
 
 test('the legacy /login/setup endpoint is gone', async () => {

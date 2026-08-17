@@ -1,6 +1,6 @@
 # dsh-auth-gateway
 
-> 🌐 **Language**: [简体中文](README.md) | English
+<p align="center"><b>Language: <a href="README.md">简体中文</a> | English</b></p>
 
 A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: **password auth + TOTP two-factor authentication + layered brute-force protection + session management**, with **real interception of every request** (HTTP and WebSocket) at the gateway layer — unauthenticated traffic never reaches the backend.
 
@@ -15,6 +15,27 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
 - **Security events**: lockouts and exhausted rate-limit windows log warnings and broadcast a `dsh-auth-gateway/brute-force` Cordis event (JSON payload) for monitoring and automation;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built), all through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`).
+
+## Installation
+
+Published on npm (`dsh-auth-gateway`); can also be installed from GitHub or a local directory:
+
+```bash
+# Option 1: npm (published registry package)
+dsh plugin --profile web add dsh-auth-gateway
+
+# Option 2: GitHub repository (default branch; pin a ref with #main, #v0.2.0, ...)
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
+
+# Option 3: local dev directory (file: is an install-time snapshot — re-run
+# `dsh plugin --profile web remove dsh-auth-gateway` + `add` after editing the source)
+dsh plugin --profile web add file:/path/to/dsh-auth-gateway
+
+dsh web --dump-config   # verify webserver is 127.0.0.1:<internal port> and the dsh-auth-gateway row exists
+dsh web                 # open http://<host>:<external port>
+```
+
+The package ships a `dsh.bundle` patch (loopback webserver + plugin row) — no hand-written composition required.
 
 ## How it works
 
@@ -46,20 +67,6 @@ Browser ──> dsh-auth-gateway gateway (external port, inside the dsh process)
 <td align="center"><img src="docs/assets/settings-auth.png" width="480" alt="Auth settings panel"><br/>Auth settings panel</td>
 </tr>
 </table>
-
-## Installation
-
-```bash
-# Local dev directory or npm package
-dsh plugin --profile web add file:/path/to/dsh-auth-gateway
-# Or, once published
-dsh plugin --profile web add dsh-auth-gateway
-
-dsh web --dump-config   # verify webserver is 127.0.0.1:<internal port> and the dsh-auth-gateway row exists
-dsh web                 # open http://<host>:<external port>
-```
-
-The package ships a `dsh.bundle` patch (loopback webserver + plugin row) — no hand-written composition required.
 
 ## Quick start
 

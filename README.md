@@ -1,6 +1,6 @@
 # dsh-auth-gateway
 
-> 🌐 **语言 / Language**：简体中文（默认）｜ [English](README.en.md)
+<p align="center"><b>Language: 简体中文 | <a href="README.en.md">English</a></b></p>
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
@@ -15,6 +15,26 @@
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
 - **安全事件**：锁触发、限流耗尽时输出告警日志并广播 `dsh-auth-gateway/brute-force` Cordis 事件（JSON 负载），供监控与联动；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）。
+
+## 安装
+
+插件已发布到 npm（`dsh-auth-gateway`），也可从 GitHub 或本地目录安装：
+
+```bash
+# 方式一：npm（registry 安装）
+dsh plugin --profile web add dsh-auth-gateway
+
+# 方式二：GitHub 仓库（默认分支；可用 #main、#v0.2.0 等指定 ref）
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
+
+# 方式三：本地开发目录（file: 为安装时快照，改代码后需 remove + add 刷新）
+dsh plugin --profile web add file:/path/to/dsh-auth-gateway
+
+dsh web --dump-config   # 确认 webserver 为 127.0.0.1:<内部端口>，出现 dsh-auth-gateway 行
+dsh web                 # 打开 http://<host>:<对外端口>
+```
+
+插件自带 `dsh.bundle` patch（webserver 回环化 + 插件行），无需手写组合配置。
 
 ## 工作原理
 
@@ -46,20 +66,6 @@
 <td align="center"><img src="docs/assets/settings-auth.png" width="480" alt="认证设置面板"><br/>认证设置面板</td>
 </tr>
 </table>
-
-## 安装
-
-```bash
-# 本地开发目录或 npm 包
-dsh plugin --profile web add file:/path/to/dsh-auth-gateway
-# 或发布后
-dsh plugin --profile web add dsh-auth-gateway
-
-dsh web --dump-config   # 确认 webserver 为 127.0.0.1:<内部端口>，出现 dsh-auth-gateway 行
-dsh web                 # 打开 http://<host>:<对外端口>
-```
-
-插件自带 `dsh.bundle` patch（webserver 回环化 + 插件行），无需手写组合配置。
 
 ## 快速开始
 

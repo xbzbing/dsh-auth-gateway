@@ -5,7 +5,11 @@
  *
  *   - the bundle is a window.__ModuleLoader__.load({ id, factory }) registration
  *   - the factory returns { apply, inject } (plugin client contract)
- *   - apply() registers the "用户设置" settings.section slot
+ *   - inject declares only services apply() actually uses ('slots')
+ *   - apply() registers the "用户设置" settings.section slot with an inject
+ *     face delivering the gateway `api` to the component props
+ *   - the component takes no ctx prop (ctx belongs to the apply world only)
+ *   - react and slots stay external requires (not inlined)
  *
  * This guards against the bundle drifting out of contract (e.g. after a
  * hand-edit or a bad build).
@@ -17,6 +21,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
 const code = readFileSync(new URL('../client/index.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../client/src/index.jsx', import.meta.url), 'utf8')
 
 function loadBundle() {
   let handoff = null
@@ -45,30 +50,55 @@ function loadBundle() {
 test('client bundle registers with the dsh loader and exports the plugin contract', () => {
   const handoff = loadBundle()
   assert.equal(handoff.id, 'dsh-password-gate')
-  const mod = handoff.factory((spec) => {
-    const r = requireStub(spec)
-    if (r === undefined) throw new Error('unexpected require: ' + spec)
-    return r
-  })
+  const mod = handoff.factory(requireStub)
   assert.equal(typeof mod.apply, 'function', 'client exports must include apply')
   assert.ok(Array.isArray(mod.inject), 'client exports must include inject')
 })
 
-test('client apply() registers the user-settings section slot', () => {
+test('inject declares only services apply() actually uses', () => {
+  const handoff = loadBundle()
+  const mod = handoff.factory(requireStub)
+  // Spread into a host-realm array: the VM realm's Array prototype differs,
+  // which trips deepStrictEqual's prototype check.
+  assert.deepEqual([...mod.inject], ['slots'])
+})
+
+test('client apply() registers settings.section with an api inject face', () => {
   const handoff = loadBundle()
   const mod = handoff.factory(requireStub)
   let slotName = null
   let registered = null
+  let registeredComponent = null
   const ctx = {
     slots: {
       inject: (name, fn) => { slotName = name; registered = fn() },
-      register: (def) => ({ ...def }),
+      register: (def, component) => { registered = { ...def }; registeredComponent = component; return registered },
     },
   }
   mod.apply(ctx)
   assert.equal(slotName, 'settings.section')
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.label(), '用户设置')
+
+  // The inject face must deliver the gateway API to the component props.
+  assert.equal(typeof registered.inject, 'function', 'inject face must be a function')
+  const props = registered.inject()
+  assert.ok(props.api, 'component props must include the api object')
+  for (const method of ['getSettings', 'enableOtp', 'verifyOtpSetup', 'disableOtp', 'changePassword', 'logout']) {
+    assert.equal(typeof props.api[method], 'function', `api.${method} must be a function`)
+  }
+  assert.equal(typeof registeredComponent, 'function', 'register must receive the component')
+})
+
+test('component takes no ctx prop and never fetches directly', () => {
+  // ctx belongs to the apply world only — the component signature must be
+  // { api } (props from the slot inject face), and fetch calls may only live
+  // inside apply()'s api factory, never in the component body.
+  assert.ok(source.includes('function UserSettingsPanel({ api })'),
+    'component must receive props (api) only')
+  assert.ok(!source.includes('function UserSettingsPanel({ ctx })'),
+    'component must not receive ctx')
+  assert.ok(source.includes('const inject = [\'slots\']'), 'inject must declare only slots')
 })
 
 test('client bundle keeps react and slots as external requires (not inlined)', () => {

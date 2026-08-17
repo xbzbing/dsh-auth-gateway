@@ -51,6 +51,17 @@
 >
 > **生产建议**：用主密钥加密存储 OTP 密钥（例如用 `$DSH_HOME` 下的主机密钥派生加密密钥），这是后续工作的方向之一。
 
+> **⚠️ OTP 未激活时的启用权限（已知限制 / DoS 面）**
+>
+> 当 OTP **尚未启用**（`otpEnabled` 配置为 true 但未设置过）时，启用/设置 OTP（`/otp/enable`、`/otp/verify-setup`）仅要求**任意有效会话**——在密码泄露且 `otpRequired: false` 的场景下，攻击者可用泄露的密码登录后，绑定**自己的**认证器启用 OTP，导致真实用户登录被 2FA 锁死。这不构成凭据窃取（真实用户仍可用备份码……除非攻击者先于其绑定），主要是 **DoS 面**。
+>
+> **恢复路径**（需要本机访问权限）：
+> 1. 停止 dsh web；
+> 2. 删除 `$DSH_HOME/login-plugin/otp.json`（清除 2FA 绑定；如需同时重置密码，可再运行 `dsh-password-gate-reset` 删除 `password.json`，或直接删除整个 `login-plugin` 目录）；
+> 3. 重启 dsh web，重新设置密码 / 重新绑定自己的认证器。
+>
+> 更严格的方案（后续方向）：OTP 未激活时，`/otp/enable` 与 `/otp/verify-setup` 要求**密码重新验证**。
+
 **配置示例：**
 
 ```yaml

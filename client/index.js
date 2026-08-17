@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
 		var import_jsx_runtime = require("react/jsx-runtime");
-		function UserSettingsPanel({ ctx }) {
+		function UserSettingsPanel({ api }) {
 		  const [otpEnabled, setOtpEnabled] = (0, import_react.useState)(false);
 		  const [loading, setLoading] = (0, import_react.useState)(true);
 		  const [status, setStatus] = (0, import_react.useState)(null);
@@ -53,8 +53,7 @@ window.__ModuleLoader__.load({
 		  }, []);
 		  async function loadSettings() {
 		    try {
-		      const res = await fetch("/login-api/settings");
-		      const data = await res.json();
+		      const data = await api.getSettings();
 		      if (data.ok) setOtpEnabled(data.config?.["dsh-password-gate"]?.otpEnabled || false);
 		    } catch (err) {
 		      setStatus({ type: "error", message: "\u52A0\u8F7D\u5931\u8D25: " + err.message });
@@ -65,8 +64,7 @@ window.__ModuleLoader__.load({
 		  async function enableOTP() {
 		    setStatus(null);
 		    try {
-		      const res = await fetch("/otp/enable", { method: "POST" });
-		      const data = await res.json();
+		      const data = await api.enableOtp();
 		      if (data.ok) {
 		        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes });
 		        setShowQRModal(true);
@@ -88,12 +86,7 @@ window.__ModuleLoader__.load({
 		    const body = isDigits ? { otp: code } : { backupCode: code };
 		    setDisablingOtp(true);
 		    try {
-		      const res = await fetch("/otp/disable", {
-		        method: "POST",
-		        headers: { "content-type": "application/json" },
-		        body: JSON.stringify(body)
-		      });
-		      const data = await res.json();
+		      const data = await api.disableOtp(body);
 		      if (data.ok) {
 		        setStatus({ type: "success", message: "OTP \u5DF2\u7981\u7528" });
 		        setOtpEnabled(false);
@@ -123,12 +116,7 @@ window.__ModuleLoader__.load({
 		    setVerifyingOtp(true);
 		    setStatus(null);
 		    try {
-		      const res = await fetch("/otp/verify-setup", {
-		        method: "POST",
-		        headers: { "content-type": "application/json" },
-		        body: JSON.stringify({ otp: otpCode })
-		      });
-		      const data = await res.json();
+		      const data = await api.verifyOtpSetup(otpCode);
 		      if (data.ok) {
 		        setShowQRModal(false);
 		        setQrData(null);
@@ -157,12 +145,7 @@ window.__ModuleLoader__.load({
 		    setChangingPassword(true);
 		    setStatus(null);
 		    try {
-		      const res = await fetch("/login/change", {
-		        method: "POST",
-		        headers: { "content-type": "application/json" },
-		        body: JSON.stringify({ oldPassword, newPassword })
-		      });
-		      const data = await res.json();
+		      const data = await api.changePassword(oldPassword, newPassword);
 		      if (data.ok) {
 		        setStatus({ type: "success", message: "\u5BC6\u7801\u4FEE\u6539\u6210\u529F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55" });
 		        setShowChangePassword(false);
@@ -181,7 +164,7 @@ window.__ModuleLoader__.load({
 		  }
 		  async function logout() {
 		    try {
-		      await fetch("/login/logout", { method: "POST" });
+		      await api.logout();
 		      location.href = "/login";
 		    } catch (err) {
 		      setStatus({ type: "error", message: "\u9000\u51FA\u5931\u8D25: " + err.message });
@@ -298,14 +281,36 @@ window.__ModuleLoader__.load({
 		    ] }) })
 		  ] });
 		}
-		var inject = ["slots", "connection", "remote", "settingsScope"];
+		var inject = ["slots"];
 		function apply(ctx) {
+		  const api = {
+		    getSettings: async () => (await fetch("/login-api/settings")).json(),
+		    enableOtp: async () => (await fetch("/otp/enable", { method: "POST" })).json(),
+		    verifyOtpSetup: async (otp) => (await fetch("/otp/verify-setup", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ otp })
+		    })).json(),
+		    disableOtp: async (payload) => (await fetch("/otp/disable", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify(payload)
+		    })).json(),
+		    changePassword: async (oldPassword, newPassword) => (await fetch("/login/change", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ oldPassword, newPassword })
+		    })).json(),
+		    logout: async () => (await fetch("/login/logout", { method: "POST" })).json()
+		  };
+		  const injected = () => ({ api });
 		  ctx.slots.inject("settings.section", () => ctx.slots.register({
 		    name: "settings.section",
 		    id: "user-settings",
 		    order: 20,
 		    label: () => "\u7528\u6237\u8BBE\u7F6E",
-		    locale: "dsh-password-gate"
+		    locale: "dsh-password-gate",
+		    inject: injected
 		  }, UserSettingsPanel));
 		}
 		

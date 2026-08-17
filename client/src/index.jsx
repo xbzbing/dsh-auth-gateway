@@ -3,7 +3,14 @@
  *
  * Source of truth for the browser bundle (built by `client/build.mjs` into
  * `client/index.js`, which is what dsh serves via exports["./client"]).
- * Register the "用户设置" section through the dsh settings slot system.
+ *
+ * Contract notes (packages/client/AGENTS.md):
+ * - ctx belongs to the apply world only — the component receives everything
+ *   through props. All gateway access is wrapped in `api` inside apply() and
+ *   delivered via the slot's inject face, so the component never fetches
+ *   directly and stays injectable/testable.
+ * - `inject` lists only the services apply() actually uses (`slots`), aligned
+ *   with dsh.client.inject in package.json.
  */
 
 import { useEffect, useState } from 'react'
@@ -12,9 +19,10 @@ import { useEffect, useState } from 'react'
 import '@deepseek-ai/dsh-client-ui-slots'
 
 /**
- * User Settings Panel component.
+ * User Settings Panel component. Receives the gateway API via the
+ * settings.section inject face — no ctx, no direct fetch.
  */
-function UserSettingsPanel({ ctx }) {
+function UserSettingsPanel({ api }) {
   const [otpEnabled, setOtpEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState(null)
@@ -36,8 +44,7 @@ function UserSettingsPanel({ ctx }) {
 
   async function loadSettings() {
     try {
-      const res = await fetch('/login-api/settings')
-      const data = await res.json()
+      const data = await api.getSettings()
       if (data.ok) setOtpEnabled(data.config?.['dsh-password-gate']?.otpEnabled || false)
     } catch (err) {
       setStatus({ type: 'error', message: '加载失败: ' + err.message })
@@ -47,8 +54,7 @@ function UserSettingsPanel({ ctx }) {
   async function enableOTP() {
     setStatus(null)
     try {
-      const res = await fetch('/otp/enable', { method: 'POST' })
-      const data = await res.json()
+      const data = await api.enableOtp()
       if (data.ok) {
         setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes })
         setShowQRModal(true)
@@ -68,11 +74,7 @@ function UserSettingsPanel({ ctx }) {
     const body = isDigits ? { otp: code } : { backupCode: code }
     setDisablingOtp(true)
     try {
-      const res = await fetch('/otp/disable', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
+      const data = await api.disableOtp(body)
       if (data.ok) {
         setStatus({ type: 'success', message: 'OTP 已禁用' })
         setOtpEnabled(false)
@@ -96,11 +98,7 @@ function UserSettingsPanel({ ctx }) {
     if (otpCode.length !== 6) { setStatus({ type: 'error', message: '请输入 6 位验证码' }); return }
     setVerifyingOtp(true); setStatus(null)
     try {
-      const res = await fetch('/otp/verify-setup', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ otp: otpCode }),
-      })
-      const data = await res.json()
+      const data = await api.verifyOtpSetup(otpCode)
       if (data.ok) {
         setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false)
         setOtpEnabled(true)
@@ -120,11 +118,7 @@ function UserSettingsPanel({ ctx }) {
     if (newPassword.length < 8) { setStatus({ type: 'error', message: '密码至少需要 8 位' }); return }
     setChangingPassword(true); setStatus(null)
     try {
-      const res = await fetch('/login/change', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ oldPassword, newPassword }),
-      })
-      const data = await res.json()
+      const data = await api.changePassword(oldPassword, newPassword)
       if (data.ok) {
         setStatus({ type: 'success', message: '密码修改成功，请重新登录' })
         setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('')
@@ -135,7 +129,7 @@ function UserSettingsPanel({ ctx }) {
   }
 
   async function logout() {
-    try { await fetch('/login/logout', { method: 'POST' }); location.href = '/login' }
+    try { await api.logout(); location.href = '/login' }
     catch (err) { setStatus({ type: 'error', message: '退出失败: ' + err.message }) }
   }
 
@@ -263,12 +257,34 @@ function UserSettingsPanel({ ctx }) {
   )
 }
 
-const inject = ['slots', 'connection', 'remote', 'settingsScope']
+/** Services this plugin's apply() actually uses (ctx.slots only). */
+const inject = ['slots']
 
 function apply(ctx) {
+  // Gateway access lives in the apply world; the component only sees the
+  // api object through the slot's inject face (no direct fetch in props).
+  const api = {
+    getSettings: async () => (await fetch('/login-api/settings')).json(),
+    enableOtp: async () => (await fetch('/otp/enable', { method: 'POST' })).json(),
+    verifyOtpSetup: async (otp) => (await fetch('/otp/verify-setup', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ otp }),
+    })).json(),
+    disableOtp: async (payload) => (await fetch('/otp/disable', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })).json(),
+    changePassword: async (oldPassword, newPassword) => (await fetch('/login/change', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ oldPassword, newPassword }),
+    })).json(),
+    logout: async () => (await fetch('/login/logout', { method: 'POST' })).json(),
+  }
+  const injected = () => ({ api })
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 20,
     label: () => '用户设置', locale: 'dsh-password-gate',
+    inject: injected,
   }, UserSettingsPanel))
 }
 

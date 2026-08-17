@@ -67,6 +67,8 @@ dsh-auth-gateway-reset
 
 `dsh-auth-gateway-reset` 删除密码记录后，**必须重启 dsh web**：初始密码在启动时生成并打印到控制台（插件没有"设置密码"页面），登录后走引导流程设置个人密码。丢失认证器时还需删除 `$DSH_HOME/auth-gate/otp.json`（或直接运行 `dsh-auth-gateway-uninstall`）。
 
+> **顺序提醒**：如需同时卸载插件，**先运行上面的凭据命令，再执行 `dsh plugin --profile web remove dsh-auth-gateway`**——remove 会移除 profile 里的插件依赖，两个命令的 bin 链接随之失效（悬空指向已删除的目标）。
+
 ## 升级
 
 `dsh plugin --profile web add file:...` 后需 **remove + add** 刷新 pnpm 快照（`file:` 依赖是安装时快照），再重启 dsh web。插件自带 `dsh-auth-gateway-reset`/`dsh-auth-gateway-uninstall` 命令（升级无需运行）。

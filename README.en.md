@@ -101,12 +101,22 @@ Authentication-state changes (enable/disable OTP, change password) always requir
 
 ## Uninstall & reset
 
+**Run the bundled credential commands FIRST, then `remove`** — `dsh plugin remove` removes the plugin dependency from the profile, and with it the `dsh-auth-gateway-reset` / `dsh-auth-gateway-uninstall` bins stop working.
+
 ```bash
-dsh plugin --profile web remove dsh-auth-gateway      # removes the composition; webserver reverts to default
-~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall   # removes credential data ($DSH_HOME/auth-gate/)
+# Forgot the password: reset the password record (2FA binding stays; also
+# delete otp.json if the authenticator is lost)
+~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-reset
+# Or wipe all credentials (password + OTP secret + backup codes)
+~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall
+
+# Remove the plugin only after cleaning up credentials (remove does not touch data)
+dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-Forgot the password? Run `dsh-auth-gateway-reset` (removes only password.json; `$DSH_HOME` defaults to `~/.dsh`), then **restart dsh web** — a fresh initial password is printed to the console and the onboarding flow lets you set a new one. The two bundled commands are linked into the profile's `node_modules/.bin`, which is not on PATH by default: use the full path or `export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"` first. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (Chinese) for details.
+- `reset` removes only `$DSH_HOME/auth-gate/password.json` (`$DSH_HOME` defaults to `~/.dsh`): **restart dsh web** — a fresh initial password is printed to the console and the onboarding flow lets you set a new one;
+- `uninstall` deletes the whole `auth-gate/` directory (password + OTP secret + backup codes);
+- The two bundled commands are linked into the profile's `node_modules/.bin`, which is not on PATH by default: use the full path or `export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"` first. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (Chinese) for details.
 
 ## Documentation
 

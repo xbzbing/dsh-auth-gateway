@@ -100,12 +100,21 @@ dsh web                 # 打开 http://<host>:<对外端口>
 
 ## 卸载与重置
 
+**先运行插件自带的凭据命令，再 `remove`**——`dsh plugin remove` 会移除 profile 里的插件依赖，其 bin（`dsh-auth-gateway-reset` / `dsh-auth-gateway-uninstall`）随之失效，命令不可再用。
+
 ```bash
-dsh plugin --profile web remove dsh-auth-gateway      # 移除组合，webserver 恢复默认
-~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall   # 清理凭据数据（$DSH_HOME/auth-gate/）
+# 忘记密码：重置密码记录（2FA 绑定保留；丢失认证器时需再删 otp.json）
+~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-reset
+# 或彻底清理全部凭据（密码 + OTP 密钥 + 备份码）
+~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall
+
+# 凭据清理完成后再移除插件（remove 只移组合，不清理数据）
+dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-忘记密码时运行 `dsh-auth-gateway-reset`（只删 password.json；`$DSH_HOME` 默认 `~/.dsh`），然后**重启 dsh web**——新的初始密码会打印到控制台，登录后走引导流程重新设置。插件自带的两个命令链接在 profile 的 `node_modules/.bin`，默认不在 PATH 上，可用完整路径或 `export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"` 后直接调用；详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+- `reset` 只删 `$DSH_HOME/auth-gate/password.json`（`$DSH_HOME` 默认 `~/.dsh`）：**重启 dsh web** 后新初始密码打印到控制台，登录走引导重新设置；
+- `uninstall` 删除整个 `auth-gate/` 目录（密码 + OTP 密钥 + 备份码）；
+- 两个命令链接在 profile 的 `node_modules/.bin`，默认不在 PATH 上，可用完整路径或 `export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"` 后直接调用；详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ## 文档
 

@@ -140,6 +140,7 @@ window.__ModuleLoader__.load({
 		  "error.loadSettings": "\u52A0\u8F7D\u5931\u8D25: {message}",
 		  "error.enableOtp": "\u542F\u7528\u5931\u8D25: {message}",
 		  "error.disableOtp": "\u7981\u7528\u5931\u8D25: {message}",
+		  "error.disableOtpInvalid": "\u9A8C\u8BC1\u7801\u9519\u8BEF\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u4F7F\u7528\u8BA4\u8BC1\u5668\u4E2D\u7684\u6700\u65B0\u9A8C\u8BC1\u7801\u91CD\u8BD5\u3002",
 		  "error.verifyOtp": "\u9A8C\u8BC1\u5931\u8D25: {message}",
 		  "error.changePassword": "\u4FEE\u6539\u5931\u8D25: {message}",
 		  "error.logout": "\u9000\u51FA\u5931\u8D25: {message}",
@@ -193,6 +194,7 @@ window.__ModuleLoader__.load({
 		  "error.loadSettings": "Failed to load: {message}",
 		  "error.enableOtp": "Failed to enable: {message}",
 		  "error.disableOtp": "Failed to disable: {message}",
+		  "error.disableOtpInvalid": "Invalid or expired code \u2014 use the latest code from your authenticator and try again.",
 		  "error.verifyOtp": "Verification failed: {message}",
 		  "error.changePassword": "Failed to update: {message}",
 		  "error.logout": "Failed to sign out: {message}",
@@ -330,7 +332,8 @@ window.__ModuleLoader__.load({
 		        setShowDisableOtp(false);
 		        setDisableOtpCode("");
 		      } else {
-		        setStatus({ type: "error", message: t("error.disableOtp", { message: data.error || t("error.unknown") }) });
+		        const message = data.error === "invalid-otp" ? t("error.disableOtpInvalid") : t("error.disableOtp", { message: data.error || t("error.unknown") });
+		        setStatus({ type: "error", message });
 		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.disableOtp", { message: err.message }) });
@@ -650,7 +653,7 @@ window.__ModuleLoader__.load({
 		            color: status.type === "success" ? T.success : T.danger
 		          }, children: status.message })
 		        ] }) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => {
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => {
 		          location.href = "/login";
 		        }, children: t("dialog.doneBtn") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: t("dialog.cancel") }),

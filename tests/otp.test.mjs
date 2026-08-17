@@ -370,6 +370,25 @@ test('OTP disable succeeds with a valid TOTP code', async () => {
   await stopGateway()
 })
 
+test('OTP disable accepts the code of the CURRENT time step, even after login used it', async () => {
+  // Regression: disabling is destructive (the secret and the lastCounter
+  // watermark die with it), so the watermark must not reject the very code
+  // the user just used to log in within the same 30s step — otherwise the
+  // panel reports a confusing invalid-otp until the step rolls over.
+  await startGateway({}, { otpEnabled: true })
+  const cookie = await loginCookie()
+  const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
+  await verifySession(cookie) // consumes the current step's counter
+
+  // Same time step, same code the verification above accepted.
+  const code = generateTOTP(getOTPSecret())
+  const res = await request('/otp/disable', { method: 'POST', cookie, body: { otp: code } })
+  assert.equal(res.status, 200)
+  assert.ok(!getOTPStatus().enabled)
+  assert.equal(backupCodes.length, 3)
+  await stopGateway()
+})
+
 test('OTP disable succeeds with an unused backup code', async () => {
   await startGateway({}, { otpEnabled: true })
   const cookie = await loginCookie()

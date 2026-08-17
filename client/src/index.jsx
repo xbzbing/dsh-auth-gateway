@@ -114,6 +114,7 @@ const zh = {
   'error.loadSettings': '加载失败: {message}',
   'error.enableOtp': '启用失败: {message}',
   'error.disableOtp': '禁用失败: {message}',
+  'error.disableOtpInvalid': '验证码错误或已过期，请使用认证器中的最新验证码重试。',
   'error.verifyOtp': '验证失败: {message}',
   'error.changePassword': '修改失败: {message}',
   'error.logout': '退出失败: {message}',
@@ -169,6 +170,7 @@ const en = {
   'error.loadSettings': 'Failed to load: {message}',
   'error.enableOtp': 'Failed to enable: {message}',
   'error.disableOtp': 'Failed to disable: {message}',
+  'error.disableOtpInvalid': 'Invalid or expired code — use the latest code from your authenticator and try again.',
   'error.verifyOtp': 'Verification failed: {message}',
   'error.changePassword': 'Failed to update: {message}',
   'error.logout': 'Failed to sign out: {message}',
@@ -301,7 +303,10 @@ function UserSettingsPanel({ api, t }) {
         setShowDisableOtp(false)
         setDisableOtpCode('')
       } else {
-        setStatus({ type: 'error', message: t('error.disableOtp', { message: data.error || t('error.unknown') }) })
+        const message = data.error === 'invalid-otp'
+          ? t('error.disableOtpInvalid')
+          : t('error.disableOtp', { message: data.error || t('error.unknown') })
+        setStatus({ type: 'error', message })
       }
     } catch (err) { setStatus({ type: 'error', message: t('error.disableOtp', { message: err.message }) }) }
     finally { setDisablingOtp(false) }
@@ -540,7 +545,7 @@ function UserSettingsPanel({ api, t }) {
                 </>
               )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '0 24px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '0 24px 24px', marginTop: '20px' }}>
               {setupDone ? (
                 <Button variant="primary" onClick={() => { location.href = '/login' }}>{t('dialog.doneBtn')}</Button>
               ) : (

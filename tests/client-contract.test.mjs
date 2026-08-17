@@ -80,6 +80,11 @@ test('client apply() registers settings.section with an api inject face', () => 
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.label(), '用户设置')
 
+  // The registration must not declare a locale namespace that is never
+  // installed: slots render the `t` seat only for declared locales, and an
+  // uninstalled namespace fails loud at render time.
+  assert.equal(registered.locale, undefined, 'no uninstalled locale namespace')
+
   // The inject face must deliver the gateway API to the component props.
   assert.equal(typeof registered.inject, 'function', 'inject face must be a function')
   const props = registered.inject()

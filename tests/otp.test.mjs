@@ -22,6 +22,8 @@ import {
   hashBackupCode,
   verifyBackupCode,
 } from '../lib/totp.js'
+import { loginPageHtml } from '../lib/login-page.js'
+import { otpSetupPage, otpVerifyPage } from '../lib/otp-page.js'
 import {
   enableOTP,
   disableOTP,
@@ -432,13 +434,11 @@ test('unverified sessions cannot modify config or manage OTP when 2FA is active'
   await enableOTP({ backupCodeCount: 3 })
   assert.ok(getOTPStatus().enabled)
 
-  // Config read/write must be blocked for the unverified session.
+  // Config read must be blocked for the unverified session. (The config is
+  // boot-time composition — there is no write endpoint at all.)
   let res = await request('/login-api/settings', { cookie })
   assert.equal(res.status, 401)
   assert.equal(JSON.parse(res.body).error, 'otp-required')
-  res = await request('/login-api/settings', { method: 'POST', cookie, body: { 'dsh-password-gate': { otpEnabled: false } } })
-  assert.equal(res.status, 401)
-  assert.ok(getOTPStatus().enabled, 'OTP must stay enabled — config was not modified')
 
   // OTP management endpoints must be blocked.
   res = await request('/otp/setup', { cookie })
@@ -462,4 +462,26 @@ test('unverified sessions cannot modify config or manage OTP when 2FA is active'
   res = await request('/login-api/settings', { cookie })
   assert.equal(res.status, 200)
   await stopGateway()
+})
+
+test('OTP pages honour the configured otpDigits', () => {
+  // Login page: input pattern/maxlength and the wire() validation follow digits.
+  const login = loginPageHtml({ mode: 'auth', otpEnabled: true, digits: 8 })
+  assert.ok(login.includes('pattern="[0-9]{8}"'), 'login input pattern must use digits')
+  assert.ok(login.includes('maxlength="8"'), 'login input maxlength must use digits')
+  assert.ok(login.includes('otpDigits: 8'), 'wire() must receive the configured digits')
+
+  // Setup page: same for the standalone setup flow.
+  const setup = otpSetupPage({ uri: 'otpauth://totp/t:u', secret: 'SECRET', backupCodes: [], digits: 8 })
+  assert.ok(setup.includes('pattern="[0-9]{8}"'), 'setup input pattern must use digits')
+  assert.ok(setup.includes('otp.length !== 8'), 'setup validation must use digits')
+
+  // Verify page: same for the login-time verification flow.
+  const verify = otpVerifyPage({ hasBackupCodes: false, digits: 8 })
+  assert.ok(verify.includes('pattern="[0-9]{8}"'), 'verify input pattern must use digits')
+  assert.ok(verify.includes('otp.length !== 8'), 'verify validation must use digits')
+
+  // Defaults stay 6.
+  assert.ok(loginPageHtml({ mode: 'auth', otpEnabled: true }).includes('pattern="[0-9]{6}"'))
+  assert.ok(otpVerifyPage().includes('pattern="[0-9]{6}"'))
 })

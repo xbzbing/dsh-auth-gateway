@@ -24,6 +24,7 @@ import '@deepseek-ai/dsh-client-ui-slots'
  */
 function UserSettingsPanel({ api }) {
   const [otpEnabled, setOtpEnabled] = useState(false)
+  const [digits, setDigits] = useState(6)
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState(null)
   const [showQRModal, setShowQRModal] = useState(false)
@@ -45,7 +46,11 @@ function UserSettingsPanel({ api }) {
   async function loadSettings() {
     try {
       const data = await api.getSettings()
-      if (data.ok) setOtpEnabled(data.config?.['dsh-password-gate']?.otpEnabled || false)
+      if (data.ok) {
+        const cfg = data.config?.['dsh-password-gate'] || {}
+        setOtpEnabled(cfg.otpEnabled || false)
+        setDigits(cfg.otpDigits || 6)
+      }
     } catch (err) {
       setStatus({ type: 'error', message: '加载失败: ' + err.message })
     } finally { setLoading(false) }
@@ -95,7 +100,7 @@ function UserSettingsPanel({ api }) {
   }
 
   async function verifyOTPSetup() {
-    if (otpCode.length !== 6) { setStatus({ type: 'error', message: '请输入 6 位验证码' }); return }
+    if (otpCode.length !== digits) { setStatus({ type: 'error', message: '请输入 ' + digits + ' 位验证码' }); return }
     setVerifyingOtp(true); setStatus(null)
     try {
       const data = await api.verifyOtpSetup(otpCode)
@@ -236,7 +241,7 @@ function UserSettingsPanel({ api }) {
             <div style={{ margin: '16px 0' }}>
               <div style={{ fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>输入验证码以完成设置：</div>
               <input
-                type="text" placeholder="6位验证码" maxLength={6}
+                type="text" placeholder={digits + '位验证码'} maxLength={digits}
                 value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 style={{ border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', outline: 'none', width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: 'monospace' }}
                 onKeyDown={(e) => { if (e.key === 'Enter') verifyOTPSetup() }}
@@ -283,7 +288,7 @@ function apply(ctx) {
   const injected = () => ({ api })
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 20,
-    label: () => '用户设置', locale: 'dsh-password-gate',
+    label: () => '用户设置',
     inject: injected,
   }, UserSettingsPanel))
 }

@@ -34,6 +34,7 @@ window.__ModuleLoader__.load({
 		var import_jsx_runtime = require("react/jsx-runtime");
 		function UserSettingsPanel({ api }) {
 		  const [otpEnabled, setOtpEnabled] = (0, import_react.useState)(false);
+		  const [digits, setDigits] = (0, import_react.useState)(6);
 		  const [loading, setLoading] = (0, import_react.useState)(true);
 		  const [status, setStatus] = (0, import_react.useState)(null);
 		  const [showQRModal, setShowQRModal] = (0, import_react.useState)(false);
@@ -54,7 +55,11 @@ window.__ModuleLoader__.load({
 		  async function loadSettings() {
 		    try {
 		      const data = await api.getSettings();
-		      if (data.ok) setOtpEnabled(data.config?.["dsh-password-gate"]?.otpEnabled || false);
+		      if (data.ok) {
+		        const cfg = data.config?.["dsh-password-gate"] || {};
+		        setOtpEnabled(cfg.otpEnabled || false);
+		        setDigits(cfg.otpDigits || 6);
+		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: "\u52A0\u8F7D\u5931\u8D25: " + err.message });
 		    } finally {
@@ -109,8 +114,8 @@ window.__ModuleLoader__.load({
 		    setStatus(null);
 		  }
 		  async function verifyOTPSetup() {
-		    if (otpCode.length !== 6) {
-		      setStatus({ type: "error", message: "\u8BF7\u8F93\u5165 6 \u4F4D\u9A8C\u8BC1\u7801" });
+		    if (otpCode.length !== digits) {
+		      setStatus({ type: "error", message: "\u8BF7\u8F93\u5165 " + digits + " \u4F4D\u9A8C\u8BC1\u7801" });
 		      return;
 		    }
 		    setVerifyingOtp(true);
@@ -265,8 +270,8 @@ window.__ModuleLoader__.load({
 		          "input",
 		          {
 		            type: "text",
-		            placeholder: "6\u4F4D\u9A8C\u8BC1\u7801",
-		            maxLength: 6,
+		            placeholder: digits + "\u4F4D\u9A8C\u8BC1\u7801",
+		            maxLength: digits,
 		            value: otpCode,
 		            onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, "")),
 		            style: { border: "1px solid #d9d9d9", borderRadius: "6px", padding: "8px 12px", fontSize: "14px", outline: "none", width: "140px", textAlign: "center", letterSpacing: "6px", fontFamily: "monospace" },
@@ -309,7 +314,6 @@ window.__ModuleLoader__.load({
 		    id: "user-settings",
 		    order: 20,
 		    label: () => "\u7528\u6237\u8BBE\u7F6E",
-		    locale: "dsh-password-gate",
 		    inject: injected
 		  }, UserSettingsPanel));
 		}

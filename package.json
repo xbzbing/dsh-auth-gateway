@@ -7,6 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client/index.js",
+    "./client/src/*": "./client/src/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -26,18 +27,23 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs"
+    "build:client": "node client/build.mjs",
+    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
     }
   },
   "license": "MIT",
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "playwright": "^1.62.1"
   }
 }

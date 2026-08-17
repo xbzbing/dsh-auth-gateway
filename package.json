@@ -30,7 +30,7 @@
   "scripts": {
     "build:client": "node client/build.mjs",
     "build:check": "npm run build:client && git diff --exit-code -- client/index.js client/index.js.map",
-    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs tests/otp.test.mjs"
+    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs tests/otp.test.mjs tests/locale.test.mjs"
   },
   "dsh": {
     "bundle": {

@@ -12,7 +12,7 @@ import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import net from 'node:net'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LoginGateway } from '../lib/gateway.js'
@@ -263,6 +263,38 @@ test('LAN access: external Host/Origin are rewritten, request passes the fence',
   })
   assert.equal(res.status, 200)
   assert.equal(seenRequests.at(-1).host, `127.0.0.1:${upstreamPort}`)
+})
+
+test('gateway pages follow the dsh preference, then Accept-Language, then zh', async () => {
+  // 1. dsh user preference wins over the request header.
+  writeFileSync(join(home, 'settings.yaml'), 'locale:\n  preference: en\n')
+  const prefEn = await request('/login', { headers: { 'accept-language': 'zh-CN,zh;q=0.9' } })
+  assert.ok(prefEn.body.includes('Sign in'), 'preference: en renders English')
+  assert.ok(!prefEn.body.includes('请输入访问密码'))
+
+  // 2. No preference: the browser language decides.
+  rmSync(join(home, 'settings.yaml'))
+  const headerEn = await request('/login', { headers: { 'accept-language': 'en-US,en;q=0.9' } })
+  assert.ok(headerEn.body.includes('Sign in'), 'Accept-Language en renders English')
+  const headerZh = await request('/login', { headers: { 'accept-language': 'zh-CN,zh;q=0.9' } })
+  assert.ok(headerZh.body.includes('请输入访问密码'), 'Accept-Language zh renders Chinese')
+
+  // 3. No header: zh fallback.
+  const fallback = await request('/login')
+  assert.ok(fallback.body.includes('请输入访问密码'), 'no signal -> zh')
+})
+
+test('onboarding and change-password pages follow the same language resolution', async () => {
+  writeFileSync(join(home, 'settings.yaml'), 'locale:\n  preference: en\n')
+  await setPassword('GoodPass1', { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  const cookie = cookieValue(loginRes.headers)
+
+  const onboarding = await request('/onboarding', { cookie })
+  assert.ok(onboarding.body.includes('Set your access password'), 'onboarding follows preference')
+
+  const change = await request('/login', { cookie })
+  assert.ok(change.body.includes('Change password'), 'change form follows preference')
 })
 
 test('the legacy /login/setup endpoint is gone', async () => {

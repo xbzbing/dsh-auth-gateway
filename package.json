@@ -1,7 +1,7 @@
 {
-  "name": "dsh-password-gate",
+  "name": "dsh-auth-gateway",
   "version": "0.2.0",
-  "description": "Password login gateway plugin for dsh web: first-open password setup, login, password change with real request interception, and OTP two-factor authentication.",
+  "description": "Password login gateway plugin for dsh web: auto-generated initial password with forced onboarding, login, password change with real request interception, and OTP two-factor authentication.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -17,11 +17,12 @@
     "cordis.patch.yml",
     "scripts/uninstall.mjs",
     "scripts/reset.mjs",
-    "README.md"
+    "README.md",
+    "README.en.md"
   ],
   "bin": {
-    "dsh-password-gate-uninstall": "./scripts/uninstall.mjs",
-    "dsh-password-gate-reset": "./scripts/reset.mjs"
+    "dsh-auth-gateway-uninstall": "./scripts/uninstall.mjs",
+    "dsh-auth-gateway-reset": "./scripts/reset.mjs"
   },
   "engines": {
     "node": ">=20"

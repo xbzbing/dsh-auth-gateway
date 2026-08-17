@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
 # End-to-end verification against a running dsh web instance with the
-# dsh-password-gate installed. Run from anywhere:
+# dsh-auth-gateway installed. Run from anywhere:
 #
 #   BASE=http://127.0.0.1:3080 PASSWORD=your-password ./scripts/verify.sh
 #
-# Works against both a fresh deployment (runs the setup flow) and an already
-# configured one (setup answers 409, which is fine).
+# Works against both a fresh deployment (auto-generated initial password,
+# pass it via INITIAL_PASSWORD — printed by the dsh console on first boot;
+# the script then walks the onboarding flow) and an already configured one.
 #
 set -euo pipefail
 
 BASE="${BASE:-http://127.0.0.1:3080}"
 PASSWORD="${PASSWORD:-verify-pass-123}"
+INITIAL="${INITIAL_PASSWORD:-}"
 JAR="$(mktemp)"
 trap 'rm -f "$JAR"' EXIT
 
@@ -38,22 +40,32 @@ echo "== targeting $BASE =="
 check 'unauthenticated /api -> 401' 401 "$(code "$BASE/api/session.list" -X POST -H 'content-type: application/json' -d '{}')"
 check 'unauthenticated page -> 302' 302 "$(code "$BASE/")"
 
-# ── setup (409 when already set up — accepted) ───────────────────────────
-setup_body="{\"password\":\"$PASSWORD\"}"
-setup_code="$(code "$BASE/login/setup" -X POST -H 'content-type: application/json' -d "$setup_body")"
-if [ "$setup_code" = "200" ]; then
-  pass=$((pass + 1)); printf 'ok   setup password (fresh deployment)\n'
-elif [ "$setup_code" = "409" ]; then
-  pass=$((pass + 1)); printf 'ok   setup already done (409)\n'
-else
-  fail=$((fail + 1)); printf 'FAIL setup password (got %s)\n' "$setup_code"
-fi
-
 # ── login ────────────────────────────────────────────────────────────────
 check 'wrong password -> 401' 401 "$(code "$BASE/login/auth" -X POST -H 'content-type: application/json' -d '{"password":"wrong-pass"}')"
+
+# Fresh deployment: the personal password does not exist yet — use the
+# initial password, land on onboarding, set the personal password, re-login.
 auth_body="{\"password\":\"$PASSWORD\"}"
 login_code="$(code "$BASE/login/auth" -c "$JAR" -X POST -H 'content-type: application/json' -d "$auth_body")"
-check 'login -> 200' 200 "$login_code"
+if [ "$login_code" = "401" ]; then
+  if [ -z "$INITIAL" ]; then
+    fail=$((fail + 1)); printf 'FAIL login (no password yet; pass INITIAL_PASSWORD from the dsh console)\n'
+  else
+    initial_body="{\"password\":\"$INITIAL\"}"
+    init_code="$(code "$BASE/login/auth" -c "$JAR" -X POST -H 'content-type: application/json' -d "$initial_body")"
+    check 'initial password login -> 200' 200 "$init_code"
+    # The session owes onboarding: pages redirect, APIs refuse.
+    check 'onboarding gate: / -> 302 /onboarding' 302 "$(code "$BASE/" -b "$JAR")"
+    check 'onboarding gate: /api -> 401' 401 "$(code "$BASE/api/session.list" -b "$JAR" -X POST -H 'content-type: application/json' -d '{}')"
+    ob_body="{\"oldPassword\":\"$INITIAL\",\"newPassword\":\"$PASSWORD\"}"
+    check 'onboarding change password -> 200' 200 "$(code "$BASE/login/change" -b "$JAR" -X POST -H 'content-type: application/json' -d "$ob_body")"
+    check 'old session after onboarding -> 401' 401 "$(code "$BASE/api/session.list" -b "$JAR" -X POST -H 'content-type: application/json' -d '{}')"
+    login_code="$(code "$BASE/login/auth" -c "$JAR" -X POST -H 'content-type: application/json' -d "$auth_body")"
+    check 'login with new password -> 200' 200 "$login_code"
+  fi
+else
+  check 'login -> 200' 200 "$login_code"
+fi
 
 # ── authenticated access through the gate ────────────────────────────────
 check 'authenticated / -> forwarded' 200 "$(code "$BASE/" -b "$JAR")"

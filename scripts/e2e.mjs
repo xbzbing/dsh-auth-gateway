@@ -2,17 +2,21 @@
  * End-to-end test against a REAL dsh web instance with the login plugin.
  *
  * Covers the full product flow in a browser:
- *   1. first-open setup password page
- *   2. setup -> straight into the dsh homepage, UI loaded, zero JS errors
- *      (regression: crypto.randomUUID is not a function on plain-HTTP LAN)
+ *   1. fresh deployment: initial password -> forced onboarding -> personal
+ *      password -> re-login (regression: crypto.randomUUID is not a function
+ *      on plain-HTTP LAN)
+ *   2. after auth: homepage UI loaded, zero JS errors
  *   3. logout -> login page -> wrong password rejected -> login -> homepage
  *   4. change password -> all sessions revoked -> re-login with new password
  *
  * Usage (against a running `dsh web --port 8002`):
- *   PASSWORD=e2e-pass node scripts/e2e.mjs
+ *   PASSWORD=e2e-pass node scripts/e2e.mjs            (configured deploy)
+ *   INITIAL_PASSWORD=<console> PASSWORD=e2e-pass node scripts/e2e.mjs
+ *                                                    (fresh deploy)
  *
- * The script adapts to both fresh (setup page) and configured (login page)
- * deployments. It ends with the password changed to `${PASSWORD}-2`.
+ * A fresh deployment mints an auto-generated initial password printed to the
+ * dsh console; pass it via INITIAL_PASSWORD. The script ends with the
+ * password changed to `${PASSWORD}-2`.
  */
 
 import { chromium } from 'playwright'
@@ -53,19 +57,35 @@ try {
   assert.equal(unauth.status(), 401, 'unauthenticated /api must be 401')
   ok('unauthenticated /api answers 401 (real interception)')
 
-  // ── 1. login page: setup or auth by server-side state ─────────────────
+  // ── 1. login: the initial password (fresh deployment) or a personal one
+  // ────────────────────────────────────────────────────────────────────────
+  // Fresh deployments mint an auto-generated initial password printed to the
+  // dsh console; pass it via INITIAL_PASSWORD. Logging in with it lands on
+  // the onboarding page (set a personal password), then re-login. A
+  // configured deployment logs in with PASSWORD directly.
+  const INITIAL = process.env.INITIAL_PASSWORD
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('form', { timeout: 10000 })
-  const pageText = await page.evaluate(() => document.body.innerText)
-  if (pageText.includes('设置密码')) {
-    await page.fill('#password', PASSWORD)
-    await page.fill('#confirm', PASSWORD)
+  if (INITIAL) {
+    await page.fill('#password', INITIAL)
     await page.click('button[type=submit]')
-    ok('first open shows setup page; password set')
+    // Must be forced into onboarding, not into the app.
+    await page.waitForURL('**/onboarding', { timeout: 15000 })
+    await page.waitForSelector('#change-form', { timeout: 10000 })
+    ok('initial password login is routed to the onboarding page')
+    await page.fill('#oldPassword', INITIAL)
+    await page.fill('#newPassword', PASSWORD)
+    await page.fill('#confirm', PASSWORD)
+    await page.click('#change-form button[type=submit]')
+    await page.waitForSelector('#auth', { timeout: 15000 })
+    await page.fill('#password', PASSWORD)
+    await page.click('button[type=submit]')
+    ok('onboarding sets a personal password; re-login succeeds')
   } else {
     await page.fill('#password', PASSWORD)
     await page.click('button[type=submit]')
-    ok('configured deployment: logged in with existing password')
+    await page.waitForURL(`${BASE}/`, { timeout: 15000 })
+    ok('personal password login lands on /')
   }
 
   // ── 2. after auth: must land on the homepage with a working UI ────────

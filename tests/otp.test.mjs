@@ -8,7 +8,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -29,11 +29,13 @@ import {
   disableOTP,
   getOTPStatus,
   getOTPSecret,
+  getLastCounter,
+  setLastCounter,
   verifyAndUseBackupCode,
   hasOTP,
 } from '../lib/otp-store.js'
 import { LoginGateway } from '../lib/gateway.js'
-import { hasPassword } from '../lib/store.js'
+import { setPassword } from '../lib/store.js'
 
 // ── TOTP algorithm tests ────────────────────────────────────────────────
 
@@ -143,7 +145,7 @@ test('hashBackupCode and verifyBackupCode round-trip', async () => {
 let home
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-otp-test-'))
+  home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-otp-test-'))
   process.env.DSH_HOME = home
 })
 
@@ -202,6 +204,20 @@ test('verifyAndUseBackupCode works correctly', async () => {
   assert.ok(!secondTry)
 })
 
+test('corrupt otp.json fails loud instead of silently disabling 2FA', async () => {
+  const dir = join(home, 'auth-gate')
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  writeFileSync(join(dir, 'otp.json'), '{not json', { mode: 0o600 })
+
+  // Every read path must throw (fail loud, like password.json) — a silent
+  // `enabled: false` would let the next login skip 2FA entirely.
+  assert.throws(() => getOTPStatus(), /cannot read .*otp\.json/)
+  assert.throws(() => getOTPSecret(), /cannot read/)
+  assert.throws(() => getLastCounter(), /cannot read/)
+  assert.throws(() => setLastCounter(123), /cannot read/)
+  await assert.rejects(verifyAndUseBackupCode('x'), /cannot read/)
+})
+
 // ── Gateway OTP route tests ─────────────────────────────────────────────
 
 let gateway, gatewayPort
@@ -251,9 +267,9 @@ function request(path, { method = 'GET', cookie, body, headers = {} } = {}) {
   })
 }
 
-/** Set up the initial password and return an authenticated session cookie. */
+/** Set a non-initial password and return an authenticated session cookie. */
 async function loginCookie() {
-  await request('/login/setup', { method: 'POST', body: { password: 'Test1234!' } })
+  await setPassword('Test1234!')
   const login = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!' } })
   const setCookie = login.headers['set-cookie']
   return (Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0]
@@ -361,6 +377,48 @@ test('OTP disable succeeds with an unused backup code', async () => {
   const res = await request('/otp/disable', { method: 'POST', cookie, body: { backupCode: backupCodes[0] } })
   assert.equal(res.status, 200)
   assert.ok(!getOTPStatus().enabled)
+  await stopGateway()
+})
+
+test('login accepts a backup code when 2FA is active (lost authenticator)', async () => {
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
+
+  // No code at all → the server demands one of otp|backupCode.
+  const noCode = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!' } })
+  assert.equal(noCode.status, 400)
+  assert.equal(JSON.parse(noCode.body).error, 'otp-required')
+
+  // Wrong backup code → 401, nothing consumed.
+  const wrong = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', backupCode: 'WRONGCODE' },
+  })
+  assert.equal(wrong.status, 401)
+  assert.equal(JSON.parse(wrong.body).error, 'invalid-backup-code')
+
+  // Valid backup code → 200 + session, fully verified in one step.
+  const good = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', backupCode: backupCodes[0] },
+  })
+  assert.equal(good.status, 200)
+  const setCookie = good.headers['set-cookie']
+  const cookie = (Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0]
+  const settings = await request('/login-api/settings', { cookie })
+  assert.equal(settings.status, 200, 'backup-code session must be fully verified (no /otp/verify hop)')
+
+  // Backup codes are single-use: the same code must not log in twice.
+  const replay = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', backupCode: backupCodes[0] },
+  })
+  assert.equal(replay.status, 401)
+  assert.equal(JSON.parse(replay.body).error, 'invalid-backup-code')
+
+  // The TOTP path still works alongside the backup path.
+  const totpLogin = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', otp: generateTOTP(getOTPSecret()) },
+  })
+  assert.equal(totpLogin.status, 200)
   await stopGateway()
 })
 
@@ -480,6 +538,8 @@ test('OTP pages honour the configured otpDigits', () => {
   const verify = otpVerifyPage({ hasBackupCodes: false, digits: 8 })
   assert.ok(verify.includes('pattern="[0-9]{8}"'), 'verify input pattern must use digits')
   assert.ok(verify.includes('otp.length !== 8'), 'verify validation must use digits')
+  assert.ok(verify.includes('请输入认证器应用显示的 8 位验证码。'), 'verify subtitle must interpolate digits')
+  assert.ok(!verify.includes('${digits}'), 'verify subtitle must not leak the literal placeholder')
 
   // Defaults stay 6.
   assert.ok(loginPageHtml({ mode: 'auth', otpEnabled: true }).includes('pattern="[0-9]{6}"'))

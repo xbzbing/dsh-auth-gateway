@@ -1,5 +1,5 @@
 /**
- * dsh-password-gate client plugin — user settings panel.
+ * dsh-auth-gate client plugin — user settings panel.
  *
  * Source of truth for the browser bundle (built by `client/build.mjs` into
  * `client/index.js`, which is what dsh serves via exports["./client"]).
@@ -47,7 +47,7 @@ function UserSettingsPanel({ api }) {
     try {
       const data = await api.getSettings()
       if (data.ok) {
-        const cfg = data.config?.['dsh-password-gate'] || {}
+        const cfg = data.config?.['dsh-auth-gate'] || {}
         setOtpEnabled(cfg.otpEnabled || false)
         setDigits(cfg.otpDigits || 6)
       }
@@ -75,7 +75,7 @@ function UserSettingsPanel({ api }) {
     setStatus(null)
     const code = disableOtpCode.trim()
     if (!code) { setStatus({ type: 'error', message: '请输入当前验证码或备份代码' }); return }
-    const isDigits = /^\d{6}$/.test(code)
+    const isDigits = new RegExp('^\\d{' + digits + '}$').test(code)
     const body = isDigits ? { otp: code } : { backupCode: code }
     setDisablingOtp(true)
     try {
@@ -149,7 +149,7 @@ function UserSettingsPanel({ api }) {
     <>
       <div style={{ padding: '20px 0' }}>
         <h3 style={{ margin: '0 0 20px 0', fontSize: '15px', fontWeight: '600', color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>⚙️</span>用户设置
+          <span>⚙️</span>认证设置
         </h3>
         {/* OTP */}
         <div style={sectionStyle}>
@@ -288,7 +288,7 @@ function apply(ctx) {
   const injected = () => ({ api })
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 20,
-    label: () => '用户设置',
+    label: () => '认证设置',
     inject: injected,
   }, UserSettingsPanel))
 }

@@ -6,7 +6,7 @@
  *   - the bundle is a window.__ModuleLoader__.load({ id, factory }) registration
  *   - the factory returns { apply, inject } (plugin client contract)
  *   - inject declares only services apply() actually uses ('slots')
- *   - apply() registers the "用户设置" settings.section slot with an inject
+ *   - apply() registers the "认证设置" settings.section slot with an inject
  *     face delivering the gateway `api` to the component props
  *   - the component takes no ctx prop (ctx belongs to the apply world only)
  *   - react and slots stay external requires (not inlined)
@@ -49,7 +49,7 @@ function loadBundle() {
 
 test('client bundle registers with the dsh loader and exports the plugin contract', () => {
   const handoff = loadBundle()
-  assert.equal(handoff.id, 'dsh-password-gate')
+  assert.equal(handoff.id, 'dsh-auth-gateway')
   const mod = handoff.factory(requireStub)
   assert.equal(typeof mod.apply, 'function', 'client exports must include apply')
   assert.ok(Array.isArray(mod.inject), 'client exports must include inject')
@@ -78,7 +78,7 @@ test('client apply() registers settings.section with an api inject face', () => 
   mod.apply(ctx)
   assert.equal(slotName, 'settings.section')
   assert.equal(registered.id, 'user-settings')
-  assert.equal(registered.label(), '用户设置')
+  assert.equal(registered.label(), '认证设置')
 
   // The registration must not declare a locale namespace that is never
   // installed: slots render the `t` seat only for declared locales, and an

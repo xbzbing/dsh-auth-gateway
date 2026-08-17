@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "dsh-password-gate",
+	id: "dsh-auth-gateway",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -56,7 +56,7 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.getSettings();
 		      if (data.ok) {
-		        const cfg = data.config?.["dsh-password-gate"] || {};
+		        const cfg = data.config?.["dsh-auth-gateway"] || {};
 		        setOtpEnabled(cfg.otpEnabled || false);
 		        setDigits(cfg.otpDigits || 6);
 		      }

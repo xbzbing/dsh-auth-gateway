@@ -1,4 +1,4 @@
-# dsh-password-gate 方案报告（技术可行性分析）
+# dsh-auth-gateway 方案报告（技术可行性分析）
 
 > 版本：v1（调研基准：deepseek-harness 源码 2026-08 快照，`packages/` 目录）
 > 目标：为 dsh Web 提供"打开即登录"的最小可安装 MVP 插件。
@@ -101,8 +101,8 @@ bridge → connection.createSharedFetchHandler('/api', fallback)
     port: 3081               # 内部端口（与插件 config 的 upstreamPort 一致）
 
 - insert:
-    - id: dsh-password-gate
-      name: 'dsh-password-gate'
+    - id: dsh-auth-gateway
+      name: 'dsh-auth-gateway'
       config:
         listenHost: 0.0.0.0  # 对外监听（与用户期望一致）
         listenPort: 3080     # 对外端口，保持原 URL 不变
@@ -118,7 +118,7 @@ bridge → connection.createSharedFetchHandler('/api', fallback)
 ```mermaid
 flowchart LR
     Browser["浏览器<br/>(任意网络位置)"] -->|"GET / , POST /api/* , WS upgrade"| GW
-    subgraph GW["dsh-password-gate（进程内插件）"]
+    subgraph GW["dsh-auth-gateway（进程内插件）"]
         GW["认证网关 node:http 服务器<br/>0.0.0.0:3080"]
         AUTH["认证状态机<br/>setup / login / change / logout"]
         STORE["密码哈希 + token 会话表<br/>(node:crypto scrypt / 随机 token)"]
@@ -177,10 +177,10 @@ flowchart LR
 ```bash
 # 1. 安装：pnpm spec 装进 $DSH_HOME/profiles/web/ 的 node_modules。
 #    插件声明了 dsh.bundle → 自动加入 profile 的 bundles 层叠列表
-dsh plugin --profile web add file:/Users/ankh/workspace/private/dsh-password-gate
+dsh plugin --profile web add file:/Users/ankh/workspace/private/dsh-auth-gateway
 
 # 2. 验证组合树（应看到 webserver 行已被 bundle patch 改为 127.0.0.1:3081，
-#    且多出 dsh-password-gate 行）
+#    且多出 dsh-auth-gateway 行）
 dsh web --dump-config
 
 # 3. 启动
@@ -190,7 +190,7 @@ dsh web
 **路径 B：发布为 npm 包（正式部署）**
 
 ```bash
-dsh plugin --profile web add dsh-password-gate   # 其余步骤同上
+dsh plugin --profile web add dsh-auth-gateway   # 其余步骤同上
 ```
 
 `dsh plugin` 支持 pnpm 全部 spec：`file:`、`link:`、`git:`、tarball、registry 包名。
@@ -198,14 +198,14 @@ dsh plugin --profile web add dsh-password-gate   # 其余步骤同上
 **不声明 `dsh.bundle` 时的手动安装**（插件包不打算自携带 patch 时）：
 
 ```bash
-dsh plugin --profile web add dsh-password-gate
+dsh plugin --profile web add dsh-auth-gateway
 # 手动编辑 $DSH_HOME/profiles/web/cordis.patch.yml，加入 4.1 节的两段内容
 ```
 
 **卸载**：
 
 ```bash
-dsh plugin --profile web remove dsh-password-gate   # 移除依赖；reconcile 自动把它从 bundles 层叠列表摘除
+dsh plugin --profile web remove dsh-auth-gateway   # 移除依赖；reconcile 自动把它从 bundles 层叠列表摘除
 # 若曾手动写 patch：从 profile 的 cordis.patch.yml 删除 webserver 行改动与 insert 段
 # （webserver 的 host/port 恢复由 bundle 层消失自然完成）
 ```

@@ -49,7 +49,7 @@ function loadBundle() {
 
 test('client bundle registers with the dsh loader and exports the plugin contract', () => {
   const handoff = loadBundle()
-  assert.equal(handoff.id, 'dsh-password-gate')
+  assert.equal(handoff.id, 'dsh-auth-gateway')
   const mod = handoff.factory(requireStub)
   assert.equal(typeof mod.apply, 'function', 'client exports must include apply')
   assert.ok(Array.isArray(mod.inject), 'client exports must include inject')

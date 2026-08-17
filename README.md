@@ -1,6 +1,6 @@
-# dsh-password-gate
+# dsh-auth-gateway
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供密码登录网关的插件。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 增加远程访问能力，并通过密码和 OTP 进行安全加固。
 
 `dsh web` 本身**没有任何认证机制**——只要能路由到 Web 端口，任何人都可以调用全部 `/api` RPC（创建 agent、执行 bash、读写文件系统）。本插件在**每一个请求**（HTTP 与 WebSocket，包括直接 POST 到后端接口）之前加一道最小密码门禁。
 
@@ -57,7 +57,7 @@
 >
 > **恢复路径**（需要本机访问权限）：
 > 1. 停止 dsh web；
-> 2. 删除 `$DSH_HOME/login-plugin/otp.json`（清除 2FA 绑定；如需同时重置密码，可再运行 `dsh-password-gate-reset` 删除 `password.json`，或直接删除整个 `login-plugin` 目录）；
+> 2. 删除 `$DSH_HOME/login-plugin/otp.json`（清除 2FA 绑定；如需同时重置密码，可再运行 `dsh-auth-gateway-reset` 删除 `password.json`，或直接删除整个 `login-plugin` 目录）；
 > 3. 重启 dsh web，重新设置密码 / 重新绑定自己的认证器。
 >
 > 更严格的方案（后续方向）：OTP 未激活时，`/otp/enable` 与 `/otp/verify-setup` 要求**密码重新验证**。
@@ -66,7 +66,7 @@
 
 ```yaml
 # 启用 OTP（可选）
-dsh-password-gate:
+dsh-auth-gateway:
   config:
     otpEnabled: true
     otpRequired: false  # 设为 true 强制所有用户启用
@@ -86,7 +86,7 @@ dsh-password-gate:
 ## 工作原理
 
 ```
-浏览器 ──> dsh-password-gate 网关（0.0.0.0:3080，运行在 dsh 进程内）
+浏览器 ──> dsh-auth-gateway 网关（0.0.0.0:3080，运行在 dsh 进程内）
                │  每个请求都做认证检查（内存会话表，O(1)）
                ├─ 通过 ──> 转发（Host/Origin 改写为回环）──> dsh webserver（127.0.0.1:3081）
                └─ 未通过 ─> 401 / 302 / 拒绝 upgrade
@@ -100,13 +100,13 @@ dsh-password-gate:
 - **密码策略**：至少 8 位，且包含**大小写字母或特殊字符**（服务端强制 + 登录页即时反馈；可通过配置调整，见下）。
 - **失败锁定**：同一来源连续输错 5 次密码后锁定 5 分钟（期间正确密码也拒绝），登录成功即清零计数；按客户端 socket 地址计数，`x-forwarded-for` 伪造无效。
 - **全局限速**：全局每分钟最多 60 次登录尝试（防多 IP 轮换爆破），超限返回 `429 rate-limited`；scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环（不影响已登录用户的转发）。
-- **爆破提醒**（符合 dsh 规范）：锁触发或全局速率耗尽时，插件写一条 `ctx.logger.warn` 日志，并 `ctx.emit('dsh-password-gate/brute-force', payload)` 广播 Cordis 事件——payload 为 JSON 安全数据（`{kind: 'lockout'|'global-rate-limit', ...}`），任何插件可监听；每个锁定/窗口只提醒一次。**锁定不影响正在使用的用户**：已登录会话走转发通道，不经过登录端点。
+- **爆破提醒**（符合 dsh 规范）：锁触发或全局速率耗尽时，插件写一条 `ctx.logger.warn` 日志，并 `ctx.emit('dsh-auth-gateway/brute-force', payload)` 广播 Cordis 事件——payload 为 JSON 安全数据（`{kind: 'lockout'|'global-rate-limit', ...}`），任何插件可监听；每个锁定/窗口只提醒一次。**锁定不影响正在使用的用户**：已登录会话走转发通道，不经过登录端点。
 - **会话**：随机 256-bit token，存于内存，**30 天有效期**；dsh 重启后全员下线；修改密码吊销全部会话。
 - **Cookie**：`dsh_auth`，`HttpOnly; SameSite=Strict`（未加 `Secure`——MVP 走明文 HTTP）。
 - **修改密码入口**：访问 `/login`（已登录时直接显示改密表单）。
 - **前端 UI（client 插件）**：按 dsh 规范通过 `ctx.slots.register` 在「用户设置」槽位注册设置面板（OTP 启用/禁用、修改密码、退出登录）。客户端源码位于 `client/src/index.jsx`（JSX），构建产物 `client/index.js` 由 `npm run build:client` 生成（esbuild，含 source map）；dsh 通过 `exports["./client"]` 加载该产物。修改源码后需重新构建并同步到已安装副本。
 
-以上策略均为可配置项（bundle patch 或 profile patch 中覆盖 `dsh-password-gate` 行的 config）：
+以上策略均为可配置项（bundle patch 或 profile patch 中覆盖 `dsh-auth-gateway` 行的 config）：
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
@@ -119,7 +119,7 @@ dsh-password-gate:
 | `maxOtpAttemptsPerMinute` | `10` | 每个客户端地址每分钟的 OTP 验证尝试上限，防暴力猜测验证码/备份码（1–10000） |
 | `otpEnabled` | `false` | 是否启用 OTP 双因素认证 |
 | `otpRequired` | `false` | 是否强制所有用户启用 OTP |
-| `otpIssuer` | `dsh-password-gate` | OTP 发行者名称（显示在认证器应用中） |
+| `otpIssuer` | `dsh-auth-gateway` | OTP 发行者名称（显示在认证器应用中） |
 | `otpPeriod` | `30` | TOTP 周期（秒，10–120） |
 | `otpDigits` | `6` | OTP 位数（4–10） |
 | `otpWindow` | `1` | OTP 验证窗口（±N 个周期，0–5） |
@@ -133,13 +133,13 @@ dsh-password-gate:
 ### 方式一：本地开发目录安装（推荐）
 
 ```bash
-dsh plugin --profile web add file:/path/to/dsh-password-gate
+dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 ```
 
 ### 方式二：发布为 npm 包后安装
 
 ```bash
-dsh plugin --profile web add dsh-password-gate
+dsh plugin --profile web add dsh-auth-gateway
 ```
 
 `dsh plugin` 支持 pnpm 的全部 spec（`file:`、`link:`、`git:`、tarball、registry 包名）。
@@ -147,7 +147,7 @@ dsh plugin --profile web add dsh-password-gate
 ### 安装后验证
 
 ```bash
-# 1. 查看组合树：webserver 应变为 host 127.0.0.1、port 3081，并多出 dsh-password-gate 行
+# 1. 查看组合树：webserver 应变为 host 127.0.0.1、port 3081，并多出 dsh-auth-gateway 行
 dsh web --dump-config
 
 # 2. 启动
@@ -160,7 +160,7 @@ dsh web
 
 插件包的 `package.json` 声明了 `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`。`dsh plugin add` 检测到 `dsh.bundle` 声明后，会自动把该包加入 profile 的 bundle 层叠列表（`dsh plugin` 的 reconcile 逻辑），启动即挂载：
 
-- 包内 `cordis.patch.yml` 会把 webserver 行改为 `127.0.0.1:3081`（回环内部端口），并插入 `dsh-password-gate` 插件行；
+- 包内 `cordis.patch.yml` 会把 webserver 行改为 `127.0.0.1:3081`（回环内部端口），并插入 `dsh-auth-gateway` 插件行；
 - **无需手动编辑任何 patch 文件**；
 - 该 bundle 层的改动仍可被 profile 自身的 `cordis.patch.yml`、`$DSH_HOME/cordis.patch.yml` 及 `--patch` overlay 覆盖。
 
@@ -173,8 +173,8 @@ dsh web
     port: 3081
 
 - insert:
-    - id: dsh-password-gate
-      name: dsh-password-gate
+    - id: dsh-auth-gateway
+      name: dsh-auth-gateway
       config:
         listenHost: 0.0.0.0
         listenPort: 3080
@@ -185,7 +185,7 @@ dsh web
 ### 重复安装会怎样？
 
 - **再次执行 `dsh plugin --profile web add`**：幂等，无影响。pnpm 不会重复写入依赖（package.json 同名 key 唯一），reconcile 检查 `bundles.includes()` 也不会重复添加层。
-- **组合树中出现两个插件行**（例如两个 bundle 都 `insert` 了 `id: dsh-password-gate`，patch 的顶层 insert 不查重）：loader 会把插件挂载两次，第二个网关绑定同一对外端口时必然 `EADDRINUSE`，**启动明确失败**（fail loud，不会静默半坏）。第一个实例继续正常工作。删除重复行即可恢复。
+- **组合树中出现两个插件行**（例如两个 bundle 都 `insert` 了 `id: dsh-auth-gateway`，patch 的顶层 insert 不查重）：loader 会把插件挂载两次，第二个网关绑定同一对外端口时必然 `EADDRINUSE`，**启动明确失败**（fail loud，不会静默半坏）。第一个实例继续正常工作。删除重复行即可恢复。
 - **webserver 行被多层 patch**：patch 按 `id` 替换整行 config，后层覆盖前层，幂等。
 - **热重载（HMR）**：卸载先释放旧网关（端口释放），重新加载再绑定，不受影响。
 
@@ -196,7 +196,7 @@ dsh web
 ### 第一步：从 profile 移除插件
 
 ```bash
-dsh plugin --profile web remove dsh-password-gate
+dsh plugin --profile web remove dsh-auth-gateway
 ```
 
 该命令会移除插件依赖，reconcile 逻辑自动把它从 bundle 层叠列表摘除，其 bundle patch 随之失效——webserver 恢复默认的 `0.0.0.0` / `3080` 配置。
@@ -211,7 +211,7 @@ dsh plugin --profile web remove dsh-password-gate
 
 ```bash
 # 方式一：运行包自带的清理命令（安装后已链接到 profile 的 bin）
-dsh-password-gate-uninstall
+dsh-auth-gateway-uninstall
 
 # 方式二：手动删除
 rm -rf "$DSH_HOME/login-plugin"
@@ -227,7 +227,7 @@ rm -rf "$DSH_HOME/login-plugin"
 
 ```bash
 # 方式一：运行包自带的重置命令（安装后已链接到 profile 的 bin）
-dsh-password-gate-reset
+dsh-auth-gateway-reset
 
 # 方式二：手动删除
 rm -f "$DSH_HOME/login-plugin/password.json"
@@ -238,7 +238,7 @@ rm -f "$DSH_HOME/login-plugin/password.json"
 几点说明：
 
 - **无需重启**：网关每次校验都实时读文件，删除后立即进入未设置状态（内存中的既有会话仍有效，直到过期或重启；想让所有会话立刻下线，重启 `dsh web` 即可）；
-- 与卸载的区别：重置只删密码记录，**插件保持安装**、其余数据不受影响；`dsh-password-gate-uninstall` 才是彻底移除插件（含数据）；
+- 与卸载的区别：重置只删密码记录，**插件保持安装**、其余数据不受影响；`dsh-auth-gateway-uninstall` 才是彻底移除插件（含数据）；
 - 若 `$DSH_HOME` 未设置，默认目录为 `~/.dsh`。
 
 ## 自定义端口与监听地址
@@ -270,11 +270,11 @@ dsh web
 
 ### 只允许本机访问
 
-如果只想本机访问（不要对外监听），把 bundle patch（或 profile 自己的 patch）里 `dsh-password-gate` 行的 `listenHost` 改为 `127.0.0.1` 即可。
+如果只想本机访问（不要对外监听），把 bundle patch（或 profile 自己的 patch）里 `dsh-auth-gateway` 行的 `listenHost` 改为 `127.0.0.1` 即可。
 
 ### 固定端口（不使用 `--port`）
 
-若不想依赖 flag，可在 profile 自己的 `cordis.patch.yml` 中覆盖 `webserver` 与 `dsh-password-gate` 两行（你的补丁层优先级高于 bundle 层），注意 `webserver.port` 必须等于 `dsh-password-gate.config.upstreamPort`。手动覆盖后 `--port` flag 将不再生效（你的值优先）。
+若不想依赖 flag，可在 profile 自己的 `cordis.patch.yml` 中覆盖 `webserver` 与 `dsh-auth-gateway` 两行（你的补丁层优先级高于 bundle 层），注意 `webserver.port` 必须等于 `dsh-auth-gateway.config.upstreamPort`。手动覆盖后 `--port` flag 将不再生效（你的值优先）。
 
 ## 验证
 
@@ -320,7 +320,7 @@ None；本包既不组装也不发送 provider 请求。
 - **内存会话**：dsh 重启后全员下线。
 - **OTP 密钥存储**：当前 OTP 密钥以明文 Base32 存储在 `otp.json` 文件中。生产环境建议加密存储。
 - **OTP 无多用户支持**：当前 OTP 配置为全局共享，不支持多用户独立的 OTP 密钥。
-- 后续工作：TLS、多用户、UI 级爆破提醒（需在 client 插件中监听 `dsh-password-gate/brute-force` 事件并展示）。
+- 后续工作：TLS、多用户、UI 级爆破提醒（需在 client 插件中监听 `dsh-auth-gateway/brute-force` 事件并展示）。
 
 ## 开发统计
 

@@ -1,5 +1,5 @@
 /**
- * dsh-password-gate client plugin — user settings panel.
+ * dsh-auth-gateway client plugin — user settings panel.
  *
  * Source of truth for the browser bundle (built by `client/build.mjs` into
  * `client/index.js`, which is what dsh serves via exports["./client"]).
@@ -47,7 +47,7 @@ function UserSettingsPanel({ api }) {
     try {
       const data = await api.getSettings()
       if (data.ok) {
-        const cfg = data.config?.['dsh-password-gate'] || {}
+        const cfg = data.config?.['dsh-auth-gateway'] || {}
         setOtpEnabled(cfg.otpEnabled || false)
         setDigits(cfg.otpDigits || 6)
       }

@@ -143,7 +143,7 @@ test('hashBackupCode and verifyBackupCode round-trip', async () => {
 let home
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-otp-test-'))
+  home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-otp-test-'))
   process.env.DSH_HOME = home
 })
 

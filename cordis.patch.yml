@@ -1,4 +1,4 @@
-# dsh-password-gate bundle patch.
+# dsh-auth-gateway bundle patch.
 #
 # Mounted as a bundle layer (package.json "dsh.bundle"), applied after
 # dsh-base / dsh-web-app. Two effects:
@@ -33,8 +33,8 @@
     trustedHosts: !!js ctx.webStartup.trustedHosts
 
 - insert:
-    - id: dsh-password-gate
-      name: dsh-password-gate
+    - id: dsh-auth-gateway
+      name: dsh-auth-gateway
       inject: [webStartup]
       config:
         listenHost: 0.0.0.0

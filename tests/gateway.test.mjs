@@ -56,7 +56,7 @@ function closeUpstream() {
 let gateway, gatewayPort, home
 
 async function startGateway(policy) {
-  home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-test-'))
+  home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
     listenHost: '127.0.0.1',

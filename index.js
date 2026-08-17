@@ -83,12 +83,21 @@ export async function apply(ctx, config) {
   if (!hasPassword()) {
     const initial = generateInitialPassword()
     await setPassword(initial, { initial: true })
+    // Bilingual notice: the full Chinese block first, then the full English
+    // block, split by a dashed line — the same credential either way (a
+    // single `initial` value). The host console cannot know the browser's
+    // language reliably, so both are shown.
     console.log('')
     console.log('============================================================')
     console.log('  dsh-auth-gateway: 首次部署初始密码')
     console.log(`  初始密码: ${initial}`)
     console.log('  请使用该密码登录；登录后将引导你设置新的访问密码。')
     console.log('  （初始密码为一次性凭据，设置新密码后自动失效）')
+    console.log('------------------------------------------------------------')
+    console.log('  dsh-auth-gateway: first-run initial password')
+    console.log(`  Initial password: ${initial}`)
+    console.log('  Log in with it; you will be guided to set your own access password.')
+    console.log('  (One-time credential — invalidated once you set a new password)')
     console.log('============================================================')
     console.log('')
   }

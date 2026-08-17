@@ -60,30 +60,45 @@ test('inject declares only services apply() actually uses', () => {
   const mod = handoff.factory(requireStub)
   // Spread into a host-realm array: the VM realm's Array prototype differs,
   // which trips deepStrictEqual's prototype check.
-  assert.deepEqual([...mod.inject], ['slots'])
+  assert.deepEqual([...mod.inject], ['slots', 'locale'])
 })
 
-test('client apply() registers settings.section with an api inject face', () => {
+test('client apply() registers dictionaries and the settings.section slot', () => {
   const handoff = loadBundle()
   const mod = handoff.factory(requireStub)
   let slotName = null
   let registered = null
   let registeredComponent = null
+  let registeredNs = null
+  let registeredDicts = null
   const ctx = {
     slots: {
       inject: (name, fn) => { slotName = name; registered = fn() },
       register: (def, component) => { registered = { ...def }; registeredComponent = component; return registered },
     },
+    locale: {
+      register: (ns, dicts) => { registeredNs = ns; registeredDicts = dicts },
+      bind: () => (key) => '[' + key + ']',
+    },
   }
   mod.apply(ctx)
   assert.equal(slotName, 'settings.section')
   assert.equal(registered.id, 'user-settings')
-  assert.equal(registered.label(), '认证设置')
+  assert.equal(registered.locale, 'dsh-auth-gateway', 'slot must declare its locale namespace')
+
+  // Dictionaries: own namespace, zh source of truth, en key set complete.
+  assert.equal(registeredNs, 'dsh-auth-gateway')
+  const zhKeys = Object.keys(registeredDicts.zh).sort()
+  const enKeys = Object.keys(registeredDicts.en).sort()
+  assert.deepEqual(enKeys, zhKeys, 'en dictionary must cover every zh key')
+
+  // The label thunk goes through the bound translator (follows the locale).
+  assert.equal(registered.label(), '[nav]')
 
   // The registration must not declare a locale namespace that is never
   // installed: slots render the `t` seat only for declared locales, and an
   // uninstalled namespace fails loud at render time.
-  assert.equal(registered.locale, undefined, 'no uninstalled locale namespace')
+  assert.equal(registered.locale, 'dsh-auth-gateway', 'no uninstalled locale namespace')
 
   // The inject face must deliver the gateway API to the component props.
   assert.equal(typeof registered.inject, 'function', 'inject face must be a function')
@@ -97,13 +112,14 @@ test('client apply() registers settings.section with an api inject face', () => 
 
 test('component takes no ctx prop and never fetches directly', () => {
   // ctx belongs to the apply world only — the component signature must be
-  // { api } (props from the slot inject face), and fetch calls may only live
-  // inside apply()'s api factory, never in the component body.
-  assert.ok(source.includes('function UserSettingsPanel({ api })'),
-    'component must receive props (api) only')
+  // { api, t } (props from the slot inject face + the locale seat), and fetch
+  // calls may only live inside apply()'s api factory, never in the component
+  // body.
+  assert.ok(source.includes('function UserSettingsPanel({ api, t })'),
+    'component must receive props (api) and the locale seat (t)')
   assert.ok(!source.includes('function UserSettingsPanel({ ctx })'),
     'component must not receive ctx')
-  assert.ok(source.includes('const inject = [\'slots\']'), 'inject must declare only slots')
+  assert.ok(source.includes('const inject = [\'slots\', \'locale\']'), 'inject must declare slots and locale')
   // The settings key the panel reads must match the gateway's
   // /login-api/settings response key (lib/gateway.js #handleGetSettings) —
   // a rename miss here silently shows OTP as disabled.

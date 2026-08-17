@@ -96,6 +96,107 @@ window.__ModuleLoader__.load({
 		    e.currentTarget.style.borderColor = "";
 		  }
 		};
+		var NS = "dsh-auth-gateway";
+		var zh = {
+		  "nav": "\u8BA4\u8BC1\u8BBE\u7F6E",
+		  "header.desc": "\u7BA1\u7406\u767B\u5F55\u5BC6\u7801\u3001\u53CC\u56E0\u7D20\u8BA4\u8BC1\u4E0E\u767B\u5F55\u4F1A\u8BDD\u3002",
+		  "loading": "\u52A0\u8F7D\u4E2D...",
+		  "otp.title": "OTP \u53CC\u56E0\u7D20\u8BA4\u8BC1",
+		  "otp.enabled": "\u5DF2\u542F\u7528",
+		  "otp.disabled": "\u672A\u542F\u7528",
+		  "otp.desc": "\u542F\u7528\u540E\u767B\u5F55\u9700\u8981\u5BC6\u7801 + \u9A8C\u8BC1\u7801\uFF1B\u517C\u5BB9 Google Authenticator\u3001Authy \u7B49 TOTP \u5E94\u7528\uFF0C\u5E76\u63D0\u4F9B\u4E00\u6B21\u6027\u5907\u4EFD\u4EE3\u7801\u3002",
+		  "otp.enable": "\u542F\u7528 OTP",
+		  "otp.disable": "\u7981\u7528 OTP",
+		  "otp.disable.confirm": "\u8F93\u5165\u5F53\u524D {digits} \u4F4D\u9A8C\u8BC1\u7801\u6216\u4E00\u4E2A\u672A\u4F7F\u7528\u7684\u5907\u4EFD\u4EE3\u7801\u4EE5\u786E\u8BA4\u7981\u7528\uFF1A",
+		  "otp.disable.confirmBtn": "\u786E\u8BA4\u7981\u7528",
+		  "otp.disable.progress": "\u7981\u7528\u4E2D...",
+		  "otp.codePlaceholder": "\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801",
+		  "password.title": "\u767B\u5F55\u5BC6\u7801",
+		  "password.desc": "\u4FEE\u6539\u540E\u6240\u6709\u4F1A\u8BDD\u5C06\u4E0B\u7EBF\uFF0C\u9700\u8981\u91CD\u65B0\u767B\u5F55\u3002",
+		  "password.change": "\u4FEE\u6539\u5BC6\u7801",
+		  "password.old": "\u5F53\u524D\u5BC6\u7801",
+		  "password.new": "\u65B0\u5BC6\u7801\uFF08\u81F3\u5C11 8 \u4F4D\uFF0C\u542B\u5927\u5C0F\u5199\u5B57\u6BCD\u6216\u7279\u6B8A\u5B57\u7B26\uFF09",
+		  "password.confirm": "\u786E\u8BA4\u65B0\u5BC6\u7801",
+		  "password.submit": "\u786E\u8BA4\u4FEE\u6539",
+		  "password.progress": "\u4FEE\u6539\u4E2D...",
+		  "session.title": "\u767B\u5F55\u4F1A\u8BDD",
+		  "session.loggedIn": "\u5DF2\u767B\u5F55",
+		  "session.desc": "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002",
+		  "session.logout": "\u9000\u51FA\u767B\u5F55",
+		  "dialog.title": "\u8BBE\u7F6E OTP \u9A8C\u8BC1\u5668",
+		  "dialog.desc": "\u4F7F\u7528 Google Authenticator\u3001Authy \u6216\u5176\u4ED6 TOTP \u5E94\u7528\u626B\u63CF\u4EE5\u4E0B\u4E8C\u7EF4\u7801\uFF1A",
+		  "dialog.secret": "\u5BC6\u94A5\uFF08\u624B\u52A8\u8F93\u5165\u7528\uFF09",
+		  "dialog.code": "\u8F93\u5165\u9A8C\u8BC1\u7801\u4EE5\u5B8C\u6210\u8BBE\u7F6E",
+		  "dialog.codePlaceholder": "{digits}\u4F4D\u9A8C\u8BC1\u7801",
+		  "dialog.verify": "\u9A8C\u8BC1\u5E76\u542F\u7528",
+		  "dialog.verifying": "\u9A8C\u8BC1\u4E2D...",
+		  "dialog.cancel": "\u53D6\u6D88",
+		  "status.otpEnabled": "OTP \u5DF2\u542F\u7528",
+		  "status.otpDisabled": "OTP \u5DF2\u7981\u7528",
+		  "status.passwordChanged": "\u5BC6\u7801\u4FEE\u6539\u6210\u529F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55",
+		  "error.loadSettings": "\u52A0\u8F7D\u5931\u8D25: {message}",
+		  "error.enableOtp": "\u542F\u7528\u5931\u8D25: {message}",
+		  "error.disableOtp": "\u7981\u7528\u5931\u8D25: {message}",
+		  "error.verifyOtp": "\u9A8C\u8BC1\u5931\u8D25: {message}",
+		  "error.changePassword": "\u4FEE\u6539\u5931\u8D25: {message}",
+		  "error.logout": "\u9000\u51FA\u5931\u8D25: {message}",
+		  "error.otpCodeMissing": "\u8BF7\u8F93\u5165\u5F53\u524D\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801",
+		  "error.otpCodeLength": "\u8BF7\u8F93\u5165 {digits} \u4F4D\u9A8C\u8BC1\u7801",
+		  "error.passwordMismatch": "\u4E24\u6B21\u8F93\u5165\u7684\u5BC6\u7801\u4E0D\u4E00\u81F4",
+		  "error.passwordTooShort": "\u5BC6\u7801\u81F3\u5C11\u9700\u8981 8 \u4F4D",
+		  "error.unknown": "\u672A\u77E5\u9519\u8BEF",
+		  "error.invalidCode": "\u9A8C\u8BC1\u7801\u9519\u8BEF"
+		};
+		var en = {
+		  "nav": "Authentication Settings",
+		  "header.desc": "Manage the login password, two-factor authentication and the active session.",
+		  "loading": "Loading...",
+		  "otp.title": "Two-factor authentication (OTP)",
+		  "otp.enabled": "Enabled",
+		  "otp.disabled": "Disabled",
+		  "otp.desc": "When enabled, login requires a password plus a verification code; works with Google Authenticator, Authy and other TOTP apps, and provides one-time backup codes.",
+		  "otp.enable": "Enable OTP",
+		  "otp.disable": "Disable OTP",
+		  "otp.disable.confirm": "Enter the current {digits}-digit code or an unused backup code to confirm:",
+		  "otp.disable.confirmBtn": "Disable",
+		  "otp.disable.progress": "Disabling...",
+		  "otp.codePlaceholder": "Code or backup code",
+		  "password.title": "Login password",
+		  "password.desc": "All sessions will be revoked and you will need to sign in again.",
+		  "password.change": "Change password",
+		  "password.old": "Current password",
+		  "password.new": "New password (8+ chars, mixed case or special)",
+		  "password.confirm": "Confirm new password",
+		  "password.submit": "Update",
+		  "password.progress": "Updating...",
+		  "session.title": "Session",
+		  "session.loggedIn": "Signed in",
+		  "session.desc": "Sessions last 30 days; a dsh restart signs everyone out.",
+		  "session.logout": "Sign out",
+		  "dialog.title": "Set up OTP authenticator",
+		  "dialog.desc": "Scan the QR code with Google Authenticator, Authy or another TOTP app:",
+		  "dialog.secret": "Secret key (for manual entry)",
+		  "dialog.code": "Enter the code to finish setup",
+		  "dialog.codePlaceholder": "{digits}-digit code",
+		  "dialog.verify": "Verify & enable",
+		  "dialog.verifying": "Verifying...",
+		  "dialog.cancel": "Cancel",
+		  "status.otpEnabled": "OTP enabled",
+		  "status.otpDisabled": "OTP disabled",
+		  "status.passwordChanged": "Password updated \u2014 please sign in again",
+		  "error.loadSettings": "Failed to load: {message}",
+		  "error.enableOtp": "Failed to enable: {message}",
+		  "error.disableOtp": "Failed to disable: {message}",
+		  "error.verifyOtp": "Verification failed: {message}",
+		  "error.changePassword": "Failed to update: {message}",
+		  "error.logout": "Failed to sign out: {message}",
+		  "error.otpCodeMissing": "Enter the current code or a backup code",
+		  "error.otpCodeLength": "Enter the {digits}-digit code",
+		  "error.passwordMismatch": "Passwords do not match",
+		  "error.passwordTooShort": "Password must be at least 8 characters",
+		  "error.unknown": "Unknown error",
+		  "error.invalidCode": "Invalid code"
+		};
 		function Button({ variant = "primary", disabled, onClick, children, full, style }) {
 		  const kinds = {
 		    primary: { background: T.primaryFill, color: T.primaryForeground, hover: T.primaryHover },
@@ -155,7 +256,7 @@ window.__ModuleLoader__.load({
 		    ...toneStyle
 		  }, children });
 		}
-		function UserSettingsPanel({ api }) {
+		function UserSettingsPanel({ api, t }) {
 		  const [otpEnabled, setOtpEnabled] = (0, import_react.useState)(false);
 		  const [digits, setDigits] = (0, import_react.useState)(6);
 		  const [loading, setLoading] = (0, import_react.useState)(true);
@@ -184,7 +285,7 @@ window.__ModuleLoader__.load({
 		        setDigits(cfg.otpDigits || 6);
 		      }
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u52A0\u8F7D\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.loadSettings", { message: err.message }) });
 		    } finally {
 		      setLoading(false);
 		    }
@@ -197,17 +298,17 @@ window.__ModuleLoader__.load({
 		        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes });
 		        setShowQRModal(true);
 		      } else {
-		        setStatus({ type: "error", message: "\u542F\u7528\u5931\u8D25: " + (data.error || "\u672A\u77E5\u9519\u8BEF") });
+		        setStatus({ type: "error", message: t("error.enableOtp", { message: data.error || t("error.unknown") }) });
 		      }
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u542F\u7528\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.enableOtp", { message: err.message }) });
 		    }
 		  }
 		  async function disableOTP() {
 		    setStatus(null);
 		    const code = disableOtpCode.trim();
 		    if (!code) {
-		      setStatus({ type: "error", message: "\u8BF7\u8F93\u5165\u5F53\u524D\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801" });
+		      setStatus({ type: "error", message: t("error.otpCodeMissing") });
 		      return;
 		    }
 		    const isDigits = new RegExp("^\\d{" + digits + "}$").test(code);
@@ -216,15 +317,15 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.disableOtp(body);
 		      if (data.ok) {
-		        setStatus({ type: "success", message: "OTP \u5DF2\u7981\u7528" });
+		        setStatus({ type: "success", message: t("status.otpDisabled") });
 		        setOtpEnabled(false);
 		        setShowDisableOtp(false);
 		        setDisableOtpCode("");
 		      } else {
-		        setStatus({ type: "error", message: "\u7981\u7528\u5931\u8D25: " + (data.error || "\u672A\u77E5\u9519\u8BEF") });
+		        setStatus({ type: "error", message: t("error.disableOtp", { message: data.error || t("error.unknown") }) });
 		      }
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u7981\u7528\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.disableOtp", { message: err.message }) });
 		    } finally {
 		      setDisablingOtp(false);
 		    }
@@ -238,7 +339,7 @@ window.__ModuleLoader__.load({
 		  }
 		  async function verifyOTPSetup() {
 		    if (otpCode.length !== digits) {
-		      setStatus({ type: "error", message: "\u8BF7\u8F93\u5165 " + digits + " \u4F4D\u9A8C\u8BC1\u7801" });
+		      setStatus({ type: "error", message: t("error.otpCodeLength", { digits }) });
 		      return;
 		    }
 		    setVerifyingOtp(true);
@@ -251,23 +352,23 @@ window.__ModuleLoader__.load({
 		        setOtpCode("");
 		        setVerifyingOtp(false);
 		        setOtpEnabled(true);
-		        setStatus({ type: "success", message: "OTP \u5DF2\u542F\u7528" });
+		        setStatus({ type: "success", message: t("status.otpEnabled") });
 		      } else {
-		        setStatus({ type: "error", message: "\u9A8C\u8BC1\u5931\u8D25: " + (data.error || "\u9A8C\u8BC1\u7801\u9519\u8BEF") });
+		        setStatus({ type: "error", message: t("error.verifyOtp", { message: data.error || t("error.invalidCode") }) });
 		      }
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u9A8C\u8BC1\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.verifyOtp", { message: err.message }) });
 		    } finally {
 		      setVerifyingOtp(false);
 		    }
 		  }
 		  async function changePassword() {
 		    if (newPassword !== confirmPassword) {
-		      setStatus({ type: "error", message: "\u4E24\u6B21\u8F93\u5165\u7684\u5BC6\u7801\u4E0D\u4E00\u81F4" });
+		      setStatus({ type: "error", message: t("error.passwordMismatch") });
 		      return;
 		    }
 		    if (newPassword.length < 8) {
-		      setStatus({ type: "error", message: "\u5BC6\u7801\u81F3\u5C11\u9700\u8981 8 \u4F4D" });
+		      setStatus({ type: "error", message: t("error.passwordTooShort") });
 		      return;
 		    }
 		    setChangingPassword(true);
@@ -275,7 +376,7 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.changePassword(oldPassword, newPassword);
 		      if (data.ok) {
-		        setStatus({ type: "success", message: "\u5BC6\u7801\u4FEE\u6539\u6210\u529F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55" });
+		        setStatus({ type: "success", message: t("status.passwordChanged") });
 		        setShowChangePassword(false);
 		        setOldPassword("");
 		        setNewPassword("");
@@ -283,9 +384,9 @@ window.__ModuleLoader__.load({
 		        setTimeout(() => {
 		          location.href = "/login";
 		        }, 1500);
-		      } else setStatus({ type: "error", message: "\u4FEE\u6539\u5931\u8D25: " + (data.error || "\u672A\u77E5\u9519\u8BEF") });
+		      } else setStatus({ type: "error", message: t("error.changePassword", { message: data.error || t("error.unknown") }) });
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u4FEE\u6539\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.changePassword", { message: err.message }) });
 		    } finally {
 		      setChangingPassword(false);
 		    }
@@ -295,11 +396,11 @@ window.__ModuleLoader__.load({
 		      await api.logout();
 		      location.href = "/login";
 		    } catch (err) {
-		      setStatus({ type: "error", message: "\u9000\u51FA\u5931\u8D25: " + err.message });
+		      setStatus({ type: "error", message: t("error.logout", { message: err.message }) });
 		    }
 		  }
 		  if (loading) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: "\u52A0\u8F7D\u4E2D..." });
+		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
 		  }
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
@@ -314,16 +415,19 @@ window.__ModuleLoader__.load({
 		        gap: "8px"
 		      }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u2699\uFE0F" }),
-		        "\u8BA4\u8BC1\u8BBE\u7F6E"
+		        t("nav")
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: "\u7BA1\u7406\u767B\u5F55\u5BC6\u7801\u3001\u53CC\u56E0\u7D20\u8BA4\u8BC1\u4E0E\u767B\u5F55\u4F1A\u8BDD\u3002" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: t("header.desc") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F510} OTP \u53CC\u56E0\u7D20\u8BA4\u8BC1" }),
-		          otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: "success", children: "\u5DF2\u542F\u7528" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: "\u672A\u542F\u7528" })
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		            "\u{1F510} ",
+		            t("otp.title")
+		          ] }),
+		          otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: "success", children: t("otp.enabled") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("otp.disabled") })
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u542F\u7528\u540E\u767B\u5F55\u9700\u8981\u5BC6\u7801 + \u9A8C\u8BC1\u7801\uFF1B\u517C\u5BB9 Google Authenticator\u3001Authy \u7B49 TOTP \u5E94\u7528\uFF0C\u5E76\u63D0\u4F9B\u4E00\u6B21\u6027\u5907\u4EFD\u4EE3\u7801\u3002" }),
-		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, children: "\u542F\u7528 OTP" }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: "\u7981\u7528 OTP" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("otp.desc") }),
+		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, children: t("otp.enable") }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: t("otp.disable") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		          display: "flex",
 		          flexDirection: "column",
 		          gap: "10px",
@@ -332,16 +436,12 @@ window.__ModuleLoader__.load({
 		          borderRadius: "10px",
 		          border: `1px solid ${T.border}`
 		        }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: 0, fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: [
-		            "\u8F93\u5165\u5F53\u524D ",
-		            digits,
-		            " \u4F4D\u9A8C\u8BC1\u7801\u6216\u4E00\u4E2A\u672A\u4F7F\u7528\u7684\u5907\u4EFD\u4EE3\u7801\u4EE5\u786E\u8BA4\u7981\u7528\uFF1A"
-		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: 0, fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("otp.disable.confirm", { digits }) }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		            "input",
 		            {
 		              type: "text",
-		              placeholder: "\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801",
+		              placeholder: t("otp.codePlaceholder"),
 		              value: disableOtpCode,
 		              onChange: (e) => setDisableOtpCode(e.target.value),
 		              style: INPUT,
@@ -353,18 +453,21 @@ window.__ModuleLoader__.load({
 		            }
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", onClick: disableOTP, disabled: disablingOtp, children: disablingOtp ? "\u7981\u7528\u4E2D..." : "\u786E\u8BA4\u7981\u7528" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", onClick: disableOTP, disabled: disablingOtp, children: disablingOtp ? t("otp.disable.progress") : t("otp.disable.confirmBtn") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
 		              setShowDisableOtp(false);
 		              setDisableOtpCode("");
-		            }, children: "\u53D6\u6D88" })
+		            }, children: t("dialog.cancel") })
 		          ] })
 		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F511} \u767B\u5F55\u5BC6\u7801" }) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u4FEE\u6539\u540E\u6240\u6709\u4F1A\u8BDD\u5C06\u4E0B\u7EBF\uFF0C\u9700\u8981\u91CD\u65B0\u767B\u5F55\u3002" }),
-		        !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: "\u4FEE\u6539\u5BC6\u7801" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		          "\u{1F511} ",
+		          t("password.title")
+		        ] }) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("password.desc") }),
+		        !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: t("password.change") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		          display: "flex",
 		          flexDirection: "column",
 		          gap: "10px",
@@ -377,7 +480,7 @@ window.__ModuleLoader__.load({
 		            "input",
 		            {
 		              type: "password",
-		              placeholder: "\u5F53\u524D\u5BC6\u7801",
+		              placeholder: t("password.old"),
 		              value: oldPassword,
 		              onChange: (e) => setOldPassword(e.target.value),
 		              style: INPUT,
@@ -388,7 +491,7 @@ window.__ModuleLoader__.load({
 		            "input",
 		            {
 		              type: "password",
-		              placeholder: "\u65B0\u5BC6\u7801\uFF08\u81F3\u5C11 8 \u4F4D\uFF0C\u542B\u5927\u5C0F\u5199\u5B57\u6BCD\u6216\u7279\u6B8A\u5B57\u7B26\uFF09",
+		              placeholder: t("password.new"),
 		              value: newPassword,
 		              onChange: (e) => setNewPassword(e.target.value),
 		              style: INPUT,
@@ -399,7 +502,7 @@ window.__ModuleLoader__.load({
 		            "input",
 		            {
 		              type: "password",
-		              placeholder: "\u786E\u8BA4\u65B0\u5BC6\u7801",
+		              placeholder: t("password.confirm"),
 		              value: confirmPassword,
 		              onChange: (e) => setConfirmPassword(e.target.value),
 		              style: INPUT,
@@ -410,23 +513,26 @@ window.__ModuleLoader__.load({
 		            }
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? "\u4FEE\u6539\u4E2D..." : "\u786E\u8BA4\u4FEE\u6539" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? t("password.progress") : t("password.submit") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
 		              setShowChangePassword(false);
 		              setOldPassword("");
 		              setNewPassword("");
 		              setConfirmPassword("");
-		            }, children: "\u53D6\u6D88" })
+		            }, children: t("dialog.cancel") })
 		          ] })
 		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F512} \u767B\u5F55\u4F1A\u8BDD" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: "\u5DF2\u767B\u5F55" })
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		            "\u{1F512} ",
+		            t("session.title")
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("session.loggedIn") })
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: "\u9000\u51FA\u767B\u5F55" })
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("session.desc") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") })
 		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
 		        marginTop: "12px",
@@ -460,14 +566,14 @@ window.__ModuleLoader__.load({
 		        overflow: "auto"
 		      }, onClick: (e) => e.stopPropagation(), children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "20px 24px 4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: "\u8BBE\u7F6E OTP \u9A8C\u8BC1\u5668" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: t("dialog.title") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { padding: "0 24px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: "\u4F7F\u7528 Google Authenticator\u3001Authy \u6216\u5176\u4ED6 TOTP \u5E94\u7528\u626B\u63CF\u4EE5\u4E0B\u4E8C\u7EF4\u7801\uFF1A" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("dialog.desc") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: `1px solid ${T.border}`, borderRadius: "8px", width: "200px", height: "200px" } }) }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: "\u5BC6\u94A5\uFF08\u624B\u52A8\u8F93\u5165\u7528\uFF09" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.secret") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
 		              padding: "8px 12px",
 		              background: T.bg1,
@@ -481,12 +587,12 @@ window.__ModuleLoader__.load({
 		            }, children: qrData.secret })
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: "\u8F93\u5165\u9A8C\u8BC1\u7801\u4EE5\u5B8C\u6210\u8BBE\u7F6E" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.code") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		              "input",
 		              {
 		                type: "text",
-		                placeholder: digits + "\u4F4D\u9A8C\u8BC1\u7801",
+		                placeholder: t("dialog.codePlaceholder", { digits }),
 		                maxLength: digits,
 		                value: otpCode,
 		                onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, "")),
@@ -509,15 +615,17 @@ window.__ModuleLoader__.load({
 		          }, children: status.message })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px", marginTop: "20px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: "\u53D6\u6D88" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? "\u9A8C\u8BC1\u4E2D..." : "\u9A8C\u8BC1\u5E76\u542F\u7528" })
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: t("dialog.cancel") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? t("dialog.verifying") : t("dialog.verify") })
 		        ] })
 		      ] })
 		    ] })
 		  ] });
 		}
-		var inject = ["slots"];
+		var inject = ["slots", "locale"];
 		function apply(ctx) {
+		  ctx.locale.register(NS, { zh, en });
+		  const t = ctx.locale.bind(NS);
 		  const api = {
 		    getSettings: async () => (await fetch("/login-api/settings")).json(),
 		    enableOtp: async () => (await fetch("/otp/enable", { method: "POST" })).json(),
@@ -543,7 +651,8 @@ window.__ModuleLoader__.load({
 		    name: "settings.section",
 		    id: "user-settings",
 		    order: 20,
-		    label: () => "\u8BA4\u8BC1\u8BBE\u7F6E",
+		    label: () => t("nav"),
+		    locale: NS,
 		    inject: injected
 		  }, UserSettingsPanel));
 		}

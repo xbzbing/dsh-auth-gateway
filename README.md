@@ -36,8 +36,20 @@
 
 - OTP 密钥使用 Base32 编码存储
 - 备份代码使用 scrypt 哈希存储（与密码相同的安全级别）
-- 验证时使用时间窗口防止重放攻击
+- 验证时使用时间窗口（±N 步）并记录最近已用时间步（`lastCounter`），同一时间步内的验证码不可重放
 - 每个备份代码只能使用一次
+- OTP 验证路径（`/otp/verify`、`/otp/verify-setup`、`/otp/verify-backup`、`/otp/disable`、登录的 OTP 步骤）共享全局每分钟限流，并按客户端地址统计失败次数——连续失败达到 `maxLoginFailures` 后锁定该地址（与登录失败同一套锁定）
+
+> **⚠️ OTP 密钥明文存储风险（已知限制）**
+>
+> TOTP 密钥以 **Base32 明文**保存在 `$DSH_HOME/login-plugin/otp.json`（与密码不同，密码是 scrypt 哈希存储）。任何能读取该文件的进程/用户都能克隆你的 2FA 身份。
+>
+> **缓解措施**（当前实现已具备）：
+> - 文件权限 `0600`、目录 `0700`（仅属主可读写）；
+> - 信任模型为**本机可信**：插件运行在 dsh 所在主机，攻击面取决于主机上其他进程的隔离程度；
+> - 建议部署时启用磁盘加密（FileVault / LUKS）。
+>
+> **生产建议**：用主密钥加密存储 OTP 密钥（例如用 `$DSH_HOME` 下的主机密钥派生加密密钥），这是后续工作的方向之一。
 
 **配置示例：**
 
@@ -80,7 +92,8 @@ dsh-password-gate:
 - **爆破提醒**（符合 dsh 规范）：锁触发或全局速率耗尽时，插件写一条 `ctx.logger.warn` 日志，并 `ctx.emit('dsh-password-gate/brute-force', payload)` 广播 Cordis 事件——payload 为 JSON 安全数据（`{kind: 'lockout'|'global-rate-limit', ...}`），任何插件可监听；每个锁定/窗口只提醒一次。**锁定不影响正在使用的用户**：已登录会话走转发通道，不经过登录端点。
 - **会话**：随机 256-bit token，存于内存，**30 天有效期**；dsh 重启后全员下线；修改密码吊销全部会话。
 - **Cookie**：`dsh_auth`，`HttpOnly; SameSite=Strict`（未加 `Secure`——MVP 走明文 HTTP）。
-- **修改密码入口**：访问 `/login`（已登录时直接显示改密表单）。插件不修改 dsh 前端 UI——按 dsh 规范，UI 扩展应通过 `ctx.slots.register`（client 插件），当前版本保持 host-only 零构建形态。
+- **修改密码入口**：访问 `/login`（已登录时直接显示改密表单）。
+- **前端 UI（client 插件）**：按 dsh 规范通过 `ctx.slots.register` 在「用户设置」槽位注册设置面板（OTP 启用/禁用、修改密码、退出登录）。客户端源码位于 `client/src/index.jsx`（JSX），构建产物 `client/index.js` 由 `npm run build:client` 生成（esbuild，含 source map）；dsh 通过 `exports["./client"]` 加载该产物。修改源码后需重新构建并同步到已安装副本。
 
 以上策略均为可配置项（bundle patch 或 profile patch 中覆盖 `dsh-password-gate` 行的 config）：
 
@@ -92,6 +105,7 @@ dsh-password-gate:
 | `maxLoginFailures` | `5` | 连续错误多少次后锁定（1–100） |
 | `lockMinutes` | `5` | 锁定分钟数（1–1440） |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | 全局每分钟最大登录尝试次数（1–10000） |
+| `maxOtpAttemptsPerMinute` | `10` | 每个客户端地址每分钟的 OTP 验证尝试上限，防暴力猜测验证码/备份码（1–10000） |
 | `otpEnabled` | `false` | 是否启用 OTP 双因素认证 |
 | `otpRequired` | `false` | 是否强制所有用户启用 OTP |
 | `otpIssuer` | `dsh-password-gate` | OTP 发行者名称（显示在认证器应用中） |
@@ -295,7 +309,7 @@ None；本包既不组装也不发送 provider 请求。
 - **内存会话**：dsh 重启后全员下线。
 - **OTP 密钥存储**：当前 OTP 密钥以明文 Base32 存储在 `otp.json` 文件中。生产环境建议加密存储。
 - **OTP 无多用户支持**：当前 OTP 配置为全局共享，不支持多用户独立的 OTP 密钥。
-- 后续工作：TLS、多用户、SPA 内嵌设置项（UI 级爆破提醒需 client 插件 slot 注册）。
+- 后续工作：TLS、多用户、UI 级爆破提醒（需在 client 插件中监听 `dsh-password-gate/brute-force` 事件并展示）。
 
 ## 开发统计
 

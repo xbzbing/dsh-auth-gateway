@@ -18,8 +18,8 @@ test('undefined/null config gets defaults', () => {
   assert.deepEqual(validate(undefined), {
     value: {
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60,
-      otpEnabled: true, otpRequired: false, otpIssuer: 'DeepSeek Harness', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
+      otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-password-gate', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -30,8 +30,8 @@ test('partial config keeps defaults for omitted fields', () => {
   assert.deepEqual(result, {
     value: {
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
-      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60,
-      otpEnabled: true, otpRequired: false, otpIssuer: 'DeepSeek Harness', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
+      minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
+      otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-password-gate', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
     },
   })
 })
@@ -117,4 +117,28 @@ test('OTP fields are validated', () => {
   assert.ok(validate({ backupCodeLength: 5 }).issues, 'min 6')
   assert.ok(validate({ backupCodeLength: 13 }).issues, 'max 12')
   assert.ok(validate({ backupCodeLength: '8' }).issues, 'must be integer')
+})
+
+test('schema defaults match createGateway defaults (no silent divergence)', async () => {
+  // The gateway is always constructed from schema-validated config in
+  // production, so createGateway's `?? fallback` values are dead code unless
+  // they agree with the schema defaults. Guard the whole surface.
+  const { createGateway } = await import('../lib/gateway.js')
+  const schema = validate(undefined).value
+  const gw = createGateway(undefined)
+  const policyKeys = [
+    'minPasswordLength', 'requireMixedCase', 'requireSpecial',
+    'maxLoginFailures', 'lockMinutes',
+    'maxGlobalAuthAttemptsPerMinute', 'maxOtpAttemptsPerMinute',
+  ]
+  const otpKeys = [
+    'otpEnabled', 'otpRequired', 'otpIssuer', 'otpPeriod',
+    'otpDigits', 'otpWindow', 'backupCodeCount', 'backupCodeLength',
+  ]
+  for (const key of policyKeys) {
+    assert.equal(schema[key], gw.policy[key], `policy default mismatch: ${key}`)
+  }
+  for (const key of otpKeys) {
+    assert.equal(schema[key], gw.otp[key], `otp default mismatch: ${key}`)
+  }
 })

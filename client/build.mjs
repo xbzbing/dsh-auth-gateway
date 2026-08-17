@@ -41,7 +41,7 @@ const map = result.outputFiles.find((f) => f.path.endsWith('.map')).text
 const indent = (s) => s.split('\n').map((line) => '\t\t' + line).join('\n')
 const bundle = [
   'window.__ModuleLoader__.load({',
-  '\tid: "dsh-password-gate",',
+  '\tid: "dsh-auth-gateway",',
   '\tfactory: (require) => {',
   '\t\tvar module = { exports: {} };',
   '\t\tvar exports = module.exports;',

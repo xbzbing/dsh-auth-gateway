@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "dsh-password-gate",
+	id: "dsh-auth-gateway",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -56,7 +56,7 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.getSettings();
 		      if (data.ok) {
-		        const cfg = data.config?.["dsh-password-gate"] || {};
+		        const cfg = data.config?.["dsh-auth-gate"] || {};
 		        setOtpEnabled(cfg.otpEnabled || false);
 		        setDigits(cfg.otpDigits || 6);
 		      }
@@ -87,7 +87,7 @@ window.__ModuleLoader__.load({
 		      setStatus({ type: "error", message: "\u8BF7\u8F93\u5165\u5F53\u524D\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801" });
 		      return;
 		    }
-		    const isDigits = /^\d{6}$/.test(code);
+		    const isDigits = new RegExp("^\\d{" + digits + "}$").test(code);
 		    const body = isDigits ? { otp: code } : { backupCode: code };
 		    setDisablingOtp(true);
 		    try {
@@ -184,7 +184,7 @@ window.__ModuleLoader__.load({
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { padding: "20px 0" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { style: { margin: "0 0 20px 0", fontSize: "15px", fontWeight: "600", color: "#1a1a1a", display: "flex", alignItems: "center", gap: "8px" }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u2699\uFE0F" }),
-		        "\u7528\u6237\u8BBE\u7F6E"
+		        "\u8BA4\u8BC1\u8BBE\u7F6E"
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: sectionStyle, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: titleStyle, children: [
@@ -313,7 +313,7 @@ window.__ModuleLoader__.load({
 		    name: "settings.section",
 		    id: "user-settings",
 		    order: 20,
-		    label: () => "\u7528\u6237\u8BBE\u7F6E",
+		    label: () => "\u8BA4\u8BC1\u8BBE\u7F6E",
 		    inject: injected
 		  }, UserSettingsPanel));
 		}

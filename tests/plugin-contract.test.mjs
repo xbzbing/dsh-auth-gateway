@@ -16,14 +16,14 @@ test('module satisfies the Cordis plugin contract', () => {
   // Loader normalize step (vendor/loader/src/index.ts): prefer default export.
   const plugin = mod.default ?? mod
   assert.equal(typeof plugin.apply, 'function', 'plugin must have an apply function')
-  assert.equal(plugin.name, 'dsh-password-gate')
+  assert.equal(plugin.name, 'dsh-auth-gateway')
   assert.ok(Array.isArray(plugin.inject), 'inject must be declared')
   assert.ok(plugin.inject.includes('webServer'), 'webServer must be injected')
   assert.equal(plugin.Config['~standard'].version, 1, 'Config must be a Standard Schema v1 validator')
 })
 
 test('named exports mirror the default export', () => {
-  assert.equal(mod.name, 'dsh-password-gate')
+  assert.equal(mod.name, 'dsh-auth-gateway')
   assert.equal(typeof mod.apply, 'function')
   assert.ok(Array.isArray(mod.inject))
   assert.equal(mod.Config, mod.default.Config)

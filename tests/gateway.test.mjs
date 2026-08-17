@@ -1,10 +1,11 @@
 /**
  * Gateway tests against a fake upstream dsh webserver.
  *
- * Covers: first-run setup flow, auth gate on /api and page paths, transparent
- * forwarding with Host/Origin rewritten to the loopback upstream (LAN access
- * must pass the internal trust fence), WebSocket upgrade rejection/forward,
- * password change revoking all sessions, logout, and the 30-day expiry.
+ * Covers: initial-password onboarding flow, auth gate on /api and page paths,
+ * transparent forwarding with Host/Origin rewritten to the loopback upstream
+ * (LAN access must pass the internal trust fence), WebSocket upgrade
+ * rejection/forward, password change revoking all sessions, logout, and the
+ * 30-day expiry.
  */
 
 import { test, before, after, beforeEach, afterEach } from 'node:test'
@@ -16,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LoginGateway } from '../lib/gateway.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
-import { hasPassword } from '../lib/store.js'
+import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
 
 // ── fake upstream ───────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ function closeUpstream() {
 let gateway, gatewayPort, home
 
 async function startGateway(policy) {
-  home = mkdtempSync(join(tmpdir(), 'dsh-password-gate-test-'))
+  home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
     listenHost: '127.0.0.1',
@@ -115,6 +116,19 @@ function cookieValue(headers) {
   return hit?.split(';')[0]
 }
 
+/**
+ * Preset a non-initial password and log in through /login/auth, returning the
+ * session cookie. Mirrors the steady-state flow: the auto-generated initial
+ * password exists only on a fresh install, and tests that exercise normal
+ * operation use a personal (non-initial) credential.
+ */
+async function login(password = 'GoodPass1') {
+  await setPassword(password)
+  const res = await request('/login/auth', { method: 'POST', body: { password } })
+  assert.equal(res.status, 200)
+  return cookieValue(res.headers)
+}
+
 /** WebSocket-style upgrade attempt; resolves 'upgraded' | 'rejected'. */
 function tryUpgrade(path, cookie) {
   return new Promise((resolve, reject) => {
@@ -160,33 +174,83 @@ test('unauthenticated: page paths redirect to /login', async () => {
   assert.equal(seenRequests.length, 0)
 })
 
-test('first run: /login renders the setup page; setup mints a session', async () => {
+test('fresh install: /login renders the login page; /login/auth answers uniformly', async () => {
+  // No password record exists yet. There is no setup page anymore: /login
+  // always renders the auth form, and the first credential comes from the
+  // harness-side auto-generated initial password (covered next).
   const page = await request('/login')
   assert.equal(page.status, 200)
-  assert.ok(page.body.includes('设置密码'))
+  assert.ok(page.body.includes('请输入访问密码'))
+  assert.ok(!page.body.includes('设置密码'), 'the legacy setup form must be gone')
 
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'HuntEr2Pass' } })
-  assert.equal(setup.status, 200)
-  const cookie = cookieValue(setup.headers)
-  assert.ok(cookie, 'setup must set a session cookie')
-  const rawSetCookie = (Array.isArray(setup.headers['set-cookie'])
-    ? setup.headers['set-cookie'] : [setup.headers['set-cookie']]).join('; ')
+  // One uniform 401: nothing reveals whether a password exists yet.
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'whatever1' } })
+  assert.equal(res.status, 401)
+  assert.equal(cookieValue(res.headers), undefined)
+})
+
+test('initial password: onboarding gate blocks everything until changed', async () => {
+  // Fresh install: the harness generates the initial password and stores it
+  // flagged `initial` (index.js first-run block); simulate that record here.
+  const initial = 'Init1al!pw'
+  await setPassword(initial, { initial: true })
+
+  const page = await request('/login')
+  assert.ok(page.body.includes('请输入访问密码'))
+
+  // Logging in with the initial password mints a session that owes onboarding.
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: initial } })
+  assert.equal(loginRes.status, 200)
+  const cookie = cookieValue(loginRes.headers)
+  assert.ok(cookie, 'login must set a session cookie')
+  const rawSetCookie = (Array.isArray(loginRes.headers['set-cookie'])
+    ? loginRes.headers['set-cookie'] : [loginRes.headers['set-cookie']]).join('; ')
   assert.ok(rawSetCookie.includes('HttpOnly'))
   assert.ok(rawSetCookie.includes('SameSite=Strict'))
 
-  // Now authenticated: the request is forwarded; Host/Origin are rewritten to
-  // the loopback upstream so the internal trust fence accepts any external
-  // address (LAN IP included).
-  const fwd = await request('/api/session.list', { method: 'POST', body: {}, cookie })
+  // Everything except the onboarding flow itself is blocked.
+  const api = await request('/api/session.list', { method: 'POST', body: {}, cookie })
+  assert.equal(api.status, 401)
+  assert.deepEqual(JSON.parse(api.body), { ok: false, error: 'onboarding-required' })
+  const root = await request('/', { cookie })
+  assert.equal(root.status, 302)
+  assert.equal(root.headers.location, '/onboarding')
+  assert.equal(seenRequests.length, 0, 'upstream must never see pre-onboarding traffic')
+
+  const onboarding = await request('/onboarding', { cookie })
+  assert.equal(onboarding.status, 200)
+  assert.ok(onboarding.body.includes('设置你的访问密码'))
+
+  // Set a personal password: the initial flag clears and every session dies.
+  const change = await request('/login/change', {
+    method: 'POST', body: { oldPassword: initial, newPassword: 'Personal1' }, cookie,
+  })
+  assert.equal(change.status, 200)
+  assert.equal(await isInitialPassword(), false)
+  const oldCookie = await request('/api/x', { method: 'POST', body: {}, cookie })
+  assert.equal(oldCookie.status, 401, 'pre-onboarding session must be revoked')
+
+  // Re-login with the personal password: no onboarding gate, and the request
+  // is forwarded with Host/Origin rewritten to the loopback upstream so the
+  // internal trust fence accepts any external address (LAN IP included).
+  const re = await request('/login/auth', { method: 'POST', body: { password: 'Personal1' } })
+  assert.equal(re.status, 200)
+  const cookie2 = cookieValue(re.headers)
+  const fwd = await request('/api/session.list', { method: 'POST', body: {}, cookie: cookie2 })
   assert.equal(fwd.status, 200)
   assert.equal(seenRequests.length, 1)
   assert.equal(seenRequests[0].host, `127.0.0.1:${upstreamPort}`, 'Host must be rewritten to the loopback upstream')
   assert.deepEqual(JSON.parse(fwd.body), { echo: '/api/session.list', host: `127.0.0.1:${upstreamPort}` })
 })
 
+test('onboarding without a session redirects to /login', async () => {
+  const res = await request('/onboarding')
+  assert.equal(res.status, 302)
+  assert.equal(res.headers.location, '/login')
+})
+
 test('LAN access: external Host/Origin are rewritten, request passes the fence', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   // What a browser on the LAN sends: Host and Origin name the machine's LAN
   // address. The upstream (the dsh trust fence) must see the loopback form.
   const res = await request('/api/llm.providers', {
@@ -201,15 +265,21 @@ test('LAN access: external Host/Origin are rewritten, request passes the fence',
   assert.equal(seenRequests.at(-1).host, `127.0.0.1:${upstreamPort}`)
 })
 
-test('setup refused once a password exists', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'FirstPass1' } })
-  const again = await request('/login/setup', { method: 'POST', body: { password: 'SecondPass2' } })
-  assert.equal(again.status, 409)
-  assert.equal(again.body, '{"ok":false,"error":"already-setup"}')
+test('the legacy /login/setup endpoint is gone', async () => {
+  await setPassword('GoodPass1')
+  // The setup route no longer exists: an unauthenticated request to it is
+  // just redirected to /login like any unknown page path, never forwarded,
+  // and it cannot mint a session or change the stored password.
+  const res = await request('/login/setup', { method: 'POST', body: { password: 'SecondPass2' } })
+  assert.equal(res.status, 302)
+  assert.equal(res.headers.location, '/login')
+  assert.equal(seenRequests.filter((r) => r.url === '/login/setup').length, 0, 'upstream must never see /login/setup')
+  assert.equal(await verifyPassword('GoodPass1'), true, 'stored password must be untouched')
+  assert.equal(await verifyPassword('SecondPass2'), false)
 })
 
 test('login: wrong password 401 (uniform), right password works', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   const wrong = await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
   assert.equal(wrong.status, 401)
   const right = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
@@ -220,8 +290,7 @@ test('login: wrong password 401 (uniform), right password works', async () => {
 })
 
 test('after login the login page shows the change-password form', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const page = await request('/login', { cookie })
   assert.ok(page.body.includes('修改密码'))
   const anon = await request('/login')
@@ -229,8 +298,7 @@ test('after login the login page shows the change-password form', async () => {
 })
 
 test('change password revokes every session; old cookie dies', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'OldPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login('OldPass1')
 
   const change = await request('/login/change', {
     method: 'POST', body: { oldPassword: 'OldPass1', newPassword: 'NewPass2' }, cookie,
@@ -248,8 +316,7 @@ test('change password revokes every session; old cookie dies', async () => {
 })
 
 test('change password requires the old password', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'OldPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login('OldPass1')
   const bad = await request('/login/change', {
     method: 'POST', body: { oldPassword: 'wrong', newPassword: 'x' }, cookie,
   })
@@ -257,8 +324,7 @@ test('change password requires the old password', async () => {
 })
 
 test('logout revokes the session', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const out = await request('/login/logout', { method: 'POST', body: {}, cookie })
   assert.equal(out.status, 200)
   const after = await request('/api/x', { method: 'POST', body: {}, cookie })
@@ -266,8 +332,7 @@ test('logout revokes the session', async () => {
 })
 
 test('session expiry: token older than the TTL is refused', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const token = cookie.split('=')[1]
   // Rewind the clock by hand (the store lazy-expires on check).
   const session = [...gateway.sessions.sessions.entries()].find(([, s]) => s.expiresAt > 0)
@@ -284,18 +349,31 @@ test('websocket: unauthenticated upgrade rejected, authenticated forwarded', asy
   assert.equal(outcome, 'rejected')
   assert.equal(upgradedSockets.length, 0)
 
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const outcome2 = await tryUpgrade('/api/events.mux', cookie)
   assert.equal(outcome2, 'upgraded')
   assert.deepEqual(upgradedSockets, [{ url: '/api/events.mux', host: `127.0.0.1:${upstreamPort}`, origin: undefined }])
 })
 
+test('websocket: a session owing onboarding is rejected even with a valid cookie', async () => {
+  // Regression: the upgrade path must apply the same onboarding gate as
+  // #route — the event stream is data, and "nothing usable before a personal
+  // password is set" covers WebSocket channels too.
+  const initial = 'Init1al!pw'
+  await setPassword(initial, { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: initial } })
+  const cookie = cookieValue(loginRes.headers)
+  assert.ok(cookie)
+  const before = upgradedSockets.length
+  const outcome = await tryUpgrade('/api/events.mux', cookie)
+  assert.equal(outcome, 'rejected')
+  assert.equal(upgradedSockets.length, before, 'onboarding session must never reach the upstream socket')
+})
+
 test('bad gateway: upstream down answers 502, not a crash', async () => {
   await closeUpstream()
   try {
-    const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-    const cookie = cookieValue(setup.headers)
+    const cookie = await login()
     const res = await request('/api/x', { method: 'POST', body: {}, cookie })
     assert.equal(res.status, 502)
     // Auth endpoints still work while upstream is down.
@@ -335,28 +413,39 @@ test('duplicate mount: a second gateway on the same port fails loud', async () =
   })
   await assert.rejects(second.start(), /EADDRINUSE/)
   // The first gateway keeps serving unaffected.
-  const res = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
   assert.equal(res.status, 200)
 })
 
 // ── password strength + lockout policy ───────────────────────────────────
 
-test('setup rejects weak passwords with a stable reason', async () => {
+test('onboarding change rejects weak passwords and keeps the initial flag', async () => {
+  const initial = 'Init1al!pw'
+  await setPassword(initial, { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: initial } })
+  const cookie = cookieValue(loginRes.headers)
   for (const [pw, reason] of [
     ['short1A', 'password-too-short'],
     ['abcdefgh', 'password-too-simple'],
     ['ABCDEFGH', 'password-too-simple'],
   ]) {
-    const res = await request('/login/setup', { method: 'POST', body: { password: pw } })
+    const res = await request('/login/change', {
+      method: 'POST', body: { oldPassword: initial, newPassword: pw }, cookie,
+    })
     assert.equal(res.status, 400, `${pw} must be rejected`)
     assert.equal(JSON.parse(res.body).error, reason)
   }
-  assert.equal(hasPassword(), false, 'no password may be stored by weak attempts')
+  // A failed onboarding change leaves the initial credential intact: the
+  // flag is untouched and the session still owes onboarding.
+  assert.equal(await isInitialPassword(), true)
+  const gate = await request('/api/x', { method: 'POST', body: {}, cookie })
+  assert.equal(gate.status, 401)
+  assert.deepEqual(JSON.parse(gate.body), { ok: false, error: 'onboarding-required' })
 })
 
 test('change rejects weak new passwords', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const res = await request('/login/change', {
     method: 'POST', body: { oldPassword: 'GoodPass1', newPassword: 'weak' }, cookie,
   })
@@ -365,7 +454,7 @@ test('change rejects weak new passwords', async () => {
 })
 
 test('login locks out after maxLoginFailures for lockMinutes', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   // 1-4 wrong attempts: 401, still unlocked.
   for (let i = 0; i < 4; i += 1) {
     const res = await request('/login/auth', { method: 'POST', body: { password: 'wrong' } })
@@ -387,7 +476,7 @@ test('login locks out after maxLoginFailures for lockMinutes', async () => {
 })
 
 test('successful login resets the failure counter', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   for (let i = 0; i < 3; i += 1) {
     await request('/login/auth', { method: 'POST', body: { password: 'wrong' } })
   }
@@ -404,7 +493,7 @@ test('successful login resets the failure counter', async () => {
 })
 
 test('lockout keys on the socket address and ignores x-forwarded-for', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   for (let i = 0; i < 5; i += 1) {
     await request('/login/auth', { method: 'POST', body: { password: 'wrong' } })
   }
@@ -416,6 +505,43 @@ test('lockout keys on the socket address and ignores x-forwarded-for', async () 
   assert.equal(spoofed.status, 429)
 })
 
+test('rate maps prune stale entries instead of growing without bound', async () => {
+  // A distributed brute force rotating IPs would otherwise grow the
+  // per-address maps for the whole process lifetime. Seed enough stale
+  // entries to cross the sweep threshold, then trigger a sweep via login.
+  const stale = { count: 1, lockedUntil: 0, updatedAt: Date.now() - 2 * 60 * 60 * 1000 }
+  for (let i = 0; i < 1100; i += 1) gateway.attempts.set(`10.0.0.${i}`, { ...stale })
+  for (let i = 0; i < 1100; i += 1) {
+    gateway.otpWindows.set(`10.1.0.${i}`, { windowStart: Date.now() - 120 * 1000, count: 1, notified: false })
+  }
+  assert.ok(gateway.attempts.size > 1024 && gateway.otpWindows.size > 1024, 'seeded maps must exceed the threshold')
+
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  assert.ok(gateway.attempts.size <= 1024, `stale attempts pruned, got ${gateway.attempts.size}`)
+  assert.ok(gateway.otpWindows.size <= 1024, `stale OTP windows pruned, got ${gateway.otpWindows.size}`)
+})
+
+test('change-password failures count toward the address lockout', async () => {
+  const cookie = await login('OldPass1')
+  for (let i = 0; i < 4; i += 1) {
+    const res = await request('/login/change', {
+      method: 'POST', body: { oldPassword: 'wrong', newPassword: 'NewPass2' }, cookie,
+    })
+    assert.equal(res.status, 401, `wrong old password #${i + 1}`)
+  }
+  // The 5th wrong old-password trips the SHARED lockout.
+  const fifth = await request('/login/change', {
+    method: 'POST', body: { oldPassword: 'wrong', newPassword: 'NewPass2' }, cookie,
+  })
+  assert.equal(fifth.status, 429)
+  assert.equal(JSON.parse(fifth.body).error, 'too-many-attempts')
+  // The lock is shared with /login/auth from the same address.
+  const duringLock = await request('/login/auth', { method: 'POST', body: { password: 'OldPass1' } })
+  assert.equal(duringLock.status, 429)
+})
+
 // ── security review regressions ──────────────────────────────────────────
 
 test('dns-rebinding / cross-site requests without a session cookie are refused at the gateway', async () => {
@@ -423,7 +549,7 @@ test('dns-rebinding / cross-site requests without a session cookie are refused a
   // fence no longer guards DNS rebinding — that duty moved to the gateway's
   // cookie gate. An unauthenticated request claiming an attacker origin must
   // never reach the upstream, whatever Host/Origin/sec-fetch-site it sends.
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   const rebindingHeaders = {
     host: 'evil.example:8002',
     origin: 'http://evil.example',
@@ -439,7 +565,7 @@ test('dns-rebinding / cross-site requests without a session cookie are refused a
 })
 
 test('forged session cookie does not pass the gate (cookie is the only credential)', async () => {
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   const res = await request('/api/session.list', {
     method: 'POST', body: {},
     cookie: 'dsh_auth=forged-token-that-is-not-in-the-table',
@@ -450,8 +576,7 @@ test('forged session cookie does not pass the gate (cookie is the only credentia
 })
 
 test('absolute-form request targets are normalized before forwarding', async () => {
-  const setup = await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
-  const cookie = cookieValue(setup.headers)
+  const cookie = await login()
   const res = await request('http://evil.example:8002/api/abs?x=1#frag', {
     method: 'POST', body: {}, cookie,
   })
@@ -478,7 +603,7 @@ test('global auth rate limit caps total attempts across all sources', async () =
   await stopGateway()
   try {
     await startGateway({ maxGlobalAuthAttemptsPerMinute: 3 })
-    await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+    await setPassword('GoodPass1')
     // Three attempts are inside the budget.
     for (let i = 0; i < 3; i += 1) {
       const res = await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
@@ -511,7 +636,7 @@ test('scrypt runs off the event loop: login requests do not serialize a CPU-boun
 test('brute-force lockout emits one lockout security event', async () => {
   const events = []
   gateway.onSecurityEvent = (p) => events.push(p)
-  await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+  await setPassword('GoodPass1')
   for (let i = 0; i < 5; i += 1) {
     await request('/login/auth', { method: 'POST', body: { password: 'wrong' } })
   }
@@ -531,7 +656,7 @@ test('global rate limit emits once per exhausted window', async () => {
     await startGateway({ maxGlobalAuthAttemptsPerMinute: 3 })
     const events = []
     gateway.onSecurityEvent = (p) => events.push(p)
-    await request('/login/setup', { method: 'POST', body: { password: 'GoodPass1' } })
+    await setPassword('GoodPass1')
     for (let i = 0; i < 5; i += 1) {
       await request('/login/auth', { method: 'POST', body: { password: 'nope' } })
     }

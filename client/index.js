@@ -32,6 +32,129 @@ window.__ModuleLoader__.load({
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
 		var import_jsx_runtime = require("react/jsx-runtime");
+		var T = {
+		  bg1: "var(--dsw-alias-bg-layer-1)",
+		  bg2: "var(--dsw-alias-bg-layer-2)",
+		  border: "var(--dsw-alias-border-l2)",
+		  textPrimary: "var(--dsw-alias-label-primary)",
+		  textSecondary: "var(--dsw-alias-label-secondary)",
+		  textTertiary: "var(--dsw-alias-label-tertiary)",
+		  brand: "var(--dsw-alias-brand-primary)",
+		  primaryFill: "var(--dsw-alias-button-primary-fill)",
+		  primaryHover: "var(--dsw-alias-button-primary-hover)",
+		  primaryForeground: "var(--dsw-alias-label-primary-foreground)",
+		  hover: "var(--dsw-alias-interactive-bg-hover)",
+		  hoverDanger: "var(--dsw-alias-interactive-bg-hover-danger)",
+		  danger: "var(--dsw-alias-state-error-primary)",
+		  dangerSoft: "var(--dsw-alias-state-error-secondary)",
+		  success: "var(--dsw-alias-state-success-primary)",
+		  successBg: "var(--dsw-alias-state-success-tertiary)",
+		  shadow3: "var(--dsw-shadow-lv3)",
+		  mask1: "var(--dsw-alias-bg-mask-1)",
+		  maskBlur: "var(--dsw-mask-blur)",
+		  fontCode: "var(--ds-font-family-code)"
+		};
+		var CARD = {
+		  background: T.bg1,
+		  border: `1px solid ${T.border}`,
+		  borderRadius: "12px",
+		  padding: "16px",
+		  marginBottom: "12px"
+		};
+		var CARD_TITLE = {
+		  fontSize: "14px",
+		  lineHeight: "22px",
+		  fontWeight: 500,
+		  color: T.textPrimary
+		};
+		var DESC = {
+		  margin: "0 0 12px",
+		  fontSize: "13px",
+		  lineHeight: "20px",
+		  color: T.textSecondary
+		};
+		var INPUT = {
+		  height: "32px",
+		  padding: "0 12px",
+		  borderRadius: "8px",
+		  border: `1px solid ${T.border}`,
+		  background: T.bg1,
+		  color: T.textPrimary,
+		  fontSize: "14px",
+		  lineHeight: "22px",
+		  outline: "none",
+		  width: "100%",
+		  boxSizing: "border-box",
+		  fontFamily: "inherit",
+		  transition: "border-color .15s ease"
+		};
+		var focusProps = {
+		  onFocus: (e) => {
+		    e.currentTarget.style.borderColor = T.brand;
+		  },
+		  onBlur: (e) => {
+		    e.currentTarget.style.borderColor = "";
+		  }
+		};
+		function Button({ variant = "primary", disabled, onClick, children, full, style }) {
+		  const kinds = {
+		    primary: { background: T.primaryFill, color: T.primaryForeground, hover: T.primaryHover },
+		    ghost: { background: "transparent", color: T.textPrimary, hover: T.hover },
+		    outline: { background: "transparent", color: T.textPrimary, hover: T.hover, border: `1px solid ${T.border}` },
+		    danger: { background: T.danger, color: "#fff", hover: T.dangerSoft },
+		    dangerOutline: { background: "transparent", color: T.danger, hover: T.hoverDanger, border: `1px solid ${T.danger}` }
+		  };
+		  const k = kinds[variant];
+		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		    "button",
+		    {
+		      type: "button",
+		      disabled,
+		      onClick,
+		      onMouseEnter: (e) => {
+		        if (!disabled) e.currentTarget.style.background = k.hover;
+		      },
+		      onMouseLeave: (e) => {
+		        if (!disabled) e.currentTarget.style.background = k.background;
+		      },
+		      style: {
+		        display: "inline-flex",
+		        alignItems: "center",
+		        justifyContent: "center",
+		        gap: "6px",
+		        height: "32px",
+		        padding: "0 14px",
+		        borderRadius: "8px",
+		        fontSize: "13px",
+		        lineHeight: "20px",
+		        fontWeight: 500,
+		        cursor: disabled ? "not-allowed" : "pointer",
+		        border: "none",
+		        fontFamily: "inherit",
+		        boxSizing: "border-box",
+		        transition: "background .15s ease",
+		        ...k,
+		        ...full ? { width: "100%" } : {},
+		        ...disabled ? { opacity: 0.5 } : {},
+		        ...style
+		      },
+		      children
+		    }
+		  );
+		}
+		function Pill({ children, tone = "neutral" }) {
+		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : { color: T.textSecondary, background: T.hover };
+		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
+		    display: "inline-flex",
+		    alignItems: "center",
+		    height: "22px",
+		    padding: "0 10px",
+		    borderRadius: "11px",
+		    fontSize: "12px",
+		    lineHeight: "18px",
+		    ...toneStyle
+		  }, children });
+		}
 		function UserSettingsPanel({ api }) {
 		  const [otpEnabled, setOtpEnabled] = (0, import_react.useState)(false);
 		  const [digits, setDigits] = (0, import_react.useState)(6);
@@ -56,7 +179,7 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.getSettings();
 		      if (data.ok) {
-		        const cfg = data.config?.["dsh-auth-gate"] || {};
+		        const cfg = data.config?.["dsh-auth-gateway"] || {};
 		        setOtpEnabled(cfg.otpEnabled || false);
 		        setDigits(cfg.otpDigits || 6);
 		      }
@@ -175,115 +298,222 @@ window.__ModuleLoader__.load({
 		      setStatus({ type: "error", message: "\u9000\u51FA\u5931\u8D25: " + err.message });
 		    }
 		  }
-		  if (loading) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "\u52A0\u8F7D\u4E2D..." });
-		  const sectionStyle = { marginBottom: "20px", paddingBottom: "20px", borderBottom: "1px solid #f0f0f0" };
-		  const titleStyle = { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "#1a1a1a" };
-		  const descStyle = { margin: "0 0 12px 0", fontSize: "12px", color: "#8c8c8c", lineHeight: "1.5" };
-		  const inputStyle = { border: "1px solid #d9d9d9", borderRadius: "6px", padding: "8px 12px", fontSize: "13px", outline: "none", width: "100%" };
+		  if (loading) {
+		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: "\u52A0\u8F7D\u4E2D..." });
+		  }
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { padding: "20px 0" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { style: { margin: "0 0 20px 0", fontSize: "15px", fontWeight: "600", color: "#1a1a1a", display: "flex", alignItems: "center", gap: "8px" }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { style: {
+		        margin: "0 0 4px",
+		        fontSize: "16px",
+		        lineHeight: "24px",
+		        fontWeight: 500,
+		        color: T.textPrimary,
+		        display: "flex",
+		        alignItems: "center",
+		        gap: "8px"
+		      }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u2699\uFE0F" }),
 		        "\u8BA4\u8BC1\u8BBE\u7F6E"
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: sectionStyle, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: titleStyle, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u{1F510}" }),
-		          "OTP \u53CC\u56E0\u7D20\u8BA4\u8BC1"
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: "\u7BA1\u7406\u767B\u5F55\u5BC6\u7801\u3001\u53CC\u56E0\u7D20\u8BA4\u8BC1\u4E0E\u767B\u5F55\u4F1A\u8BDD\u3002" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F510} OTP \u53CC\u56E0\u7D20\u8BA4\u8BC1" }),
+		          otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: "success", children: "\u5DF2\u542F\u7528" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: "\u672A\u542F\u7528" })
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: descStyle, children: "\u542F\u7528\u540E\u767B\u5F55\u9700\u8981\u5BC6\u7801 + \u9A8C\u8BC1\u7801\uFF0C\u63D0\u9AD8\u5B89\u5168\u6027\u3002" }),
-		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: enableOTP, style: { background: "#52c41a", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }, children: "\u542F\u7528 OTP" }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => setShowDisableOtp(true), style: { background: "#ff4d4f", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }, children: "\u7981\u7528 OTP" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: "8px", padding: "16px", background: "#fafafa", borderRadius: "8px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "0", fontSize: "12px", color: "#666", lineHeight: "1.5" }, children: "\u8F93\u5165\u5F53\u524D 6 \u4F4D\u9A8C\u8BC1\u7801\u6216\u4E00\u4E2A\u672A\u4F7F\u7528\u7684\u5907\u4EFD\u4EE3\u7801\u4EE5\u786E\u8BA4\u7981\u7528\uFF1A" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u542F\u7528\u540E\u767B\u5F55\u9700\u8981\u5BC6\u7801 + \u9A8C\u8BC1\u7801\uFF1B\u517C\u5BB9 Google Authenticator\u3001Authy \u7B49 TOTP \u5E94\u7528\uFF0C\u5E76\u63D0\u4F9B\u4E00\u6B21\u6027\u5907\u4EFD\u4EE3\u7801\u3002" }),
+		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, children: "\u542F\u7528 OTP" }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: "\u7981\u7528 OTP" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          display: "flex",
+		          flexDirection: "column",
+		          gap: "10px",
+		          padding: "12px",
+		          background: T.bg2,
+		          borderRadius: "10px",
+		          border: `1px solid ${T.border}`
+		        }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: 0, fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: [
+		            "\u8F93\u5165\u5F53\u524D ",
+		            digits,
+		            " \u4F4D\u9A8C\u8BC1\u7801\u6216\u4E00\u4E2A\u672A\u4F7F\u7528\u7684\u5907\u4EFD\u4EE3\u7801\u4EE5\u786E\u8BA4\u7981\u7528\uFF1A"
+		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		            "input",
 		            {
 		              type: "text",
-		              placeholder: "6\u4F4D\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801",
+		              placeholder: "\u9A8C\u8BC1\u7801\u6216\u5907\u4EFD\u4EE3\u7801",
 		              value: disableOtpCode,
 		              onChange: (e) => setDisableOtpCode(e.target.value),
-		              style: inputStyle,
+		              style: INPUT,
 		              autoFocus: true,
+		              ...focusProps,
 		              onKeyDown: (e) => {
 		                if (e.key === "Enter") disableOTP();
 		              }
 		            }
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px", marginTop: "4px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: disableOTP, disabled: disablingOtp, style: { background: "#ff4d4f", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: disablingOtp ? "not-allowed" : "pointer", opacity: disablingOtp ? 0.6 : 1 }, children: disablingOtp ? "\u7981\u7528\u4E2D..." : "\u786E\u8BA4\u7981\u7528" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => {
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", onClick: disableOTP, disabled: disablingOtp, children: disablingOtp ? "\u7981\u7528\u4E2D..." : "\u786E\u8BA4\u7981\u7528" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
 		              setShowDisableOtp(false);
 		              setDisableOtpCode("");
-		            }, style: { background: "transparent", color: "#666", border: "1px solid #d9d9d9", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", cursor: "pointer" }, children: "\u53D6\u6D88" })
+		            }, children: "\u53D6\u6D88" })
 		          ] })
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: sectionStyle, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: titleStyle, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u{1F511}" }),
-		          "\u4FEE\u6539\u5BC6\u7801"
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: descStyle, children: "\u4FEE\u6539\u60A8\u7684\u767B\u5F55\u5BC6\u7801\u3002" }),
-		        !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => setShowChangePassword(true), style: { background: "#1677ff", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }, children: "\u4FEE\u6539\u5BC6\u7801" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: "12px", padding: "16px", background: "#fafafa", borderRadius: "8px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "password", placeholder: "\u5F53\u524D\u5BC6\u7801", value: oldPassword, onChange: (e) => setOldPassword(e.target.value), style: inputStyle }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "password", placeholder: "\u65B0\u5BC6\u7801\uFF08\u81F3\u5C11 8 \u4F4D\uFF09", value: newPassword, onChange: (e) => setNewPassword(e.target.value), style: inputStyle }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "password", placeholder: "\u786E\u8BA4\u65B0\u5BC6\u7801", value: confirmPassword, onChange: (e) => setConfirmPassword(e.target.value), style: inputStyle }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px", marginTop: "4px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: changePassword, disabled: changingPassword, style: { background: "#1677ff", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: changingPassword ? "not-allowed" : "pointer", opacity: changingPassword ? 0.6 : 1 }, children: changingPassword ? "\u4FEE\u6539\u4E2D..." : "\u786E\u8BA4\u4FEE\u6539" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => {
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F511} \u767B\u5F55\u5BC6\u7801" }) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u4FEE\u6539\u540E\u6240\u6709\u4F1A\u8BDD\u5C06\u4E0B\u7EBF\uFF0C\u9700\u8981\u91CD\u65B0\u767B\u5F55\u3002" }),
+		        !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: "\u4FEE\u6539\u5BC6\u7801" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          display: "flex",
+		          flexDirection: "column",
+		          gap: "10px",
+		          padding: "12px",
+		          background: T.bg2,
+		          borderRadius: "10px",
+		          border: `1px solid ${T.border}`
+		        }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		            "input",
+		            {
+		              type: "password",
+		              placeholder: "\u5F53\u524D\u5BC6\u7801",
+		              value: oldPassword,
+		              onChange: (e) => setOldPassword(e.target.value),
+		              style: INPUT,
+		              ...focusProps
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		            "input",
+		            {
+		              type: "password",
+		              placeholder: "\u65B0\u5BC6\u7801\uFF08\u81F3\u5C11 8 \u4F4D\uFF0C\u542B\u5927\u5C0F\u5199\u5B57\u6BCD\u6216\u7279\u6B8A\u5B57\u7B26\uFF09",
+		              value: newPassword,
+		              onChange: (e) => setNewPassword(e.target.value),
+		              style: INPUT,
+		              ...focusProps
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		            "input",
+		            {
+		              type: "password",
+		              placeholder: "\u786E\u8BA4\u65B0\u5BC6\u7801",
+		              value: confirmPassword,
+		              onChange: (e) => setConfirmPassword(e.target.value),
+		              style: INPUT,
+		              ...focusProps,
+		              onKeyDown: (e) => {
+		                if (e.key === "Enter") changePassword();
+		              }
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? "\u4FEE\u6539\u4E2D..." : "\u786E\u8BA4\u4FEE\u6539" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
 		              setShowChangePassword(false);
 		              setOldPassword("");
 		              setNewPassword("");
 		              setConfirmPassword("");
-		            }, style: { background: "white", color: "#666", border: "1px solid #d9d9d9", borderRadius: "6px", padding: "8px 16px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }, children: "\u53D6\u6D88" })
+		            }, children: "\u53D6\u6D88" })
 		          ] })
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { paddingTop: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		        "button",
-		        {
-		          onClick: logout,
-		          style: { background: "white", color: "#ff4d4f", border: "1px solid #ff4d4f", borderRadius: "6px", padding: "7px 15px", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "all 0.2s", boxSizing: "border-box" },
-		          onMouseEnter: (e) => {
-		            e.target.style.background = "#ff4d4f";
-		            e.target.style.color = "white";
-		          },
-		          onMouseLeave: (e) => {
-		            e.target.style.background = "white";
-		            e.target.style.color = "#ff4d4f";
-		          },
-		          children: "\u9000\u51FA\u767B\u5F55"
-		        }
-		      ) }),
-		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "16px", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "500", background: status.type === "success" ? "#f6ffed" : "#fff2f0", border: `1px solid ${status.type === "success" ? "#b7eb8f" : "#ffccc7"}`, color: status.type === "success" ? "#52c41a" : "#ff4d4f" }, children: status.message })
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: CARD_TITLE, children: "\u{1F512} \u767B\u5F55\u4F1A\u8BDD" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: "\u5DF2\u767B\u5F55" })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: "\u9000\u51FA\u767B\u5F55" })
+		      ] }),
+		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+		        marginTop: "12px",
+		        padding: "10px 14px",
+		        borderRadius: "10px",
+		        fontSize: "13px",
+		        lineHeight: "20px",
+		        background: status.type === "success" ? T.successBg : T.hoverDanger,
+		        color: status.type === "success" ? T.success : T.danger
+		      }, children: status.message })
 		    ] }),
-		    showQRModal && qrData && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1e3 }, onClick: closeQRModal, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { background: "white", borderRadius: "12px", padding: "24px", maxWidth: "400px", width: "90%", maxHeight: "80vh", overflow: "auto" }, onClick: (e) => e.stopPropagation(), children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600" }, children: "\u8BBE\u7F6E OTP \u9A8C\u8BC1\u5668" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "0 0 16px 0", fontSize: "13px", color: "#666" }, children: "\u4F7F\u7528 Google Authenticator\u3001Authy \u6216\u5176\u4ED6 TOTP \u5E94\u7528\u626B\u63CF\u4EE5\u4E0B\u4E8C\u7EF4\u7801\uFF1A" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: "1px solid #e8e8e8", borderRadius: "8px", width: "200px", height: "200px" } }) }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", fontWeight: "500", marginBottom: "8px" }, children: "\u5BC6\u94A5\uFF08\u624B\u52A8\u8F93\u5165\u7528\uFF09\uFF1A" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "8px 12px", background: "#f6f8fa", borderRadius: "6px", fontFamily: "monospace", fontSize: "13px", wordBreak: "break-all" }, children: qrData.secret })
-		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", fontWeight: "500", marginBottom: "8px" }, children: "\u8F93\u5165\u9A8C\u8BC1\u7801\u4EE5\u5B8C\u6210\u8BBE\u7F6E\uFF1A" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		          "input",
-		          {
-		            type: "text",
-		            placeholder: digits + "\u4F4D\u9A8C\u8BC1\u7801",
-		            maxLength: digits,
-		            value: otpCode,
-		            onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, "")),
-		            style: { border: "1px solid #d9d9d9", borderRadius: "6px", padding: "8px 12px", fontSize: "14px", outline: "none", width: "140px", textAlign: "center", letterSpacing: "6px", fontFamily: "monospace" },
-		            onKeyDown: (e) => {
-		              if (e.key === "Enter") verifyOTPSetup();
-		            }
-		          }
-		        )
-		      ] }),
-		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { margin: "12px 0", padding: "8px 12px", borderRadius: "6px", fontSize: "12px", background: status.type === "success" ? "#f6ffed" : "#fff2f0", border: `1px solid ${status.type === "success" ? "#b7eb8f" : "#ffccc7"}`, color: status.type === "success" ? "#52c41a" : "#ff4d4f" }, children: status.message }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: verifyOTPSetup, disabled: verifyingOtp, style: { width: "100%", marginTop: "8px", padding: "10px", background: "#52c41a", color: "white", border: "none", borderRadius: "6px", fontSize: "14px", cursor: verifyingOtp ? "not-allowed" : "pointer", opacity: verifyingOtp ? 0.6 : 1 }, children: verifyingOtp ? "\u9A8C\u8BC1\u4E2D..." : "\u9A8C\u8BC1\u5E76\u542F\u7528" })
-		    ] }) })
+		    showQRModal && qrData && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		      position: "fixed",
+		      inset: 0,
+		      zIndex: 1e3,
+		      display: "flex",
+		      alignItems: "center",
+		      justifyContent: "center",
+		      padding: "24px"
+		    }, onClick: closeQRModal, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { position: "absolute", inset: 0, background: T.mask1, backdropFilter: T.maskBlur } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		        position: "relative",
+		        boxSizing: "border-box",
+		        background: T.bg2,
+		        borderRadius: "24px",
+		        boxShadow: T.shadow3,
+		        border: `1px solid ${T.border}`,
+		        width: "min(400px, 100%)",
+		        maxHeight: "calc(100vh - 48px)",
+		        overflow: "auto"
+		      }, onClick: (e) => e.stopPropagation(), children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "20px 24px 4px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: "\u8BBE\u7F6E OTP \u9A8C\u8BC1\u5668" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { padding: "0 24px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: "\u4F7F\u7528 Google Authenticator\u3001Authy \u6216\u5176\u4ED6 TOTP \u5E94\u7528\u626B\u63CF\u4EE5\u4E0B\u4E8C\u7EF4\u7801\uFF1A" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: `1px solid ${T.border}`, borderRadius: "8px", width: "200px", height: "200px" } }) }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: "\u5BC6\u94A5\uFF08\u624B\u52A8\u8F93\u5165\u7528\uFF09" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+		              padding: "8px 12px",
+		              background: T.bg1,
+		              border: `1px solid ${T.border}`,
+		              borderRadius: "8px",
+		              fontFamily: T.fontCode,
+		              fontSize: "13px",
+		              lineHeight: "20px",
+		              color: T.textPrimary,
+		              wordBreak: "break-all"
+		            }, children: qrData.secret })
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: "\u8F93\u5165\u9A8C\u8BC1\u7801\u4EE5\u5B8C\u6210\u8BBE\u7F6E" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		              "input",
+		              {
+		                type: "text",
+		                placeholder: digits + "\u4F4D\u9A8C\u8BC1\u7801",
+		                maxLength: digits,
+		                value: otpCode,
+		                onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, "")),
+		                style: { ...INPUT, width: "140px", textAlign: "center", letterSpacing: "6px", fontFamily: T.fontCode },
+		                ...focusProps,
+		                onKeyDown: (e) => {
+		                  if (e.key === "Enter") verifyOTPSetup();
+		                }
+		              }
+		            )
+		          ] }),
+		          status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+		            margin: "12px 0",
+		            padding: "8px 12px",
+		            borderRadius: "8px",
+		            fontSize: "12px",
+		            lineHeight: "18px",
+		            background: status.type === "success" ? T.successBg : T.hoverDanger,
+		            color: status.type === "success" ? T.success : T.danger
+		          }, children: status.message })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px", marginTop: "20px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: "\u53D6\u6D88" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? "\u9A8C\u8BC1\u4E2D..." : "\u9A8C\u8BC1\u5E76\u542F\u7528" })
+		        ] })
+		      ] })
+		    ] })
 		  ] });
 		}
 		var inject = ["slots"];

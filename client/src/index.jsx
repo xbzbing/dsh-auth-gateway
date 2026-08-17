@@ -1,5 +1,5 @@
 /**
- * dsh-auth-gate client plugin — user settings panel.
+ * dsh-auth-gateway client plugin — user settings panel.
  *
  * Source of truth for the browser bundle (built by `client/build.mjs` into
  * `client/index.js`, which is what dsh serves via exports["./client"]).
@@ -17,6 +17,94 @@ import { useEffect, useState } from 'react'
 // Side-effect import: guarantees the dsh slots module is materialized by the
 // client loader before this plugin's apply() runs (declared in dsh.client.inject).
 import '@deepseek-ai/dsh-client-ui-slots'
+
+// dsh web design tokens (--dsw-alias-*). They are defined globally by the
+// dsh web client and switch automatically with the light/dark theme, so the
+// panel follows the host UI instead of hard-coding colors.
+const T = {
+  bg1: 'var(--dsw-alias-bg-layer-1)',
+  bg2: 'var(--dsw-alias-bg-layer-2)',
+  border: 'var(--dsw-alias-border-l2)',
+  textPrimary: 'var(--dsw-alias-label-primary)',
+  textSecondary: 'var(--dsw-alias-label-secondary)',
+  textTertiary: 'var(--dsw-alias-label-tertiary)',
+  brand: 'var(--dsw-alias-brand-primary)',
+  primaryFill: 'var(--dsw-alias-button-primary-fill)',
+  primaryHover: 'var(--dsw-alias-button-primary-hover)',
+  primaryForeground: 'var(--dsw-alias-label-primary-foreground)',
+  hover: 'var(--dsw-alias-interactive-bg-hover)',
+  hoverDanger: 'var(--dsw-alias-interactive-bg-hover-danger)',
+  danger: 'var(--dsw-alias-state-error-primary)',
+  dangerSoft: 'var(--dsw-alias-state-error-secondary)',
+  success: 'var(--dsw-alias-state-success-primary)',
+  successBg: 'var(--dsw-alias-state-success-tertiary)',
+  shadow3: 'var(--dsw-shadow-lv3)',
+  mask1: 'var(--dsw-alias-bg-mask-1)',
+  maskBlur: 'var(--dsw-mask-blur)',
+  fontCode: 'var(--ds-font-family-code)',
+}
+
+const CARD = {
+  background: T.bg1, border: `1px solid ${T.border}`, borderRadius: '12px',
+  padding: '16px', marginBottom: '12px',
+}
+const CARD_TITLE = {
+  fontSize: '14px', lineHeight: '22px', fontWeight: 500, color: T.textPrimary,
+}
+const DESC = {
+  margin: '0 0 12px', fontSize: '13px', lineHeight: '20px', color: T.textSecondary,
+}
+const INPUT = {
+  height: '32px', padding: '0 12px', borderRadius: '8px',
+  border: `1px solid ${T.border}`, background: T.bg1, color: T.textPrimary,
+  fontSize: '14px', lineHeight: '22px', outline: 'none', width: '100%',
+  boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .15s ease',
+}
+const focusProps = {
+  onFocus: (e) => { e.currentTarget.style.borderColor = T.brand },
+  onBlur: (e) => { e.currentTarget.style.borderColor = '' },
+}
+
+/** dsh-styled button (design tokens, hover handled inline). */
+function Button({ variant = 'primary', disabled, onClick, children, full, style }) {
+  const kinds = {
+    primary: { background: T.primaryFill, color: T.primaryForeground, hover: T.primaryHover },
+    ghost: { background: 'transparent', color: T.textPrimary, hover: T.hover },
+    outline: { background: 'transparent', color: T.textPrimary, hover: T.hover, border: `1px solid ${T.border}` },
+    danger: { background: T.danger, color: '#fff', hover: T.dangerSoft },
+    dangerOutline: { background: 'transparent', color: T.danger, hover: T.hoverDanger, border: `1px solid ${T.danger}` },
+  }
+  const k = kinds[variant]
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = k.hover }}
+      onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.background = k.background }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+        height: '32px', padding: '0 14px', borderRadius: '8px', fontSize: '13px', lineHeight: '20px',
+        fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'inherit',
+        boxSizing: 'border-box', transition: 'background .15s ease',
+        ...k, ...(full ? { width: '100%' } : {}), ...(disabled ? { opacity: 0.5 } : {}), ...style,
+      }}
+    >{children}</button>
+  )
+}
+
+/** Small status badge (success tone or neutral). */
+function Pill({ children, tone = 'neutral' }) {
+  const toneStyle = tone === 'success'
+    ? { color: T.success, background: T.successBg }
+    : { color: T.textSecondary, background: T.hover }
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', height: '22px', padding: '0 10px',
+      borderRadius: '11px', fontSize: '12px', lineHeight: '18px', ...toneStyle,
+    }}>{children}</span>
+  )
+}
 
 /**
  * User Settings Panel component. Receives the gateway API via the
@@ -47,7 +135,10 @@ function UserSettingsPanel({ api }) {
     try {
       const data = await api.getSettings()
       if (data.ok) {
-        const cfg = data.config?.['dsh-auth-gate'] || {}
+        // The key must match the gateway's /login-api/settings response
+        // (lib/gateway.js #handleGetSettings) — regression-guarded in
+        // tests/client-contract.test.mjs.
+        const cfg = data.config?.['dsh-auth-gateway'] || {}
         setOtpEnabled(cfg.otpEnabled || false)
         setDigits(cfg.otpDigits || 6)
       }
@@ -63,8 +154,8 @@ function UserSettingsPanel({ api }) {
       if (data.ok) {
         setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes })
         setShowQRModal(true)
-        // Do NOT flip the panel button here — OTP is not enabled
-        // until the 6-digit code is verified via verify-setup.
+        // Do NOT flip the panel state here — OTP is not enabled
+        // until the code is verified via verify-setup.
       } else {
         setStatus({ type: 'error', message: '启用失败: ' + (data.error || '未知错误') })
       }
@@ -138,123 +229,169 @@ function UserSettingsPanel({ api }) {
     catch (err) { setStatus({ type: 'error', message: '退出失败: ' + err.message }) }
   }
 
-  if (loading) return <div>加载中...</div>
-
-  const sectionStyle = { marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #f0f0f0' }
-  const titleStyle = { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: '#1a1a1a' }
-  const descStyle = { margin: '0 0 12px 0', fontSize: '12px', color: '#8c8c8c', lineHeight: '1.5' }
-  const inputStyle = { border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '13px', outline: 'none', width: '100%' }
+  if (loading) {
+    return <div style={{ padding: '24px 0', fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>加载中...</div>
+  }
 
   return (
     <>
-      <div style={{ padding: '20px 0' }}>
-        <h3 style={{ margin: '0 0 20px 0', fontSize: '15px', fontWeight: '600', color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ paddingTop: '4px' }}>
+        <h3 style={{
+          margin: '0 0 4px', fontSize: '16px', lineHeight: '24px', fontWeight: 500,
+          color: T.textPrimary, display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
           <span>⚙️</span>认证设置
         </h3>
-        {/* OTP */}
-        <div style={sectionStyle}>
-          <div style={titleStyle}><span>🔐</span>OTP 双因素认证</div>
-          <p style={descStyle}>启用后登录需要密码 + 验证码，提高安全性。</p>
+        <p style={{ ...DESC, margin: '0 0 16px' }}>管理登录密码、双因素认证与登录会话。</p>
+
+        {/* OTP two-factor */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={CARD_TITLE}>🔐 OTP 双因素认证</span>
+            {otpEnabled ? <Pill tone="success">已启用</Pill> : <Pill>未启用</Pill>}
+          </div>
+          <p style={DESC}>启用后登录需要密码 + 验证码；兼容 Google Authenticator、Authy 等 TOTP 应用，并提供一次性备份代码。</p>
           {!otpEnabled ? (
-            <button onClick={enableOTP} style={{ background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-              启用 OTP
-            </button>
+            <Button variant="primary" onClick={enableOTP}>启用 OTP</Button>
           ) : !showDisableOtp ? (
-            <button onClick={() => setShowDisableOtp(true)} style={{ background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-              禁用 OTP
-            </button>
+            <Button variant="dangerOutline" onClick={() => setShowDisableOtp(true)}>禁用 OTP</Button>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
-              <p style={{ margin: '0', fontSize: '12px', color: '#666', lineHeight: '1.5' }}>输入当前 6 位验证码或一个未使用的备份代码以确认禁用：</p>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
+              background: T.bg2, borderRadius: '10px', border: `1px solid ${T.border}`,
+            }}>
+              <p style={{ margin: 0, fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>
+                输入当前 {digits} 位验证码或一个未使用的备份代码以确认禁用：
+              </p>
               <input
-                type="text" placeholder="6位验证码或备份代码"
+                type="text" placeholder="验证码或备份代码"
                 value={disableOtpCode} onChange={(e) => setDisableOtpCode(e.target.value)}
-                style={inputStyle} autoFocus
+                style={INPUT} autoFocus {...focusProps}
                 onKeyDown={(e) => { if (e.key === 'Enter') disableOTP() }}
               />
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button onClick={disableOTP} disabled={disablingOtp} style={{ background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: disablingOtp ? 'not-allowed' : 'pointer', opacity: disablingOtp ? 0.6 : 1 }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="danger" onClick={disableOTP} disabled={disablingOtp}>
                   {disablingOtp ? '禁用中...' : '确认禁用'}
-                </button>
-                <button onClick={() => { setShowDisableOtp(false); setDisableOtpCode('') }} style={{ background: 'transparent', color: '#666', border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer' }}>
-                  取消
-                </button>
+                </Button>
+                <Button variant="outline" onClick={() => { setShowDisableOtp(false); setDisableOtpCode('') }}>取消</Button>
               </div>
             </div>
           )}
         </div>
-        {/* Change Password */}
-        <div style={sectionStyle}>
-          <div style={titleStyle}><span>🔑</span>修改密码</div>
-          <p style={descStyle}>修改您的登录密码。</p>
+
+        {/* Change password */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={CARD_TITLE}>🔑 登录密码</span>
+          </div>
+          <p style={DESC}>修改后所有会话将下线，需要重新登录。</p>
           {!showChangePassword ? (
-            <button onClick={() => setShowChangePassword(true)} style={{ background: '#1677ff', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-              修改密码
-            </button>
+            <Button variant="primary" onClick={() => setShowChangePassword(true)}>修改密码</Button>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
-              <input type="password" placeholder="当前密码" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} style={inputStyle} />
-              <input type="password" placeholder="新密码（至少 8 位）" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} />
-              <input type="password" placeholder="确认新密码" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle} />
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button onClick={changePassword} disabled={changingPassword} style={{ background: '#1677ff', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: changingPassword ? 'not-allowed' : 'pointer', opacity: changingPassword ? 0.6 : 1 }}>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
+              background: T.bg2, borderRadius: '10px', border: `1px solid ${T.border}`,
+            }}>
+              <input type="password" placeholder="当前密码" value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)} style={INPUT} {...focusProps} />
+              <input type="password" placeholder="新密码（至少 8 位，含大小写字母或特殊字符）" value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)} style={INPUT} {...focusProps} />
+              <input type="password" placeholder="确认新密码" value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)} style={INPUT} {...focusProps}
+                onKeyDown={(e) => { if (e.key === 'Enter') changePassword() }} />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="primary" onClick={changePassword} disabled={changingPassword}>
                   {changingPassword ? '修改中...' : '确认修改'}
-                </button>
-                <button onClick={() => { setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('') }} style={{ background: 'white', color: '#666', border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-                  取消
-                </button>
+                </Button>
+                <Button variant="outline" onClick={() => { setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('') }}>取消</Button>
               </div>
             </div>
           )}
         </div>
-        {/* Logout */}
-        <div style={{ paddingTop: '4px' }}>
-          <button
-            onClick={logout}
-            style={{ background: 'white', color: '#ff4d4f', border: '1px solid #ff4d4f', borderRadius: '6px', padding: '7px 15px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.2s', boxSizing: 'border-box' }}
-            onMouseEnter={(e) => { e.target.style.background = '#ff4d4f'; e.target.style.color = 'white' }}
-            onMouseLeave={(e) => { e.target.style.background = 'white'; e.target.style.color = '#ff4d4f' }}
-          >
-            退出登录
-          </button>
+
+        {/* Session */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={CARD_TITLE}>🔒 登录会话</span>
+            <Pill>已登录</Pill>
+          </div>
+          <p style={DESC}>会话有效期 30 天；dsh 重启后需重新登录。</p>
+          <Button variant="dangerOutline" onClick={logout}>退出登录</Button>
         </div>
+
         {/* Status */}
         {status && (
-          <div style={{ marginTop: '16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500', background: status.type === 'success' ? '#f6ffed' : '#fff2f0', border: `1px solid ${status.type === 'success' ? '#b7eb8f' : '#ffccc7'}`, color: status.type === 'success' ? '#52c41a' : '#ff4d4f' }}>
+          <div style={{
+            marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
+            fontSize: '13px', lineHeight: '20px',
+            background: status.type === 'success' ? T.successBg : T.hoverDanger,
+            color: status.type === 'success' ? T.success : T.danger,
+          }}>
             {status.message}
           </div>
         )}
       </div>
-      {/* QR Modal */}
+
+      {/* QR dialog (dsh dialog pattern: mask + blur, rounded panel, footer actions) */}
       {showQRModal && qrData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeQRModal}>
-          <div style={{ background: 'white', borderRadius: '12px', padding: '24px', maxWidth: '400px', width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>设置 OTP 验证器</h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#666' }}>使用 Google Authenticator、Authy 或其他 TOTP 应用扫描以下二维码：</p>
-            <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <img src={qrData.svgUrl} alt="OTP QR Code" style={{ border: '1px solid #e8e8e8', borderRadius: '8px', width: '200px', height: '200px' }} />
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '24px',
+        }} onClick={closeQRModal}>
+          <div style={{ position: 'absolute', inset: 0, background: T.mask1, backdropFilter: T.maskBlur }} />
+          <div style={{
+            position: 'relative', boxSizing: 'border-box', background: T.bg2,
+            borderRadius: '24px', boxShadow: T.shadow3, border: `1px solid ${T.border}`,
+            width: 'min(400px, 100%)', maxHeight: 'calc(100vh - 48px)', overflow: 'auto',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '20px 24px 4px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', lineHeight: '24px', fontWeight: 500, color: T.textPrimary }}>
+                设置 OTP 验证器
+              </h3>
+              <Button variant="ghost" onClick={closeQRModal} style={{ height: '28px', width: '28px', padding: 0, borderRadius: '8px' }}>✕</Button>
             </div>
-            <div style={{ margin: '16px 0' }}>
-              <div style={{ fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>密钥（手动输入用）：</div>
-              <div style={{ padding: '8px 12px', background: '#f6f8fa', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }}>{qrData.secret}</div>
-            </div>
-            <div style={{ margin: '16px 0' }}>
-              <div style={{ fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>输入验证码以完成设置：</div>
-              <input
-                type="text" placeholder={digits + '位验证码'} maxLength={digits}
-                value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                style={{ border: '1px solid #d9d9d9', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', outline: 'none', width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: 'monospace' }}
-                onKeyDown={(e) => { if (e.key === 'Enter') verifyOTPSetup() }}
-              />
-            </div>
-            {status && (
-              <div style={{ margin: '12px 0', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', background: status.type === 'success' ? '#f6ffed' : '#fff2f0', border: `1px solid ${status.type === 'success' ? '#b7eb8f' : '#ffccc7'}`, color: status.type === 'success' ? '#52c41a' : '#ff4d4f' }}>
-                {status.message}
+            <div style={{ padding: '0 24px' }}>
+              <p style={{ margin: '8px 0 16px', fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>
+                使用 Google Authenticator、Authy 或其他 TOTP 应用扫描以下二维码：
+              </p>
+              <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                <img src={qrData.svgUrl} alt="OTP QR Code" style={{ border: `1px solid ${T.border}`, borderRadius: '8px', width: '200px', height: '200px' }} />
               </div>
-            )}
-            <button onClick={verifyOTPSetup} disabled={verifyingOtp} style={{ width: '100%', marginTop: '8px', padding: '10px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: verifyingOtp ? 'not-allowed' : 'pointer', opacity: verifyingOtp ? 0.6 : 1 }}>
-              {verifyingOtp ? '验证中...' : '验证并启用'}
-            </button>
+              <div style={{ margin: '16px 0' }}>
+                <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
+                  密钥（手动输入用）
+                </div>
+                <div style={{
+                  padding: '8px 12px', background: T.bg1, border: `1px solid ${T.border}`, borderRadius: '8px',
+                  fontFamily: T.fontCode, fontSize: '13px', lineHeight: '20px', color: T.textPrimary, wordBreak: 'break-all',
+                }}>{qrData.secret}</div>
+              </div>
+              <div style={{ margin: '16px 0' }}>
+                <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
+                  输入验证码以完成设置
+                </div>
+                <input
+                  type="text" placeholder={digits + '位验证码'} maxLength={digits}
+                  value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  style={{ ...INPUT, width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: T.fontCode }}
+                  {...focusProps}
+                  onKeyDown={(e) => { if (e.key === 'Enter') verifyOTPSetup() }}
+                />
+              </div>
+              {status && (
+                <div style={{
+                  margin: '12px 0', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: '18px',
+                  background: status.type === 'success' ? T.successBg : T.hoverDanger,
+                  color: status.type === 'success' ? T.success : T.danger,
+                }}>{status.message}</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '0 24px', marginTop: '20px' }}>
+              <Button variant="outline" onClick={closeQRModal}>取消</Button>
+              <Button variant="primary" onClick={verifyOTPSetup} disabled={verifyingOtp}>
+                {verifyingOtp ? '验证中...' : '验证并启用'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

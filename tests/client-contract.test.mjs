@@ -104,6 +104,11 @@ test('component takes no ctx prop and never fetches directly', () => {
   assert.ok(!source.includes('function UserSettingsPanel({ ctx })'),
     'component must not receive ctx')
   assert.ok(source.includes('const inject = [\'slots\']'), 'inject must declare only slots')
+  // The settings key the panel reads must match the gateway's
+  // /login-api/settings response key (lib/gateway.js #handleGetSettings) —
+  // a rename miss here silently shows OTP as disabled.
+  assert.ok(source.includes("config?.['dsh-auth-gateway']"),
+    'panel must read the dsh-auth-gateway config key')
 })
 
 test('client bundle keeps react and slots as external requires (not inlined)', () => {

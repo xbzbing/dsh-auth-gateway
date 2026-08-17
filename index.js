@@ -93,11 +93,13 @@ export async function apply(ctx, config) {
     console.log(`  初始密码: ${initial}`)
     console.log('  请使用该密码登录；登录后将引导你设置新的访问密码。')
     console.log('  （初始密码为一次性凭据，设置新密码后自动失效）')
+    console.log('  初次登录可在引导页绑定 OTP，或稍后在「认证设置」面板中绑定。')
     console.log('------------------------------------------------------------')
     console.log('  dsh-auth-gateway: first-run initial password')
     console.log(`  Initial password: ${initial}`)
     console.log('  Log in with it; you will be guided to set your own access password.')
     console.log('  (One-time credential — invalidated once you set a new password)')
+    console.log('  You can bind OTP on the onboarding page, or later from the Auth Settings panel.')
     console.log('============================================================')
     console.log('')
   }

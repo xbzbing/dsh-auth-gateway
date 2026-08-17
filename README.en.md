@@ -14,6 +14,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
 - **Security events**: lockouts and exhausted rate-limit windows log warnings and broadcast a `dsh-auth-gateway/brute-force` Cordis event (JSON payload) for monitoring and automation;
+- **Bilingual (zh/en)**: the settings panel follows the dsh UI language (Settings → Language); the login / onboarding / OTP pages render in your preferred language (`locale.preference` in `$DSH_HOME/settings.yaml`), falling back to the browser language (Accept-Language) when no preference was set — a change applies on the next page load; the first-run console notice prints both languages;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built), all through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`).
 
 ## Installation

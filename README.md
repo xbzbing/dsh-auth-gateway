@@ -14,6 +14,7 @@
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
 - **安全事件**：锁触发、限流耗尽时输出告警日志并广播 `dsh-auth-gateway/brute-force` Cordis 事件（JSON 负载），供监控与联动；
+- **中英双语**：设置面板跟随 dsh 界面语言（设置 → 语言）；登录 / 引导 / OTP 页面按你的语言偏好渲染（`$DSH_HOME/settings.yaml` 的 `locale.preference`），未设置偏好时跟随浏览器语言（Accept-Language），刷新即生效；首次部署的控制台提示中英对照输出；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）。
 
 ## 安装

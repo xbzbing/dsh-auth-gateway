@@ -89,7 +89,8 @@ dsh web                 # 打开 http://<host>:<对外端口>
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | 全局登录尝试速率上限 |
 | `maxOtpAttemptsPerMinute` | `10` | 单来源 OTP/备份码验证速率上限 |
-| `otpEnabled` / `otpRequired` | `false` / `false` | 启用/强制 2FA |
+| `otpEnabled`（已废弃） | `false` | 不再作为启用开关——2FA 由用户登录后在「认证设置」中绑定激活；字段保留仅为兼容旧配置 |
+| `otpRequired` | `false` | 2FA 激活后强制每次登录验证（无需任何配置） |
 | `otpIssuer` / `otpPeriod` / `otpDigits` / `otpWindow` | `dsh-auth-gateway` / `30` / `6` / `1` | TOTP 参数（显示名、周期、位数、窗口） |
 | `backupCodeCount` / `backupCodeLength` | `10` / `8` | 备份代码数量与长度 |
 

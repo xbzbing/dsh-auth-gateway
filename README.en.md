@@ -90,7 +90,8 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | Password-failure lockout threshold and duration |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | Global auth-attempt rate cap |
 | `maxOtpAttemptsPerMinute` | `10` | Per-source OTP/backup-code verification rate cap |
-| `otpEnabled` / `otpRequired` | `false` / `false` | Enable / require 2FA |
+| `otpEnabled` (deprecated) | `false` | No longer a switch — 2FA is bound and activated by the user from the Auth Settings panel; kept only for config compatibility |
+| `otpRequired` | `false` | Require verification at every login once 2FA is active (no config needed) |
 | `otpIssuer` / `otpPeriod` / `otpDigits` / `otpWindow` | `dsh-auth-gateway` / `30` / `6` / `1` | TOTP parameters (display name, period, digits, window) |
 | `backupCodeCount` / `backupCodeLength` | `10` / `8` | Backup-code count and length |
 

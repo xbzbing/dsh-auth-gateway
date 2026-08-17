@@ -105,6 +105,9 @@ const zh = {
   'dialog.verify': '验证并启用',
   'dialog.verifying': '验证中...',
   'dialog.cancel': '取消',
+  'dialog.enabledDesc': '所有会话已下线。请保存以下一次性备份代码（每个只能使用一次），然后重新登录。',
+  'dialog.backupCodesTitle': '备份代码',
+  'dialog.doneBtn': '完成并重新登录',
   'status.otpEnabled': 'OTP 已启用',
   'status.otpDisabled': 'OTP 已禁用',
   'status.passwordChanged': '密码修改成功，请重新登录',
@@ -157,6 +160,9 @@ const en = {
   'dialog.verify': 'Verify & enable',
   'dialog.verifying': 'Verifying...',
   'dialog.cancel': 'Cancel',
+  'dialog.enabledDesc': 'All sessions were signed out. Save these one-time backup codes (each can be used once), then sign in again.',
+  'dialog.backupCodesTitle': 'Backup codes',
+  'dialog.doneBtn': 'Done — sign in again',
   'status.otpEnabled': 'OTP enabled',
   'status.otpDisabled': 'OTP disabled',
   'status.passwordChanged': 'Password updated — please sign in again',
@@ -227,6 +233,11 @@ function UserSettingsPanel({ api, t }) {
   const [status, setStatus] = useState(null)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrData, setQrData] = useState(null)
+  // Post-verification state inside the QR dialog: OTP is enabled, every
+  // session (including this one) was revoked — show the backup codes, then
+  // the user signs in again under the new password + OTP policy.
+  const [setupDone, setSetupDone] = useState(false)
+  const [backupCodes, setBackupCodes] = useState([])
 
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [oldPassword, setOldPassword] = useState('')
@@ -250,6 +261,9 @@ function UserSettingsPanel({ api, t }) {
         // tests/client-contract.test.mjs.
         const cfg = data.config?.['dsh-auth-gateway'] || {}
         setOtpEnabled(cfg.otpEnabled || false)
+        // Deployment switch (composition config), distinct from the active
+        // state above: when false, enabling OTP from the panel is impossible
+        // (the server answers otp-not-enabled) and the card explains why.
         setDigits(cfg.otpDigits || 6)
       }
     } catch (err) {
@@ -297,6 +311,7 @@ function UserSettingsPanel({ api, t }) {
     // Cancel path: just close, keep the panel button in its
     // current state (OTP was not verified here).
     setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false)
+    setSetupDone(false); setBackupCodes([])
     setStatus(null)
   }
 
@@ -306,9 +321,13 @@ function UserSettingsPanel({ api, t }) {
     try {
       const data = await api.verifyOtpSetup(otpCode)
       if (data.ok) {
-        setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false)
+        // The gateway revoked every session (sessionRevoked) — this one is
+        // gone too, so the panel cannot refresh anything anymore. Keep the
+        // dialog open showing the backup codes, then sign in again.
         setOtpEnabled(true)
-        setStatus({ type: 'success', message: t('status.otpEnabled') })
+        setBackupCodes(data.backupCodes || [])
+        setSetupDone(true)
+        setOtpCode('')
       } else {
         setStatus({ type: 'error', message: t('error.verifyOtp', { message: data.error || t('error.invalidCode') }) })
       }
@@ -461,46 +480,77 @@ function UserSettingsPanel({ api, t }) {
               <Button variant="ghost" onClick={closeQRModal} style={{ height: '28px', width: '28px', padding: 0, borderRadius: '8px' }}>✕</Button>
             </div>
             <div style={{ padding: '0 24px' }}>
-              <p style={{ margin: '8px 0 16px', fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>
-                {t('dialog.desc')}
-              </p>
-              <div style={{ textAlign: 'center', margin: '16px 0' }}>
-                <img src={qrData.svgUrl} alt="OTP QR Code" style={{ border: `1px solid ${T.border}`, borderRadius: '8px', width: '200px', height: '200px' }} />
-              </div>
-              <div style={{ margin: '16px 0' }}>
-                <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
-                  {t('dialog.secret')}
-                </div>
-                <div style={{
-                  padding: '8px 12px', background: T.bg1, border: `1px solid ${T.border}`, borderRadius: '8px',
-                  fontFamily: T.fontCode, fontSize: '13px', lineHeight: '20px', color: T.textPrimary, wordBreak: 'break-all',
-                }}>{qrData.secret}</div>
-              </div>
-              <div style={{ margin: '16px 0' }}>
-                <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
-                  {t('dialog.code')}
-                </div>
-                <input
-                  type="text" placeholder={t('dialog.codePlaceholder', { digits })} maxLength={digits}
-                  value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  style={{ ...INPUT, width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: T.fontCode }}
-                  {...focusProps}
-                  onKeyDown={(e) => { if (e.key === 'Enter') verifyOTPSetup() }}
-                />
-              </div>
-              {status && (
-                <div style={{
-                  margin: '12px 0', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: '18px',
-                  background: status.type === 'success' ? T.successBg : T.hoverDanger,
-                  color: status.type === 'success' ? T.success : T.danger,
-                }}>{status.message}</div>
+              {setupDone ? (
+                <>
+                  <div style={{
+                    margin: '8px 0 16px', padding: '10px 12px', borderRadius: '10px',
+                    fontSize: '13px', lineHeight: '20px', color: T.success,
+                    background: T.successBg, border: `1px solid ${T.border}`,
+                  }}>
+                    {t('status.otpEnabled')} — {t('dialog.enabledDesc')}
+                  </div>
+                  <div style={{ margin: '16px 0' }}>
+                    <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
+                      {t('dialog.backupCodesTitle')}
+                    </div>
+                    <div style={{
+                      padding: '8px 12px', background: T.bg1, border: `1px solid ${T.border}`, borderRadius: '8px',
+                      fontFamily: T.fontCode, fontSize: '13px', lineHeight: '22px', color: T.textPrimary,
+                    }}>
+                      {backupCodes.join('\n')}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: '8px 0 16px', fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>
+                    {t('dialog.desc')}
+                  </p>
+                  <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                    <img src={qrData.svgUrl} alt="OTP QR Code" style={{ border: `1px solid ${T.border}`, borderRadius: '8px', width: '200px', height: '200px' }} />
+                  </div>
+                  <div style={{ margin: '16px 0' }}>
+                    <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
+                      {t('dialog.secret')}
+                    </div>
+                    <div style={{
+                      padding: '8px 12px', background: T.bg1, border: `1px solid ${T.border}`, borderRadius: '8px',
+                      fontFamily: T.fontCode, fontSize: '13px', lineHeight: '20px', color: T.textPrimary, wordBreak: 'break-all',
+                    }}>{qrData.secret}</div>
+                  </div>
+                  <div style={{ margin: '16px 0' }}>
+                    <div style={{ fontSize: '12px', lineHeight: '18px', fontWeight: 500, color: T.textSecondary, marginBottom: '6px' }}>
+                      {t('dialog.code')}
+                    </div>
+                    <input
+                      type="text" placeholder={t('dialog.codePlaceholder', { digits })} maxLength={digits}
+                      value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      style={{ ...INPUT, width: '140px', textAlign: 'center', letterSpacing: '6px', fontFamily: T.fontCode }}
+                      {...focusProps}
+                      onKeyDown={(e) => { if (e.key === 'Enter') verifyOTPSetup() }}
+                    />
+                  </div>
+                  {status && (
+                    <div style={{
+                      margin: '12px 0', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: '18px',
+                      background: status.type === 'success' ? T.successBg : T.hoverDanger,
+                      color: status.type === 'success' ? T.success : T.danger,
+                    }}>{status.message}</div>
+                  )}
+                </>
               )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '0 24px', marginTop: '20px' }}>
-              <Button variant="outline" onClick={closeQRModal}>{t('dialog.cancel')}</Button>
-              <Button variant="primary" onClick={verifyOTPSetup} disabled={verifyingOtp}>
-                {verifyingOtp ? t('dialog.verifying') : t('dialog.verify')}
-              </Button>
+              {setupDone ? (
+                <Button variant="primary" onClick={() => { location.href = '/login' }}>{t('dialog.doneBtn')}</Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={closeQRModal}>{t('dialog.cancel')}</Button>
+                  <Button variant="primary" onClick={verifyOTPSetup} disabled={verifyingOtp}>
+                    {verifyingOtp ? t('dialog.verifying') : t('dialog.verify')}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -131,6 +131,9 @@ window.__ModuleLoader__.load({
 		  "dialog.verify": "\u9A8C\u8BC1\u5E76\u542F\u7528",
 		  "dialog.verifying": "\u9A8C\u8BC1\u4E2D...",
 		  "dialog.cancel": "\u53D6\u6D88",
+		  "dialog.enabledDesc": "\u6240\u6709\u4F1A\u8BDD\u5DF2\u4E0B\u7EBF\u3002\u8BF7\u4FDD\u5B58\u4EE5\u4E0B\u4E00\u6B21\u6027\u5907\u4EFD\u4EE3\u7801\uFF08\u6BCF\u4E2A\u53EA\u80FD\u4F7F\u7528\u4E00\u6B21\uFF09\uFF0C\u7136\u540E\u91CD\u65B0\u767B\u5F55\u3002",
+		  "dialog.backupCodesTitle": "\u5907\u4EFD\u4EE3\u7801",
+		  "dialog.doneBtn": "\u5B8C\u6210\u5E76\u91CD\u65B0\u767B\u5F55",
 		  "status.otpEnabled": "OTP \u5DF2\u542F\u7528",
 		  "status.otpDisabled": "OTP \u5DF2\u7981\u7528",
 		  "status.passwordChanged": "\u5BC6\u7801\u4FEE\u6539\u6210\u529F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55",
@@ -181,6 +184,9 @@ window.__ModuleLoader__.load({
 		  "dialog.verify": "Verify & enable",
 		  "dialog.verifying": "Verifying...",
 		  "dialog.cancel": "Cancel",
+		  "dialog.enabledDesc": "All sessions were signed out. Save these one-time backup codes (each can be used once), then sign in again.",
+		  "dialog.backupCodesTitle": "Backup codes",
+		  "dialog.doneBtn": "Done \u2014 sign in again",
 		  "status.otpEnabled": "OTP enabled",
 		  "status.otpDisabled": "OTP disabled",
 		  "status.passwordChanged": "Password updated \u2014 please sign in again",
@@ -263,6 +269,8 @@ window.__ModuleLoader__.load({
 		  const [status, setStatus] = (0, import_react.useState)(null);
 		  const [showQRModal, setShowQRModal] = (0, import_react.useState)(false);
 		  const [qrData, setQrData] = (0, import_react.useState)(null);
+		  const [setupDone, setSetupDone] = (0, import_react.useState)(false);
+		  const [backupCodes, setBackupCodes] = (0, import_react.useState)([]);
 		  const [showChangePassword, setShowChangePassword] = (0, import_react.useState)(false);
 		  const [oldPassword, setOldPassword] = (0, import_react.useState)("");
 		  const [newPassword, setNewPassword] = (0, import_react.useState)("");
@@ -335,6 +343,8 @@ window.__ModuleLoader__.load({
 		    setQrData(null);
 		    setOtpCode("");
 		    setVerifyingOtp(false);
+		    setSetupDone(false);
+		    setBackupCodes([]);
 		    setStatus(null);
 		  }
 		  async function verifyOTPSetup() {
@@ -347,12 +357,10 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.verifyOtpSetup(otpCode);
 		      if (data.ok) {
-		        setShowQRModal(false);
-		        setQrData(null);
-		        setOtpCode("");
-		        setVerifyingOtp(false);
 		        setOtpEnabled(true);
-		        setStatus({ type: "success", message: t("status.otpEnabled") });
+		        setBackupCodes(data.backupCodes || []);
+		        setSetupDone(true);
+		        setOtpCode("");
 		      } else {
 		        setStatus({ type: "error", message: t("error.verifyOtp", { message: data.error || t("error.invalidCode") }) });
 		      }
@@ -569,7 +577,35 @@ window.__ModuleLoader__.load({
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: t("dialog.title") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { padding: "0 24px" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "0 24px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		            margin: "8px 0 16px",
+		            padding: "10px 12px",
+		            borderRadius: "10px",
+		            fontSize: "13px",
+		            lineHeight: "20px",
+		            color: T.success,
+		            background: T.successBg,
+		            border: `1px solid ${T.border}`
+		          }, children: [
+		            t("status.otpEnabled"),
+		            " \u2014 ",
+		            t("dialog.enabledDesc")
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.backupCodesTitle") }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+		              padding: "8px 12px",
+		              background: T.bg1,
+		              border: `1px solid ${T.border}`,
+		              borderRadius: "8px",
+		              fontFamily: T.fontCode,
+		              fontSize: "13px",
+		              lineHeight: "22px",
+		              color: T.textPrimary
+		            }, children: backupCodes.join("\n") })
+		          ] })
+		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("dialog.desc") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: `1px solid ${T.border}`, borderRadius: "8px", width: "200px", height: "200px" } }) }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
@@ -613,11 +649,13 @@ window.__ModuleLoader__.load({
 		            background: status.type === "success" ? T.successBg : T.hoverDanger,
 		            color: status.type === "success" ? T.success : T.danger
 		          }, children: status.message })
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px", marginTop: "20px" }, children: [
+		        ] }) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => {
+		          location.href = "/login";
+		        }, children: t("dialog.doneBtn") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: t("dialog.cancel") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? t("dialog.verifying") : t("dialog.verify") })
-		        ] })
+		        ] }) })
 		      ] })
 		    ] })
 		  ] });

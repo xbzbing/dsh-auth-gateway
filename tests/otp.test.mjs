@@ -289,14 +289,16 @@ test('OTP setup page returns 401 when not authenticated', async () => {
   await stopGateway()
 })
 
-test('OTP setup page returns 400 when OTP not enabled', async () => {
+test('OTP setup page is served without any config switch', async () => {
+  // Enabling 2FA is a user action — no otpEnabled deployment switch is
+  // required anymore: a verified session may start the binding flow.
   await startGateway({}, { otpEnabled: false })
 
   const cookie = await loginCookie()
 
-  // Try to access OTP setup
   const res = await request('/otp/setup', { cookie })
-  assert.equal(res.status, 400)
+  assert.equal(res.status, 200)
+  assert.ok(res.body.includes('id="qr"'), 'setup page must render the QR code')
   await stopGateway()
 })
 
@@ -519,6 +521,43 @@ test('unverified sessions cannot modify config or manage OTP when 2FA is active'
   // After verification the same session regains management access.
   res = await request('/login-api/settings', { cookie })
   assert.equal(res.status, 200)
+  await stopGateway()
+})
+
+test('enabling OTP via the HTTP flow revokes every session and requires re-login', async () => {
+  await startGateway({}, { otpEnabled: false }) // no config switch needed
+  const cookie = await loginCookie()
+
+  // Full HTTP binding flow: enable stages a secret, verify-setup activates it.
+  const enable = await request('/otp/enable', { method: 'POST', cookie })
+  assert.equal(enable.status, 200)
+  const secret = JSON.parse(enable.body).secret
+  const code = generateTOTP(secret)
+  const verify = await request('/otp/verify-setup', {
+    method: 'POST', cookie, body: { otp: code },
+  })
+  assert.equal(verify.status, 200)
+  const vBody = JSON.parse(verify.body)
+  assert.equal(vBody.sessionRevoked, true, 'response must flag the session revocation')
+  assert.ok(vBody.backupCodes.length > 0, 'backup codes are returned for saving')
+
+  // Every pre-2FA session is gone, including the one that enabled OTP.
+  const after = await request('/login-api/settings', { cookie })
+  assert.equal(after.status, 401)
+  assert.equal(JSON.parse(after.body).error, 'unauthenticated')
+
+  // Password alone no longer logs in; a backup code does, fully verified.
+  const passwordOnly = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!' } })
+  assert.equal(passwordOnly.status, 400)
+  assert.equal(JSON.parse(passwordOnly.body).error, 'otp-required')
+  const backupLogin = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', backupCode: vBody.backupCodes[0] },
+  })
+  assert.equal(backupLogin.status, 200)
+  const newCookie = (Array.isArray(backupLogin.headers['set-cookie'])
+    ? backupLogin.headers['set-cookie'][0] : backupLogin.headers['set-cookie']).split(';')[0]
+  const settings = await request('/login-api/settings', { cookie: newCookie })
+  assert.equal(settings.status, 200, 'backup-code session must be fully verified')
   await stopGateway()
 })
 

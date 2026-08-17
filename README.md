@@ -15,8 +15,68 @@
   - WebSocket 升级（`/api/events.mux`、`/api/events.host`）→ 拒绝连接
 - **设置/登录成功** → 直接跳转 dsh 首页（`/`）。
 - **修改密码** → 校验旧密码后更新，并**吊销全部会话**（所有端下线）。
+- **OTP 双因素认证**（可选）→ 启用后，登录需要密码 + OTP 验证码，支持：
+  - TOTP（基于时间的一次性密码），兼容 Google Authenticator、Authy 等认证器应用
+  - 备份代码，用于设备丢失时恢复访问
+  - 可配置为强制或可选启用
 
 这是真正的服务端门禁，不是仅限前端的 UI 锁：未认证的客户端根本到不了后端。
+
+### OTP 双因素认证
+
+启用 OTP 后，登录流程变为：**密码 + OTP 验证码**。OTP 基于 TOTP（RFC 6238），兼容所有主流认证器应用（Google Authenticator、Authy、1Password 等）。
+
+**用户流程：**
+
+1. **设置 OTP**：已登录用户访问 `/otp/setup`，扫描 QR 码或手动输入密钥，输入验证码确认。
+2. **登录验证**：密码验证后，系统提示输入 OTP 验证码。
+3. **备份代码**：如果丢失认证器设备，可以使用一次性备份代码登录。
+
+**安全特性：**
+
+- OTP 密钥使用 Base32 编码存储
+- 备份代码使用 scrypt 哈希存储（与密码相同的安全级别）
+- 验证时使用时间窗口（±N 步）并记录最近已用时间步（`lastCounter`），同一时间步内的验证码不可重放
+- 每个备份代码只能使用一次
+- OTP 验证路径（`/otp/verify`、`/otp/verify-setup`、`/otp/verify-backup`、`/otp/disable`、登录的 OTP 步骤）共享全局每分钟限流，并按客户端地址统计失败次数——连续失败达到 `maxLoginFailures` 后锁定该地址（与登录失败同一套锁定）
+
+> **⚠️ OTP 密钥明文存储风险（已知限制）**
+>
+> TOTP 密钥以 **Base32 明文**保存在 `$DSH_HOME/login-plugin/otp.json`（与密码不同，密码是 scrypt 哈希存储）。任何能读取该文件的进程/用户都能克隆你的 2FA 身份。
+>
+> **缓解措施**（当前实现已具备）：
+> - 文件权限 `0600`、目录 `0700`（仅属主可读写）；
+> - 信任模型为**本机可信**：插件运行在 dsh 所在主机，攻击面取决于主机上其他进程的隔离程度；
+> - 建议部署时启用磁盘加密（FileVault / LUKS）。
+>
+> **生产建议**：用主密钥加密存储 OTP 密钥（例如用 `$DSH_HOME` 下的主机密钥派生加密密钥），这是后续工作的方向之一。
+
+> **⚠️ OTP 未激活时的启用权限（已知限制 / DoS 面）**
+>
+> 当 OTP **尚未启用**（`otpEnabled` 配置为 true 但未设置过）时，启用/设置 OTP（`/otp/enable`、`/otp/verify-setup`）仅要求**任意有效会话**——在密码泄露且 `otpRequired: false` 的场景下，攻击者可用泄露的密码登录后，绑定**自己的**认证器启用 OTP，导致真实用户登录被 2FA 锁死。这不构成凭据窃取（真实用户仍可用备份码……除非攻击者先于其绑定），主要是 **DoS 面**。
+>
+> **恢复路径**（需要本机访问权限）：
+> 1. 停止 dsh web；
+> 2. 删除 `$DSH_HOME/login-plugin/otp.json`（清除 2FA 绑定；如需同时重置密码，可再运行 `dsh-password-gate-reset` 删除 `password.json`，或直接删除整个 `login-plugin` 目录）；
+> 3. 重启 dsh web，重新设置密码 / 重新绑定自己的认证器。
+>
+> 更严格的方案（后续方向）：OTP 未激活时，`/otp/enable` 与 `/otp/verify-setup` 要求**密码重新验证**。
+
+**配置示例：**
+
+```yaml
+# 启用 OTP（可选）
+dsh-password-gate:
+  config:
+    otpEnabled: true
+    otpRequired: false  # 设为 true 强制所有用户启用
+    otpIssuer: my-dsh-instance
+    otpPeriod: 30
+    otpDigits: 6
+    otpWindow: 1
+    backupCodeCount: 10
+    backupCodeLength: 8
+```
 
 > **非安全上下文兼容**：通过 `http://<局域网 IP>`（而非 localhost）访问时，浏览器 Web Crypto 的
 > `crypto.randomUUID` 不可用，会导致 dsh 前端报"crypto.randomUUID is not a function"。
@@ -43,7 +103,8 @@
 - **爆破提醒**（符合 dsh 规范）：锁触发或全局速率耗尽时，插件写一条 `ctx.logger.warn` 日志，并 `ctx.emit('dsh-password-gate/brute-force', payload)` 广播 Cordis 事件——payload 为 JSON 安全数据（`{kind: 'lockout'|'global-rate-limit', ...}`），任何插件可监听；每个锁定/窗口只提醒一次。**锁定不影响正在使用的用户**：已登录会话走转发通道，不经过登录端点。
 - **会话**：随机 256-bit token，存于内存，**30 天有效期**；dsh 重启后全员下线；修改密码吊销全部会话。
 - **Cookie**：`dsh_auth`，`HttpOnly; SameSite=Strict`（未加 `Secure`——MVP 走明文 HTTP）。
-- **修改密码入口**：访问 `/login`（已登录时直接显示改密表单）。插件不修改 dsh 前端 UI——按 dsh 规范，UI 扩展应通过 `ctx.slots.register`（client 插件），当前版本保持 host-only 零构建形态。
+- **修改密码入口**：访问 `/login`（已登录时直接显示改密表单）。
+- **前端 UI（client 插件）**：按 dsh 规范通过 `ctx.slots.register` 在「用户设置」槽位注册设置面板（OTP 启用/禁用、修改密码、退出登录）。客户端源码位于 `client/src/index.jsx`（JSX），构建产物 `client/index.js` 由 `npm run build:client` 生成（esbuild，含 source map）；dsh 通过 `exports["./client"]` 加载该产物。修改源码后需重新构建并同步到已安装副本。
 
 以上策略均为可配置项（bundle patch 或 profile patch 中覆盖 `dsh-password-gate` 行的 config）：
 
@@ -55,6 +116,15 @@
 | `maxLoginFailures` | `5` | 连续错误多少次后锁定（1–100） |
 | `lockMinutes` | `5` | 锁定分钟数（1–1440） |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | 全局每分钟最大登录尝试次数（1–10000） |
+| `maxOtpAttemptsPerMinute` | `10` | 每个客户端地址每分钟的 OTP 验证尝试上限，防暴力猜测验证码/备份码（1–10000） |
+| `otpEnabled` | `false` | 是否启用 OTP 双因素认证 |
+| `otpRequired` | `false` | 是否强制所有用户启用 OTP |
+| `otpIssuer` | `dsh-password-gate` | OTP 发行者名称（显示在认证器应用中） |
+| `otpPeriod` | `30` | TOTP 周期（秒，10–120） |
+| `otpDigits` | `6` | OTP 位数（4–10） |
+| `otpWindow` | `1` | OTP 验证窗口（±N 个周期，0–5） |
+| `backupCodeCount` | `10` | 备份代码数量（5–20） |
+| `backupCodeLength` | `8` | 备份代码长度（6–12） |
 
 ## 安装
 
@@ -248,7 +318,9 @@ None；本包既不组装也不发送 provider 请求。
 - **明文 HTTP**：密码与 cookie 在网络中明文传输。局域网部署应保持在可信网络内，或为网关前置 TLS。
 - **暴力破解防护有限**：有按来源的失败锁定（默认 5 次/5 分钟）+ 全局限速（默认 60 次/分钟），均可配置；无分布式/换 IP 绕过全局限速的防护（攻击者可等待窗口重置或分布到多机）。
 - **内存会话**：dsh 重启后全员下线。
-- 后续工作：TLS、多用户、SPA 内嵌设置项（UI 级爆破提醒需 client 插件 slot 注册）。
+- **OTP 密钥存储**：当前 OTP 密钥以明文 Base32 存储在 `otp.json` 文件中。生产环境建议加密存储。
+- **OTP 无多用户支持**：当前 OTP 配置为全局共享，不支持多用户独立的 OTP 密钥。
+- 后续工作：TLS、多用户、UI 级爆破提醒（需在 client 插件中监听 `dsh-password-gate/brute-force` 事件并展示）。
 
 ## 开发统计
 

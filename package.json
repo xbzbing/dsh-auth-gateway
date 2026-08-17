@@ -1,14 +1,18 @@
 {
   "name": "dsh-password-gate",
-  "version": "0.1.0",
-  "description": "Password login gateway plugin for dsh web: first-open password setup, login, and password change with real request interception.",
+  "version": "0.2.0",
+  "description": "Password login gateway plugin for dsh web: first-open password setup, login, password change with real request interception, and OTP two-factor authentication.",
   "type": "module",
   "main": "index.js",
   "exports": {
-    ".": "./index.js"
+    ".": "./index.js",
+    "./client": "./client/index.js",
+    "./client/src/*": "./client/src/*",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "client",
     "lib",
     "cordis.patch.yml",
     "scripts/uninstall.mjs",
@@ -23,15 +27,24 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs"
+    "build:client": "node client/build.mjs",
+    "build:check": "npm run build:client && git diff --exit-code -- client/index.js client/index.js.map",
+    "test": "node --test tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs tests/otp.test.mjs"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
     }
   },
   "license": "MIT",
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "playwright": "^1.62.1"
   }
 }

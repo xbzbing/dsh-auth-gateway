@@ -37,7 +37,7 @@ dsh web                # 默认：对外 3080，内部 3081
 - **LAN 部署**：置于可信网络；网关默认监听所有网卡，跨网络暴露前务必配置防火墙；
 - **HTTPS**：插件当前服务明文 HTTP（`Secure` Cookie 未启用）。生产建议前置 TLS 反向代理（nginx/Caddy 等）到网关端口，并配置 `trustedHosts`（见下）；启用 TLS 后可将 Cookie 的 `Secure` 标记纳入后续版本；
 - **trustedHosts**：若经反向代理/自定义域名访问，需在 `dsh-client-connection` 行配置 `trustedHosts`（内部 fence 的授权权威；本插件转发已改写 Host/Origin 为回环，正常情况下无需配置，特殊拓扑下按 dsh 文档配置）；
-- **备份**：凭据数据位于 `$DSH_HOME/auth-gate/`（password.json、otp.json），备份时注意加密（OTP 密钥明文，见 SECURITY.md）。
+- **备份**：凭据数据位于 `$DSH_HOME/auth-gate/`（password.json、otp.json、otp-master.key），备份时注意加密（OTP 密钥已 AES-256-GCM 加密，但主密钥 `otp-master.key` 同样需保护，见 SECURITY.md）。
 
 ## 故障排查
 

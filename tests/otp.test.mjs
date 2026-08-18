@@ -8,7 +8,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -34,6 +34,13 @@ import {
   verifyAndUseBackupCode,
   hasOTP,
 } from '../lib/otp-store.js'
+import {
+  seal,
+  unseal,
+  isSealed,
+  getMasterKey,
+  _resetMasterKeyCache,
+} from '../lib/otp-crypto.js'
 import { LoginGateway } from '../lib/gateway.js'
 import { setPassword } from '../lib/store.js'
 
@@ -181,6 +188,76 @@ test('getOTPSecret returns secret when enabled', async () => {
   await enableOTP()
   const secret = getOTPSecret()
   assert.ok(typeof secret === 'string')
+})
+
+test('OTP secret is sealed at rest, never plaintext on disk', async () => {
+  const { secret } = await enableOTP({ backupCodeCount: 3 })
+  // The in-memory value returned by getOTPSecret must round-trip.
+  assert.equal(getOTPSecret(), secret)
+  // On disk it must be a sealed blob, NOT the raw Base32 secret.
+  const onDisk = JSON.parse(readFileSync(join(home, 'auth-gate', 'otp.json'), 'utf8'))
+  assert.ok(isSealed(onDisk.secret), 'stored secret should be sealed')
+  assert.notEqual(onDisk.secret, secret, 'stored secret must not equal plaintext')
+  assert.ok(!onDisk.secret.startsWith(secret), 'ciphertext must not leak plaintext')
+})
+
+test('seal/unseal round-trips an arbitrary value', () => {
+  const plain = 'JBSWY3DPEHPK3PXP'
+  const token = seal(plain)
+  assert.ok(isSealed(token))
+  assert.equal(unseal(token), plain)
+})
+
+test('unseal rejects tampered ciphertext', () => {
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const parts = token.split('.')
+  // Flip one hex char of the ciphertext.
+  const bad = `${parts[0]}.${parts[1]}.${parts[2].slice(0, -1)}f`
+  assert.throws(() => unseal(bad), /malformed sealed secret|auth/i)
+})
+
+test('master key resolves to 32 bytes and is cached per process', () => {
+  const key = getMasterKey()
+  assert.equal(key.length, 32)
+  assert.equal(getMasterKey(), key, 'should be cached')
+})
+
+test('master key from DSH_AUTH_GATEWAY_MASTER_KEY env overrides key file', async () => {
+  _resetMasterKeyCache()
+  const hex = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
+  const prev = process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+  process.env.DSH_AUTH_GATEWAY_MASTER_KEY = hex
+  try {
+    const key = getMasterKey()
+    assert.equal(key.length, 32)
+    assert.equal(key.toString('hex'), hex)
+    // A secret sealed under the env key must unseal with the same env key.
+    const tok = seal('env-derived-secret')
+    assert.equal(unseal(tok), 'env-derived-secret')
+  } finally {
+    if (prev === undefined) delete process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+    else process.env.DSH_AUTH_GATEWAY_MASTER_KEY = prev
+    _resetMasterKeyCache()
+  }
+})
+
+test('legacy plaintext secret is still readable (migration)', async () => {
+  // Simulate a pre-encryption record written directly to disk.
+  const record = {
+    version: 1,
+    enabled: true,
+    secret: 'LEGACYPLAINTEXTSECRET',
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    backupCodes: [],
+    lastCounter: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  mkdirSync(join(home, 'auth-gate'), { recursive: true })
+  writeFileSync(join(home, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+  assert.equal(getOTPSecret(), 'LEGACYPLAINTEXTSECRET')
 })
 
 test('disableOTP clears OTP data', async () => {

@@ -27,7 +27,7 @@ client（可选，源码构建）
 
 - **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
 - **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（polyfill 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
-- **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥明文存储为已知限制（见 SECURITY.md）。
+- **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gate/otp-master.key`，见 SECURITY.md）。
 
 ## 构建
 

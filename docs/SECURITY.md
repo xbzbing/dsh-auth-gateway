@@ -37,6 +37,17 @@
 - 验证窗口 ±1 步，并记录已接受时间步防重放；
 - 备份代码：scrypt 哈希存储、单次使用、生成时去除易混淆字符。
 
+### OTP 密钥加密（at rest）
+
+TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验证码。为阻止 `$DSH_HOME` 文件泄露直接交出该密钥，`otp-store.js` 在写入 `otp.json` 前用 `lib/otp-crypto.js` 将其以 **AES-256-GCM** 密封（格式 `v1.<iv>.<tag>.<cipher>`，均 hex），读取时再用主密钥解密。旧版明文记录仍可读取（按 `v1.` 前缀判断），无需手动迁移。
+
+主密钥（32 字节）解析优先级：
+
+1. 环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64，32 字节）；设置了即用它，不再写密钥文件；
+2. 否则首次启用 OTP 时自动生成 `auth-gate/otp-master.key`（0600，目录 0700），进程内缓存一次。
+
+密钥来自环境变量时，应将它置于加密卷或外部密钥管理（KMS / Docker secret 等），方能真正隔离磁盘泄露——默认自动生成路径下密钥与密文同目录，本机可信模型不变（能读 `$DSH_HOME` 的本机用户可取二者）。
+
 ### 防爆破分层
 
 | 层 | 机制 | 覆盖 |
@@ -69,7 +80,11 @@
 rm -f "$DSH_HOME/auth-gate/password.json"
 # 丢失认证器时，一并清除 OTP 绑定
 rm -f "$DSH_HOME/auth-gate/otp.json"
+# OTP 主密钥丢失（或想彻底弃用加密）：删除密钥文件，重新启用 OTP 时会生成新密钥
+rm -f "$DSH_HOME/auth-gate/otp-master.key"
 ```
+
+> **主密钥丢失 = OTP 不可解密**：若此前用环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 注入主密钥、且该值已无法恢复，则 `otp.json` 中的密文无法解密、2FA 验证全部失败。此时删除 `otp.json`（必要时连同 `otp-master.key`）后重启，重新绑定认证器即可；删除 `otp.json` 不影响密码登录。
 
 插件包自带重置命令 `dsh-auth-gateway-reset`（只删 password.json；安装时链接到 profile 的 `node_modules/.bin`，默认不在 PATH 上，用完整路径或先 `export PATH="$HOME/.dsh/profiles/<profile>/node_modules/.bin:$PATH"`）：
 

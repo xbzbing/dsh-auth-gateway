@@ -85,6 +85,8 @@ rm -f "$DSH_HOME/auth-gate/otp-master.key"
 ```
 
 > **主密钥丢失 = OTP 不可解密**：若此前用环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 注入主密钥、且该值已无法恢复，则 `otp.json` 中的密文无法解密、2FA 验证全部失败。此时删除 `otp.json`（必要时连同 `otp-master.key`）后重启，重新绑定认证器即可；删除 `otp.json` 不影响密码登录。
+>
+> 解密路径**不会**静默重新生成密钥：若 `otp.json` 已存在 `v1.` 密封密文、但既无 env 主密钥也无 `otp-master.key`，进程启动解密时会明确抛出 `master key missing` 并停止，而不会写入一个与密文不匹配的新密钥文件去掩盖根因。这正是备份恢复场景的典型情况——只拷回了 `otp.json` 却丢了密钥：请同时恢复 `otp-master.key`（或重新设置 env 主密钥），或删除 `otp.json` 以重新绑定。自动生成密钥仅发生在**首次启用 OTP（seal 路径）**时。
 
 插件包自带重置命令 `dsh-auth-gateway-reset`（只删 password.json；安装时链接到 profile 的 `node_modules/.bin`，默认不在 PATH 上，用完整路径或先 `export PATH="$HOME/.dsh/profiles/<profile>/node_modules/.bin:$PATH"`）：
 

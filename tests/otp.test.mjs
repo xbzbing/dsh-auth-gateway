@@ -8,7 +8,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -239,6 +239,29 @@ test('master key from DSH_AUTH_GATEWAY_MASTER_KEY env overrides key file', async
     else process.env.DSH_AUTH_GATEWAY_MASTER_KEY = prev
     _resetMasterKeyCache()
   }
+})
+
+test('seal generates a master key file on first use', () => {
+  _resetMasterKeyCache()
+  const dir = join(process.env.DSH_HOME, 'auth-gate')
+  rmSync(dir, { recursive: true, force: true })
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(dir, 'otp-master.key')
+  assert.ok(existsSync(keyFile), 'seal must generate the key file on first use')
+  assert.equal(unseal(token), 'JBSWY3DPEHPK3PXP')
+  _resetMasterKeyCache()
+})
+
+test('unseal with missing master key throws (no silent regeneration)', () => {
+  // Simulate a backup restore that copied only otp.json (sealed) but lost the key.
+  _resetMasterKeyCache()
+  const token = seal('JBSWY3DPEHPK3PXP') // generates + writes key file, caches key
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  rmSync(keyFile, { force: true })
+  _resetMasterKeyCache() // drop cached key so resolution must hit disk
+  assert.throws(() => unseal(token), /master key missing/)
+  assert.ok(!existsSync(keyFile), 'unseal must NOT regenerate the key file')
+  _resetMasterKeyCache()
 })
 
 test('legacy plaintext secret is still readable (migration)', async () => {

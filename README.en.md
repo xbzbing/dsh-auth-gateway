@@ -9,7 +9,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 ## Features
 
 - **Password auth**: on first deployment an initial password is auto-generated and printed to the console (one-time credential); after login you are guided to set a personal password (scrypt-hashed), and every subsequent visit requires login;
-- **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost;
+- **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost; **the OTP secret is stored encrypted at rest with AES-256-GCM** (master key from the `DSH_AUTH_GATEWAY_MASTER_KEY` env var or an auto-generated `auth-gate/otp-master.key`), so a disk disclosure no longer exposes the second-factor root key;
 - **Real request interception**: unauthenticated `/api/*` returns 401, page paths 302 to the login page, WebSocket upgrades are rejected outright; authenticated traffic is forwarded transparently (Host/Origin normalization, compatible with the internal trust fence);
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
@@ -97,7 +97,7 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 
 ## Security model
 
-Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). The full threat model, known limitations and recovery paths are in [docs/SECURITY.md](docs/SECURITY.md) (Chinese).
+Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). **The OTP secret is sealed with AES-256-GCM before it is written to disk** and can only be read with the master key — by default an auto-generated `auth-gate/otp-master.key` (0600), or injected via `DSH_AUTH_GATEWAY_MASTER_KEY` (hex/base64, 32 bytes) to isolate disk disclosure. The full threat model, known limitations and recovery paths are in [docs/SECURITY.md](docs/SECURITY.md) (Chinese).
 
 ## Uninstall & reset
 
@@ -131,7 +131,7 @@ The detailed docs above are in Chinese.
 
 ## Verification overview
 
-- Unit & contract tests: `npm test` (88 tests, incl. OTP security regressions, client contract, patch port derivation)
+- Unit & contract tests: `npm test` (110 tests, incl. OTP security regressions, client contract, patch port derivation)
 - End-to-end against a real instance: `node scripts/e2e.mjs` (Playwright; login/2FA/password-change flows)
 - Gate verification: `./scripts/verify.sh` (curl; 401/302/WS rejection/lockout)
 

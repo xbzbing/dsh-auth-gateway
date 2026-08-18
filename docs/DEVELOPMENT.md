@@ -10,6 +10,7 @@ host（零构建，node:crypto / node:http）
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）
 ├── lib/store.js      # 密码存储（scrypt 异步哈希，$DSH_HOME/auth-gate/password.json）
 ├── lib/otp-store.js  # OTP 存储（secret + 备份码哈希 + lastCounter 水印）
+├── lib/otp-crypto.js # OTP 密钥加解密（AES-256-GCM，主密钥来自环境变量或 key 文件）
 ├── lib/totp.js       # TOTP（RFC 6238/4226）：base32、生成/验证、防重放、otpauth URI、备份码
 ├── lib/qr-svg.js     # 零依赖 QR SVG 生成（Reed-Solomon、掩码评估）
 ├── lib/otp-page.js   # OTP 设置/验证页面（自包含 HTML）
@@ -27,7 +28,7 @@ client（可选，源码构建）
 
 - **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
 - **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（polyfill 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
-- **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥明文存储为已知限制（见 SECURITY.md）。
+- **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gate/otp-master.key`，见 SECURITY.md）。
 
 ## 构建
 
@@ -59,5 +60,6 @@ client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:
 
 ## 版本历史
 
+- `0.4.0`：OTP 密钥 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `otp-master.key`），兼容旧明文记录；
 - `0.2.0`（待发布）：OTP 双因素认证（TOTP + 备份码 + QR）、多层防爆破、client 设置面板、安全评审修复（重验证、防重放、限流）；
 - `0.1.0`：密码门禁（设置/登录/改密、密码策略、失败锁定、全局限速、安全事件）。

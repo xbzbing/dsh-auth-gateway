@@ -8,7 +8,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -34,6 +34,15 @@ import {
   verifyAndUseBackupCode,
   hasOTP,
 } from '../lib/otp-store.js'
+import {
+  seal,
+  unseal,
+  isSealed,
+  getMasterKey,
+  _resetMasterKeyCache,
+  OTPCryptoError,
+  OTP_CRYPTO_ERROR,
+} from '../lib/otp-crypto.js'
 import { LoginGateway } from '../lib/gateway.js'
 import { setPassword } from '../lib/store.js'
 
@@ -183,6 +192,166 @@ test('getOTPSecret returns secret when enabled', async () => {
   assert.ok(typeof secret === 'string')
 })
 
+test('OTP secret is sealed at rest, never plaintext on disk', async () => {
+  const { secret } = await enableOTP({ backupCodeCount: 3 })
+  // The in-memory value returned by getOTPSecret must round-trip.
+  assert.equal(getOTPSecret(), secret)
+  // On disk it must be a sealed blob, NOT the raw Base32 secret.
+  const onDisk = JSON.parse(readFileSync(join(home, 'auth-gate', 'otp.json'), 'utf8'))
+  assert.ok(isSealed(onDisk.secret), 'stored secret should be sealed')
+  assert.notEqual(onDisk.secret, secret, 'stored secret must not equal plaintext')
+  assert.ok(!onDisk.secret.startsWith(secret), 'ciphertext must not leak plaintext')
+})
+
+test('seal/unseal round-trips an arbitrary value', () => {
+  const plain = 'JBSWY3DPEHPK3PXP'
+  const token = seal(plain)
+  assert.ok(isSealed(token))
+  assert.equal(unseal(token), plain)
+})
+
+test('unseal rejects tampered ciphertext', () => {
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const parts = token.split('.')
+  // Flip one hex char of the ciphertext.
+  const bad = `${parts[0]}.${parts[1]}.${parts[2].slice(0, -1)}f`
+  assert.throws(() => unseal(bad), /malformed sealed secret|auth/i)
+})
+
+test('master key resolves to 32 bytes and is cached per process', () => {
+  const key = getMasterKey()
+  assert.equal(key.length, 32)
+  assert.equal(getMasterKey(), key, 'should be cached')
+})
+
+test('master key from DSH_AUTH_GATEWAY_MASTER_KEY env overrides key file', async () => {
+  _resetMasterKeyCache()
+  const hex = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
+  const prev = process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+  process.env.DSH_AUTH_GATEWAY_MASTER_KEY = hex
+  try {
+    const key = getMasterKey()
+    assert.equal(key.length, 32)
+    assert.equal(key.toString('hex'), hex)
+    // A secret sealed under the env key must unseal with the same env key.
+    const tok = seal('env-derived-secret')
+    assert.equal(unseal(tok), 'env-derived-secret')
+  } finally {
+    if (prev === undefined) delete process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+    else process.env.DSH_AUTH_GATEWAY_MASTER_KEY = prev
+    _resetMasterKeyCache()
+  }
+})
+
+test('seal generates a master key file on first use', () => {
+  _resetMasterKeyCache()
+  const dir = join(process.env.DSH_HOME, 'auth-gate')
+  rmSync(dir, { recursive: true, force: true })
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(dir, 'otp-master.key')
+  assert.ok(existsSync(keyFile), 'seal must generate the key file on first use')
+  assert.equal(unseal(token), 'JBSWY3DPEHPK3PXP')
+  _resetMasterKeyCache()
+})
+
+test('unseal with missing master key throws (no silent regeneration)', () => {
+  // Simulate a backup restore that copied only otp.json (sealed) but lost the key.
+  _resetMasterKeyCache()
+  const token = seal('JBSWY3DPEHPK3PXP') // generates + writes key file, caches key
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  rmSync(keyFile, { force: true })
+  _resetMasterKeyCache() // drop cached key so resolution must hit disk
+  assert.throws(() => unseal(token), /master key missing/)
+  assert.ok(!existsSync(keyFile), 'unseal must NOT regenerate the key file')
+  _resetMasterKeyCache()
+})
+
+test('missing master key surfaces as typed otp-master-key-missing error', () => {
+  _resetMasterKeyCache()
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  rmSync(keyFile, { force: true })
+  _resetMasterKeyCache()
+
+  // Persist a record carrying the sealed secret so getOTPSecret must unseal.
+  const record = {
+    version: 1,
+    enabled: true,
+    secret: token,
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    backupCodes: [],
+    lastCounter: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  mkdirSync(join(process.env.DSH_HOME, 'auth-gate'), { recursive: true })
+  writeFileSync(join(process.env.DSH_HOME, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+
+  // getOTPSecret must categorise the failure into a typed error with a stable code.
+  assert.throws(
+    () => getOTPSecret(),
+    (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.MASTER_KEY_MISSING && err.status === 503,
+    'expected OTPCryptoError(otp-master-key-missing, 503)',
+  )
+  _resetMasterKeyCache()
+})
+
+test('wrong master key surfaces as typed otp-secret-corrupted error', () => {
+  _resetMasterKeyCache()
+  // Seal under one key, then swap in a different key file (e.g. regenerated/rotated).
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  writeFileSync(keyFile, Buffer.alloc(32, 9), { mode: 0o600 })
+  _resetMasterKeyCache() // drop cached key so the swapped file is read
+
+  assert.throws(
+    () => unseal(token),
+    (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.SECRET_CORRUPTED,
+    'expected OTPCryptoError(otp-secret-corrupted)',
+  )
+  _resetMasterKeyCache()
+})
+
+test('invalid-length env master key surfaces as typed otp-master-key-invalid error', () => {
+  _resetMasterKeyCache()
+  const prev = process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+  process.env.DSH_AUTH_GATEWAY_MASTER_KEY = 'tooshort' // not 32 bytes in hex or base64
+  try {
+    // seal() resolves the (invalid) key and must throw a typed error, not a bare
+    // Error — otherwise the failure bubbles to a bare 500 on the enable path.
+    assert.throws(
+      () => seal('JBSWY3DPEHPK3PXP'),
+      (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.MASTER_KEY_INVALID,
+      'expected OTPCryptoError(otp-master-key-invalid)',
+    )
+  } finally {
+    if (prev === undefined) delete process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+    else process.env.DSH_AUTH_GATEWAY_MASTER_KEY = prev
+    _resetMasterKeyCache()
+  }
+})
+
+test('legacy plaintext secret is still readable (migration)', async () => {
+  // Simulate a pre-encryption record written directly to disk.
+  const record = {
+    version: 1,
+    enabled: true,
+    secret: 'LEGACYPLAINTEXTSECRET',
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    backupCodes: [],
+    lastCounter: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  mkdirSync(join(home, 'auth-gate'), { recursive: true })
+  writeFileSync(join(home, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+  assert.equal(getOTPSecret(), 'LEGACYPLAINTEXTSECRET')
+})
+
 test('disableOTP clears OTP data', async () => {
   await enableOTP()
   assert.ok(hasOTP())
@@ -281,6 +450,26 @@ async function verifySession(cookie) {
   const res = await request('/otp/verify', { method: 'POST', cookie, body: { otp: code } })
   assert.equal(res.status, 200)
 }
+
+test('replay watermark is clamped to the current step (no future advance)', async () => {
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  await enableOTP() // sealed secret in $DSH_HOME
+  const period = 30
+
+  // A code one step in the future is still inside the acceptance window, so it
+  // logs in — but the watermark must NOT be advanced past the current step.
+  const futureCode = generateTOTP(getOTPSecret(), { timestamp: Date.now() + period * 1000 })
+  const login = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!', otp: futureCode } })
+  assert.equal(login.status, 200, 'future-window code should still authenticate')
+
+  const currentStep = Math.floor(Date.now() / 1000 / period)
+  assert.ok(
+    getLastCounter() <= currentStep,
+    `watermark must not advance past current step, got ${getLastCounter()} > ${currentStep}`,
+  )
+  await stopGateway()
+})
 
 test('OTP setup page returns 401 when not authenticated', async () => {
   await startGateway({}, { otpEnabled: true })

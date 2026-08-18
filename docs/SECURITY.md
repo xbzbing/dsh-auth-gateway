@@ -14,7 +14,7 @@
 | OTP 重放（同一验证码在窗口内复用） | 记录已接受时间步（`lastCounter`，持久化），同一步或更早步骤的验证码拒绝 |
 | 会话劫持（Cookie 窃取） | HttpOnly + SameSite=Strict；禁用 OTP、修改密码等敏感操作要求完整重验证 |
 | DNS-rebinding / 跨站请求 | 网关 Cookie 门禁接管（跨站请求无会话 Cookie 即被拒）；内部 fence 职责移交后，Host/Origin 改写为回环（见下） |
-| 存储泄露（`$DSH_HOME` 文件被读取） | 密码与备份代码为 scrypt 哈希；**OTP 密钥为明文 Base32**（见"已知限制"） |
+| 存储泄露（`$DSH_HOME` 文件被读取） | 密码与备份代码为 scrypt 哈希；**OTP 密钥为 AES-256-GCM 加密**（读取需主密钥，见"已知限制"） |
 | 首次部署抢占 | 初始密码由服务器自动生成（console 打印，本机可见）——无"先到先得"窗口；初始密码为一次性凭据，完成引导后失效 |
 
 ## 认证安全设计
@@ -37,6 +37,17 @@
 - 验证窗口 ±1 步，并记录已接受时间步防重放；
 - 备份代码：scrypt 哈希存储、单次使用、生成时去除易混淆字符。
 
+### OTP 密钥加密（at rest）
+
+TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验证码。为阻止 `$DSH_HOME` 文件泄露直接交出该密钥，`otp-store.js` 在写入 `otp.json` 前用 `lib/otp-crypto.js` 将其以 **AES-256-GCM** 密封（格式 `v1.<iv>.<tag>.<cipher>`，均 hex），读取时再用主密钥解密。旧版明文记录仍可读取（按 `v1.` 前缀判断），无需手动迁移。
+
+主密钥（32 字节）解析优先级：
+
+1. 环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64，32 字节）；设置了即用它，不再写密钥文件；
+2. 否则首次启用 OTP 时自动生成 `auth-gate/otp-master.key`（0600，目录 0700），进程内缓存一次。
+
+密钥来自环境变量时，应将它置于加密卷或外部密钥管理（KMS / Docker secret 等），方能真正隔离磁盘泄露——默认自动生成路径下密钥与密文同目录，本机可信模型不变（能读 `$DSH_HOME` 的本机用户可取二者）。
+
 ### 防爆破分层
 
 | 层 | 机制 | 覆盖 |
@@ -53,7 +64,7 @@
 
 ## 已知限制
 
-- **OTP 密钥明文存储**：`$DSH_HOME/auth-gate/otp.json` 中的 Base32 密钥未加密。缓解：文件 0600、目录 0700、本机可信模型；生产建议用主密钥加密（后续方向）；
+- **OTP 密钥加密存储**：`$DSH_HOME/auth-gate/otp.json` 中的 Base32 密钥已用 AES-256-GCM 加密（lib/otp-crypto.js），读取需主密钥。主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64）或首次启用时自动生成的 `auth-gate/otp-master.key`（0600）；仍属本机可信模型——能读 `$DSH_HOME` 的本机用户同时可取密钥，故需将主密钥置于加密卷或外部密钥管理方能真正隔离磁盘泄露；
 - **明文 HTTP**：密码与 Cookie 在网络中明文传输。局域网部署建议置于可信网络，或前置 TLS 反向代理（见 DEPLOYMENT.md）；
 - **OTP 启用权限（DoS 面）**：`/otp/enable` 与 `/otp/verify-setup` 仅要求任意有效会话——启用 2FA 是用户操作（无需部署开关），密码泄露场景下攻击者可用泄露的密码登录后绑定自己的认证器，锁死真实用户登录。这不构成凭据窃取，主要是 DoS 面；缓解为启用成功后**吊销全部会话**（含启用者自身，强制在 2FA 策略下重新登录）；后续方向为启用时要求密码重验证；
 - **内存会话**：dsh 重启后全员下线（需重新登录；OTP 已启用时需重新完成 2FA）；
@@ -69,7 +80,25 @@
 rm -f "$DSH_HOME/auth-gate/password.json"
 # 丢失认证器时，一并清除 OTP 绑定
 rm -f "$DSH_HOME/auth-gate/otp.json"
+# OTP 主密钥丢失（或想彻底弃用加密）：删除密钥文件，重新启用 OTP 时会生成新密钥
+rm -f "$DSH_HOME/auth-gate/otp-master.key"
 ```
+
+> **主密钥丢失 = OTP 不可解密**：若此前用环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 注入主密钥、且该值已无法恢复，则 `otp.json` 中的密文无法解密、2FA 验证全部失败。此时删除 `otp.json`（必要时连同 `otp-master.key`）后重启，重新绑定认证器即可；删除 `otp.json` 不影响密码登录。
+>
+> 解密路径**不会**静默重新生成密钥：若 `otp.json` 已存在 `v1.` 密封密文、但既无 env 主密钥也无 `otp-master.key`，进程启动解密时会明确抛出 `master key missing` 并停止，而不会写入一个与密文不匹配的新密钥文件去掩盖根因。这正是备份恢复场景的典型情况——只拷回了 `otp.json` 却丢了密钥：请同时恢复 `otp-master.key`（或重新设置 env 主密钥），或删除 `otp.json` 以重新绑定。自动生成密钥仅发生在**首次启用 OTP（seal 路径）**时。
+
+#### OTP 密文解密失败时的 HTTP 响应
+
+解密失败不会冒泡成裸 `500 internal error`（text/plain），而是返回 JSON 错误码，便于客户端/运维定位：
+
+| 错误码 | HTTP | 触发场景 | 处理建议 |
+| --- | --- | --- | --- |
+| `otp-master-key-missing` | 503 | `otp.json` 存在 `v1.` 密文，但既无 env 主密钥也无 `otp-master.key` | 恢复 `otp-master.key` / 设置 `DSH_AUTH_GATEWAY_MASTER_KEY`，或删 `otp.json` 重绑 |
+| `otp-master-key-invalid` | 500 | `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `otp-master.key` 存在但长度不是 32 字节 | 修正主密钥值（hex/base64 编码的 32 字节） |
+| `otp-secret-corrupted` | 500 | 密文格式损坏、被篡改，或曾用**不同主密钥**密封（如密钥被误轮换） | 恢复与密文匹配的主密钥，或删 `otp.json` 重绑 |
+
+两类错误都带 `message` 字段给出可操作提示，登录/禁用 OTP 不再是无差别 500。
 
 插件包自带重置命令 `dsh-auth-gateway-reset`（只删 password.json；安装时链接到 profile 的 `node_modules/.bin`，默认不在 PATH 上，用完整路径或先 `export PATH="$HOME/.dsh/profiles/<profile>/node_modules/.bin:$PATH"`）：
 

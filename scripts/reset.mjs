@@ -9,10 +9,12 @@
  * and complete onboarding (set a personal password).
  *
  * The OTP binding is a separate file ($DSH_HOME/auth-gate/otp.json); delete
- * it as well when the authenticator is lost (or run dsh-auth-gateway-uninstall
- * to clear the whole directory). Unlike `dsh-auth-gateway-uninstall` this
- * script does NOT remove the plugin or its directory — the composition
- * stays installed.
+ * it AND its master key ($DSH_HOME/auth-gate/otp-master.key) together when the
+ * authenticator is lost (or run dsh-auth-gateway-uninstall to clear the whole
+ * directory). Delete both at once: dropping only the key leaves otp.json behind,
+ * and on next start getMasterKey() silently generates a fresh key that fails to
+ * decrypt the old otp.json. Unlike `dsh-auth-gateway-uninstall` this script does
+ * NOT remove the plugin or its directory — the composition stays installed.
  */
 
 import { rmSync } from 'node:fs'
@@ -27,7 +29,10 @@ try {
   console.log(`dsh-auth-gateway: password record removed (${file})`)
   console.log('dsh-auth-gateway: restart dsh web now — a new initial password will be generated and')
   console.log('dsh-auth-gateway: printed to the console; log in with it and complete onboarding.')
-  console.log('dsh-auth-gateway: (authenticator lost too? also delete $DSH_HOME/auth-gate/otp.json)')
+  console.log('dsh-auth-gateway: (authenticator lost too? also delete $DSH_HOME/auth-gate/otp.json')
+  console.log('dsh-auth-gateway:  AND $DSH_HOME/auth-gate/otp-master.key — delete BOTH together:')
+  console.log('dsh-auth-gateway:  leaving otp.json but dropping the key makes startup auto-generate a new')
+  console.log('dsh-auth-gateway:  key, which then fails to decrypt the old otp.json)')
 } catch (err) {
   console.error(`dsh-auth-gateway: failed to remove ${file}: ${err.message}`)
   process.exit(1)

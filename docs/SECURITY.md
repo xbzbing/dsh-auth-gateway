@@ -95,6 +95,7 @@ rm -f "$DSH_HOME/auth-gate/otp-master.key"
 | 错误码 | HTTP | 触发场景 | 处理建议 |
 | --- | --- | --- | --- |
 | `otp-master-key-missing` | 503 | `otp.json` 存在 `v1.` 密文，但既无 env 主密钥也无 `otp-master.key` | 恢复 `otp-master.key` / 设置 `DSH_AUTH_GATEWAY_MASTER_KEY`，或删 `otp.json` 重绑 |
+| `otp-master-key-invalid` | 500 | `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `otp-master.key` 存在但长度不是 32 字节 | 修正主密钥值（hex/base64 编码的 32 字节） |
 | `otp-secret-corrupted` | 500 | 密文格式损坏、被篡改，或曾用**不同主密钥**密封（如密钥被误轮换） | 恢复与密文匹配的主密钥，或删 `otp.json` 重绑 |
 
 两类错误都带 `message` 字段给出可操作提示，登录/禁用 OTP 不再是无差别 500。

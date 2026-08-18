@@ -314,6 +314,25 @@ test('wrong master key surfaces as typed otp-secret-corrupted error', () => {
   _resetMasterKeyCache()
 })
 
+test('invalid-length env master key surfaces as typed otp-master-key-invalid error', () => {
+  _resetMasterKeyCache()
+  const prev = process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+  process.env.DSH_AUTH_GATEWAY_MASTER_KEY = 'tooshort' // not 32 bytes in hex or base64
+  try {
+    // seal() resolves the (invalid) key and must throw a typed error, not a bare
+    // Error — otherwise the failure bubbles to a bare 500 on the enable path.
+    assert.throws(
+      () => seal('JBSWY3DPEHPK3PXP'),
+      (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.MASTER_KEY_INVALID,
+      'expected OTPCryptoError(otp-master-key-invalid)',
+    )
+  } finally {
+    if (prev === undefined) delete process.env.DSH_AUTH_GATEWAY_MASTER_KEY
+    else process.env.DSH_AUTH_GATEWAY_MASTER_KEY = prev
+    _resetMasterKeyCache()
+  }
+})
+
 test('legacy plaintext secret is still readable (migration)', async () => {
   // Simulate a pre-encryption record written directly to disk.
   const record = {
@@ -431,6 +450,26 @@ async function verifySession(cookie) {
   const res = await request('/otp/verify', { method: 'POST', cookie, body: { otp: code } })
   assert.equal(res.status, 200)
 }
+
+test('replay watermark is clamped to the current step (no future advance)', async () => {
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  await enableOTP() // sealed secret in $DSH_HOME
+  const period = 30
+
+  // A code one step in the future is still inside the acceptance window, so it
+  // logs in — but the watermark must NOT be advanced past the current step.
+  const futureCode = generateTOTP(getOTPSecret(), { timestamp: Date.now() + period * 1000 })
+  const login = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!', otp: futureCode } })
+  assert.equal(login.status, 200, 'future-window code should still authenticate')
+
+  const currentStep = Math.floor(Date.now() / 1000 / period)
+  assert.ok(
+    getLastCounter() <= currentStep,
+    `watermark must not advance past current step, got ${getLastCounter()} > ${currentStep}`,
+  )
+  await stopGateway()
+})
 
 test('OTP setup page returns 401 when not authenticated', async () => {
   await startGateway({}, { otpEnabled: true })

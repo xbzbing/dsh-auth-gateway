@@ -88,6 +88,17 @@ rm -f "$DSH_HOME/auth-gate/otp-master.key"
 >
 > 解密路径**不会**静默重新生成密钥：若 `otp.json` 已存在 `v1.` 密封密文、但既无 env 主密钥也无 `otp-master.key`，进程启动解密时会明确抛出 `master key missing` 并停止，而不会写入一个与密文不匹配的新密钥文件去掩盖根因。这正是备份恢复场景的典型情况——只拷回了 `otp.json` 却丢了密钥：请同时恢复 `otp-master.key`（或重新设置 env 主密钥），或删除 `otp.json` 以重新绑定。自动生成密钥仅发生在**首次启用 OTP（seal 路径）**时。
 
+#### OTP 密文解密失败时的 HTTP 响应
+
+解密失败不会冒泡成裸 `500 internal error`（text/plain），而是返回 JSON 错误码，便于客户端/运维定位：
+
+| 错误码 | HTTP | 触发场景 | 处理建议 |
+| --- | --- | --- | --- |
+| `otp-master-key-missing` | 503 | `otp.json` 存在 `v1.` 密文，但既无 env 主密钥也无 `otp-master.key` | 恢复 `otp-master.key` / 设置 `DSH_AUTH_GATEWAY_MASTER_KEY`，或删 `otp.json` 重绑 |
+| `otp-secret-corrupted` | 500 | 密文格式损坏、被篡改，或曾用**不同主密钥**密封（如密钥被误轮换） | 恢复与密文匹配的主密钥，或删 `otp.json` 重绑 |
+
+两类错误都带 `message` 字段给出可操作提示，登录/禁用 OTP 不再是无差别 500。
+
 插件包自带重置命令 `dsh-auth-gateway-reset`（只删 password.json；安装时链接到 profile 的 `node_modules/.bin`，默认不在 PATH 上，用完整路径或先 `export PATH="$HOME/.dsh/profiles/<profile>/node_modules/.bin:$PATH"`）：
 
 ```bash

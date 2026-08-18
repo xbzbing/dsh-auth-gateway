@@ -40,6 +40,8 @@ import {
   isSealed,
   getMasterKey,
   _resetMasterKeyCache,
+  OTPCryptoError,
+  OTP_CRYPTO_ERROR,
 } from '../lib/otp-crypto.js'
 import { LoginGateway } from '../lib/gateway.js'
 import { setPassword } from '../lib/store.js'
@@ -261,6 +263,54 @@ test('unseal with missing master key throws (no silent regeneration)', () => {
   _resetMasterKeyCache() // drop cached key so resolution must hit disk
   assert.throws(() => unseal(token), /master key missing/)
   assert.ok(!existsSync(keyFile), 'unseal must NOT regenerate the key file')
+  _resetMasterKeyCache()
+})
+
+test('missing master key surfaces as typed otp-master-key-missing error', () => {
+  _resetMasterKeyCache()
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  rmSync(keyFile, { force: true })
+  _resetMasterKeyCache()
+
+  // Persist a record carrying the sealed secret so getOTPSecret must unseal.
+  const record = {
+    version: 1,
+    enabled: true,
+    secret: token,
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    backupCodes: [],
+    lastCounter: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  mkdirSync(join(process.env.DSH_HOME, 'auth-gate'), { recursive: true })
+  writeFileSync(join(process.env.DSH_HOME, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+
+  // getOTPSecret must categorise the failure into a typed error with a stable code.
+  assert.throws(
+    () => getOTPSecret(),
+    (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.MASTER_KEY_MISSING && err.status === 503,
+    'expected OTPCryptoError(otp-master-key-missing, 503)',
+  )
+  _resetMasterKeyCache()
+})
+
+test('wrong master key surfaces as typed otp-secret-corrupted error', () => {
+  _resetMasterKeyCache()
+  // Seal under one key, then swap in a different key file (e.g. regenerated/rotated).
+  const token = seal('JBSWY3DPEHPK3PXP')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  writeFileSync(keyFile, Buffer.alloc(32, 9), { mode: 0o600 })
+  _resetMasterKeyCache() // drop cached key so the swapped file is read
+
+  assert.throws(
+    () => unseal(token),
+    (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.SECRET_CORRUPTED,
+    'expected OTPCryptoError(otp-secret-corrupted)',
+  )
   _resetMasterKeyCache()
 })
 

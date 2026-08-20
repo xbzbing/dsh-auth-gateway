@@ -1,5 +1,7 @@
 # 部署指南
 
+> 中文文档 | [English](DEPLOYMENT.en.md)
+
 ## 端口与监听地址
 
 ### 端口：直接用 `dsh web --port <N>`
@@ -39,6 +41,18 @@ dsh web                # 默认：对外 3080，内部 3081
 - **trustedHosts**：若经反向代理/自定义域名访问，需在 `dsh-client-connection` 行配置 `trustedHosts`（内部 fence 的授权权威；本插件转发已改写 Host/Origin 为回环，正常情况下无需配置，特殊拓扑下按 dsh 文档配置）；
 - **备份**：凭据数据位于 `$DSH_HOME/auth-gate/`（password.json、otp.json、otp-master.key），备份时注意加密（OTP 密钥已 AES-256-GCM 加密，但主密钥 `otp-master.key` 同样需保护，见 SECURITY.md）。
 - **OTP 主密钥管理**：默认自动生成 `auth-gate/otp-master.key`，密钥与密文同目录（本机可信模型）。要隔离磁盘泄露，部署前设置环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64 编码的 32 字节），并把它放到加密卷或外部密钥管理（KMS / Docker secret / systemd credentials 等）；设置了环境变量即不再生成/读取密钥文件。生成示例：`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`。详见 [docs/SECURITY.md](docs/SECURITY.md) 的「OTP 密钥加密」。
+
+## 配合 nginx / 反向代理部署
+
+网关可直接对外提供服务，也可以放在 nginx（或其他反向代理）之后。完整拓扑与配置示例（裸金属直连、子域名部署、子路径部署、Docker nginx 容器）见：
+
+- [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)（中文）｜ [NGINX-DEPLOYMENT.en.md](NGINX-DEPLOYMENT.en.md)（English）
+
+要点速览：
+
+- **子域名部署（推荐）**：`dsh.example.com` 根路径部署，nginx 将 443 反代到网关端口，零冲突、零维护；
+- **子路径部署**：网关配置 `basePath: /dsh`（在部署方 profile patch 中覆盖，注意 `config:` 是整对象替换，须保留 bundle patch 全部字段），nginx 需额外转发 dsh 引用的根路径资源（`/assets/`、`/api/`、`/plugins/` 等）；
+- 反代时必须转发 `Upgrade` / `Connection` 头（WebSocket）并调大 `proxy_read_timeout` / `proxy_send_timeout`（SSE 长连接），否则事件流 60s 被掐断。
 
 ## 故障排查
 

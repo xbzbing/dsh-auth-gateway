@@ -27,9 +27,8 @@ dsh plugin --profile web remove dsh-auth-gateway
 ```
 
 - Supports installation from GitHub / local directory — see [docs/INSTALL.md](docs/INSTALL.md);
-- **You must run the credential cleanup command before `remove`** (`reset` / `uninstall`), otherwise `$DSH_HOME/auth-gate/` password and OTP data will remain;
 - Forgot your password? Use `dsh-auth-gateway-reset` to reset (restart prints a new initial password to the console);
-- Update / detailed steps / troubleshooting — see [docs/INSTALL.md](docs/INSTALL.md).
+- Deployment guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Features
 
@@ -113,13 +112,13 @@ Authentication-state changes (enable/disable OTP, change password) always requir
 | Doc | Content |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Install, update, uninstall, credential reset — full step-by-step |
-| [docs/NGINX-DEPLOYMENT.md](docs/NGINX-DEPLOYMENT.md) | nginx deployment: bare-metal / host nginx / Docker nginx container — three topologies with full config examples |
+| [docs/NGINX-DEPLOYMENT.en.md](docs/NGINX-DEPLOYMENT.en.md)（[简体中文](docs/NGINX-DEPLOYMENT.md)） | nginx deployment: bare-metal / subdomain / sub-path / Docker nginx container — four topologies with full config examples |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, OTP security design, known limitations, recovery paths |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Ports & listening, LAN deployment, HTTPS advice, troubleshooting |
+| [docs/DEPLOYMENT.en.md](docs/DEPLOYMENT.en.md)（[简体中文](docs/DEPLOYMENT.md)） | Ports & listening, LAN deployment, HTTPS advice, nginx reverse proxy, troubleshooting |
 | [docs/TESTING.md](docs/TESTING.md) | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Architecture, build, development stats |
 
-The detailed docs above are in Chinese.
+Deployment docs are bilingual (简体中文 / English); INSTALL, SECURITY, TESTING and DEVELOPMENT are in Chinese.
 
 ## Acknowledgements
 

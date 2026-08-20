@@ -1,5 +1,7 @@
 # 配合 nginx 部署
 
+> 中文文档 | [English](NGINX-DEPLOYMENT.en.md)
+
 `dsh-auth-gateway` 本身是一个独立监听的网关进程（运行在 dsh 进程内），可以直接对外提供服务，也可以放在 nginx 反向代理之后。本文覆盖四种典型拓扑，均给出完整配置示例。
 
 > 本文所有示例使用占位符：域名 `dsh.example.com`、公网 IP `203.0.113.10`、网关端口 `8080`。请替换为你自己的值。
@@ -321,5 +323,5 @@ location / {
 ## 相关文档
 
 - [INSTALL.md](INSTALL.md) — 安装、更新、卸载
-- [DEPLOYMENT.md](DEPLOYMENT.md) — 端口推导、LAN 部署、故障排查
+- [DEPLOYMENT.md](DEPLOYMENT.md)（中文）｜ [DEPLOYMENT.en.md](DEPLOYMENT.en.md)（English）— 端口推导、LAN 部署、故障排查
 - [SECURITY.md](SECURITY.md) — 威胁模型与 OTP 安全设计

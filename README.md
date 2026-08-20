@@ -111,12 +111,12 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 | 文档 | 内容 |
 |---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | 安装、更新、卸载、凭据重置的完整操作步骤 |
+| [docs/INSTALL.md](docs/INSTALL.md)（[English](docs/INSTALL.en.md)） | 安装、更新、卸载、凭据重置的完整操作步骤 |
 | [docs/NGINX-DEPLOYMENT.md](docs/NGINX-DEPLOYMENT.md)（[English](docs/NGINX-DEPLOYMENT.en.md)） | 配合 nginx 部署：裸金属直连 / 子域名 / 子路径 / Docker nginx 容器四种拓扑与配置示例 |
-| [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、OTP 安全设计、已知限制与恢复路径 |
+| [docs/SECURITY.md](docs/SECURITY.md)（[English](docs/SECURITY.en.md)） | 威胁模型、OTP 安全设计、已知限制与恢复路径 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)（[English](docs/DEPLOYMENT.en.md)） | 端口与监听、LAN 部署、HTTPS 建议、nginx 反向代理、故障排查 |
-| [docs/TESTING.md](docs/TESTING.md) | 单元测试、端到端（Playwright）、API/WebSocket 门禁验证 |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 架构说明、构建、开发统计 |
+| [docs/TESTING.md](docs/TESTING.md)（[English](docs/TESTING.en.md)） | 单元测试、端到端（Playwright）、API/WebSocket 门禁验证 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)（[English](docs/DEVELOPMENT.en.md)） | 架构说明、构建、开发统计 |
 
 ## 致谢
 

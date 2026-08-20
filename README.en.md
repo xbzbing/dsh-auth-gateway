@@ -111,14 +111,14 @@ Authentication-state changes (enable/disable OTP, change password) always requir
 
 | Doc | Content |
 |---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | Install, update, uninstall, credential reset — full step-by-step |
+| [docs/INSTALL.en.md](docs/INSTALL.en.md)（[简体中文](docs/INSTALL.md)） | Install, update, uninstall, credential reset — full step-by-step |
 | [docs/NGINX-DEPLOYMENT.en.md](docs/NGINX-DEPLOYMENT.en.md)（[简体中文](docs/NGINX-DEPLOYMENT.md)） | nginx deployment: bare-metal / subdomain / sub-path / Docker nginx container — four topologies with full config examples |
-| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, OTP security design, known limitations, recovery paths |
+| [docs/SECURITY.en.md](docs/SECURITY.en.md)（[简体中文](docs/SECURITY.md)） | Threat model, OTP security design, known limitations, recovery paths |
 | [docs/DEPLOYMENT.en.md](docs/DEPLOYMENT.en.md)（[简体中文](docs/DEPLOYMENT.md)） | Ports & listening, LAN deployment, HTTPS advice, nginx reverse proxy, troubleshooting |
-| [docs/TESTING.md](docs/TESTING.md) | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Architecture, build, development stats |
+| [docs/TESTING.en.md](docs/TESTING.en.md)（[简体中文](docs/TESTING.md)） | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
+| [docs/DEVELOPMENT.en.md](docs/DEVELOPMENT.en.md)（[简体中文](docs/DEVELOPMENT.md)） | Architecture, build, development stats |
 
-Deployment docs are bilingual (简体中文 / English); INSTALL, SECURITY, TESTING and DEVELOPMENT are in Chinese.
+All docs are bilingual (简体中文 / English).
 
 ## Acknowledgements
 

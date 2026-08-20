@@ -1,5 +1,7 @@
 # 开发指南
 
+> 中文文档 | [English](DEVELOPMENT.en.md)
+
 ## 架构
 
 ```
@@ -79,7 +81,8 @@ client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:
 
 ## 版本历史
 
-- `0.4.2`：basePath 子路径部署（路由/跳转/转发剥离 + PWA/静态资产免认证）、登录审计日志、登录失败统一错误码 + 页面错误字典集中化（lib/errors.js）、中英文部署文档（DEPLOYMENT / NGINX-DEPLOYMENT）；
+- `0.5.0`：重置/卸载命令中英双语输出；部署文档中英双语（DEPLOYMENT / NGINX-DEPLOYMENT）；文档维护；
+- `0.4.2`：basePath 子路径部署（路由/跳转/转发剥离 + PWA/静态资产免认证）、登录审计日志、登录失败统一错误码 + 页面错误字典集中化（lib/errors.js）、中英文部署文档；
 - `0.4.1`：认证后 LAN 浏览器设置支持（loopback-trusted，PR #7）；
 - `0.4.0`：OTP 密钥 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `otp-master.key`），兼容旧明文记录；
 - `0.3.1`：从设置面板启用 OTP 无需部署开关；激活时吊销全部会话；

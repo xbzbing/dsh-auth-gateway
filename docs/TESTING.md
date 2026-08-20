@@ -1,17 +1,21 @@
 # 测试指南
 
+> 中文文档 | [English](TESTING.en.md)
+
 ## 单元与契约测试
 
 ```bash
 npm test
 ```
 
-86 项测试（node:test），覆盖：
+131 项测试（node:test），覆盖：
 
 | 文件 | 覆盖 |
 |---|---|
 | `tests/gateway.test.mjs` | 认证门禁（401/302/WS 拒绝）、转发（Host/Origin 改写、绝对 URI 规范化）、锁定/限流/安全事件、会话生命周期、DNS-rebinding 契约 |
 | `tests/otp.test.mjs` | TOTP 算法（RFC 6238/4226）、备份码、OTP 存储、OTP 路由（启用/禁用重验证、防重放、限流、otpDigits）、S1/S2 安全回归 |
+| `tests/basepath.test.mjs` | basePath 路由/重定向/转发、PWA 元数据与静态资产免认证放行 |
+| `tests/locale.test.mjs` | 页面语言解析（preference > Accept-Language > zh） |
 | `tests/policy.test.mjs` | 密码强度策略矩阵 |
 | `tests/config.test.mjs` | 配置 Schema 校验（默认值、非法值、边界） |
 | `tests/plugin-contract.test.mjs` | Cordis 插件契约（loader normalize、Config 校验） |

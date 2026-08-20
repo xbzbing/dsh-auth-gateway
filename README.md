@@ -1,22 +1,16 @@
 # dsh-auth-gateway
 
+<p align="center">
+<a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/v/dsh-auth-gateway.svg" alt="npm version"></a>
+<a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/dt/dsh-auth-gateway.svg" alt="npm total downloads"></a>
+<a href="LICENSE"><img src="https://img.shields.io/npm/l/dsh-auth-gateway.svg" alt="npm license"></a>
+</p>
+
 <p align="center"><b>Language: 简体中文 | <a href="README.en.md">English</a></b></p>
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
 `dsh web` 本身没有任何认证层（其内置 trust fence 是可达性策略而非认证）。本插件以进程内网关形态补齐认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
-
-## 功能特性
-
-- **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
-- **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
-- **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
-- **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
-- **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
-- **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
-- **安全事件**：锁触发、限流耗尽时输出告警日志并广播 `dsh-auth-gateway/brute-force` Cordis 事件（JSON 负载），供监控与联动；
-- **中英双语**：设置面板跟随 dsh 界面语言（设置 → 语言）；登录 / 引导 / OTP 页面按你的语言偏好渲染（`$DSH_HOME/settings.yaml` 的 `locale.preference`），未设置偏好时跟随浏览器语言（Accept-Language），刷新即生效；首次部署的控制台提示中英对照输出；
-- **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）。
 
 ## 安装
 
@@ -37,6 +31,18 @@ dsh web                 # 打开 http://<host>:<对外端口>
 ```
 
 插件自带 `dsh.bundle` patch（webserver 回环化 + 插件行），无需手写组合配置。
+
+## 功能特性
+
+- **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
+- **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
+- **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
+- **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
+- **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
+- **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
+- **安全事件**：锁触发、限流耗尽时输出告警日志并广播 `dsh-auth-gateway/brute-force` Cordis 事件（JSON 负载），供监控与联动；
+- **中英双语**：设置面板跟随 dsh 界面语言（设置 → 语言）；登录 / 引导 / OTP 页面按你的语言偏好渲染（`$DSH_HOME/settings.yaml` 的 `locale.preference`），未设置偏好时跟随浏览器语言（Accept-Language），刷新即生效；首次部署的控制台提示中英对照输出；
+- **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）。
 
 ## 工作原理
 
@@ -127,6 +133,11 @@ dsh plugin --profile web remove dsh-auth-gateway
 | [docs/TESTING.md](docs/TESTING.md) | 单元测试、端到端（Playwright）、API/WebSocket 门禁验证 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 架构说明、构建、开发统计 |
 
+## 致谢
+
+- **@adra2n** — 实现 OTP 双因素认证（[PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)），并添加 OTP 密钥 AES-256-GCM 静态加密存储与解密路径错误分类（[PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6)）；
+- **@meowtech** — 实现认证后 LAN 浏览器设置支持（[PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)），修复远程访问下 host-backed settings 不可用的问题。
+
 ## 验证概览
 
 - 单元与契约测试：`npm test`（110 项，含 OTP 安全回归、client 契约、patch 端口推导）
@@ -141,7 +152,7 @@ None，本包是浏览器与内部 dsh webserver 之间的认证载体，不会�
 
 #### KV Cache effect
 
-None；本包既不组装也不发送 provider 请求。
+None；本包既不组装也不发送 provider请求。
 
 ## License
 

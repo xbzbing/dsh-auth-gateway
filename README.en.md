@@ -1,22 +1,16 @@
 # dsh-auth-gateway
 
+<p align="center">
+<a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/v/dsh-auth-gateway.svg" alt="npm version"></a>
+<a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/dt/dsh-auth-gateway.svg" alt="npm total downloads"></a>
+<a href="LICENSE"><img src="https://img.shields.io/npm/l/dsh-auth-gateway.svg" alt="npm license"></a>
+</p>
+
 <p align="center"><b>Language: <a href="README.md">简体中文</a> | English</b></p>
 
 A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: **password auth + TOTP two-factor authentication + layered brute-force protection + session management**, with **real interception of every request** (HTTP and WebSocket) at the gateway layer — unauthenticated traffic never reaches the backend.
 
 `dsh web` ships with no authentication layer (its built-in trust fence is a reachability policy, not auth). This plugin fills that gap as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
-
-## Features
-
-- **Password auth**: on first deployment an initial password is auto-generated and printed to the console (one-time credential); after login you are guided to set a personal password (scrypt-hashed), and every subsequent visit requires login;
-- **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost; **the OTP secret is stored encrypted at rest with AES-256-GCM** (master key from the `DSH_AUTH_GATEWAY_MASTER_KEY` env var or an auto-generated `auth-gate/otp-master.key`), so a disk disclosure no longer exposes the second-factor root key;
-- **Real request interception**: unauthenticated `/api/*` returns 401, page paths 302 to the login page, WebSocket upgrades are rejected outright; authenticated traffic is forwarded transparently (Host/Origin normalization, compatible with the internal trust fence);
-- **Authenticated LAN settings support**: before dsh client modules initialize, browsers reached through the gateway receive loopback-trusted connection state, enabling Models, Credentials, locale/theme preferences, and other host-backed settings to load and persist;
-- **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
-- **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
-- **Security events**: lockouts and exhausted rate-limit windows log warnings and broadcast a `dsh-auth-gateway/brute-force` Cordis event (JSON payload) for monitoring and automation;
-- **Bilingual (zh/en)**: the settings panel follows the dsh UI language (Settings → Language); the login / onboarding / OTP pages render in your preferred language (`locale.preference` in `$DSH_HOME/settings.yaml`), falling back to the browser language (Accept-Language) when no preference was set — a change applies on the next page load; the first-run console notice prints both languages;
-- **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built), all through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`).
 
 ## Installation
 
@@ -38,6 +32,18 @@ dsh web                 # open http://<host>:<external port>
 ```
 
 The package ships a `dsh.bundle` patch (loopback webserver + plugin row) — no hand-written composition required.
+
+## Features
+
+- **Password auth**: on first deployment an initial password is auto-generated and printed to the console (one-time credential); after login you are guided to set a personal password (scrypt-hashed), and every subsequent visit requires login;
+- **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost; **the OTP secret is stored encrypted at rest with AES-256-GCM** (master key from the `DSH_AUTH_GATEWAY_MASTER_KEY` env var or an auto-generated `auth-gate/otp-master.key`), so a disk disclosure no longer exposes the second-factor root key;
+- **Real request interception**: unauthenticated `/api/*` returns 401, page paths 302 to the login page, WebSocket upgrades are rejected outright; authenticated traffic is forwarded transparently (Host/Origin normalization, compatible with the internal trust fence);
+- **Authenticated LAN settings support**: before dsh client modules initialize, browsers reached through the gateway receive loopback-trusted connection state, enabling Models, Credentials, locale/theme preferences, and other host-backed settings to load and persist;
+- **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
+- **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
+- **Security events**: lockouts and exhausted rate-limit windows log warnings and broadcast a `dsh-auth-gateway/brute-force` Cordis event (JSON payload) for monitoring and automation;
+- **Bilingual (zh/en)**: the settings panel follows the dsh UI language (Settings → Language); the login / onboarding / OTP pages render in your preferred language (`locale.preference` in `$DSH_HOME/settings.yaml`), falling back to the browser language (Accept-Language) when no preference was set — a change applies on the next page load; the first-run console notice prints both languages;
+- **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built), all through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`).
 
 ## How it works
 
@@ -130,6 +136,11 @@ dsh plugin --profile web remove dsh-auth-gateway
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Architecture, build, development stats |
 
 The detailed docs above are in Chinese.
+
+## Acknowledgements
+
+- **@adra2n** — implemented OTP two-factor authentication ([PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)) and added AES-256-GCM encryption at rest for the OTP secret with error classification ([PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6));
+- **@meowtech** — implemented authenticated LAN browser settings support ([PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)), fixing the host-backed settings unavailability issue when accessing remotely.
 
 ## Verification overview
 

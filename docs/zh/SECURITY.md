@@ -1,6 +1,6 @@
 # 安全模型
 
-> 中文文档 | [English](SECURITY.en.md)
+> 中文文档 | [English](../en/SECURITY.md)
 
 本文档描述 dsh-auth-gateway 的威胁模型、认证安全设计、已知限制与恢复路径。
 

@@ -1,6 +1,6 @@
 # 开发指南
 
-> 中文文档 | [English](DEVELOPMENT.en.md)
+> 中文文档 | [English](../en/DEVELOPMENT.md)
 
 ## 架构
 

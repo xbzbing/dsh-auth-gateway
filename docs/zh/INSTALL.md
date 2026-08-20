@@ -1,6 +1,6 @@
 # 安装、更新与卸载
 
-> 中文文档 | [English](INSTALL.en.md)
+> 中文文档 | [English](../en/INSTALL.md)
 
 本指南覆盖 `dsh-auth-gateway` 的完整生命周期操作：安装、验证、更新、卸载与凭据重置。面向 dsh Web profile 部署场景；其他 profile（如 `dsh`）把命令中的 `web` 替换为对应 profile 名即可。
 
@@ -152,7 +152,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 ## 6. 相关文档
 
-- [README.md](../README.md) — 功能特性、配置表、快速开始
-- [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)（[English](NGINX-DEPLOYMENT.en.md)）— 反向代理部署拓扑与 nginx 配置示例
-- [DEPLOYMENT.md](DEPLOYMENT.md)（[English](DEPLOYMENT.en.md)）— 端口与监听、LAN 部署、HTTPS 建议
-- [SECURITY.md](SECURITY.md)（[English](SECURITY.en.md)）— 威胁模型、OTP 密钥加密、恢复路径
+- [README.md](../../README.md) — 功能特性、配置表、快速开始
+- [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)（[English](../en/NGINX-DEPLOYMENT.md)）— 反向代理部署拓扑与 nginx 配置示例
+- [DEPLOYMENT.md](DEPLOYMENT.md)（[English](../en/DEPLOYMENT.md)）— 端口与监听、LAN 部署、HTTPS 建议
+- [SECURITY.md](SECURITY.md)（[English](../en/SECURITY.md)）— 威胁模型、OTP 密钥加密、恢复路径

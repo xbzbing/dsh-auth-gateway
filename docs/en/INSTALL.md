@@ -1,6 +1,6 @@
 # Install, Update and Uninstall
 
-> [简体中文](INSTALL.md) | English
+> [简体中文](../zh/INSTALL.md) | English
 
 This guide covers the full lifecycle of `dsh-auth-gateway`: install, verify, update, uninstall and credential reset. It targets the dsh Web profile; for other profiles (e.g. `dsh`), replace `web` in the commands with the profile name.
 
@@ -153,7 +153,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 ## 6. Related documents
 
-- [README.md](../README.md) — features, configuration table, quick start
+- [README.md](../../README.md) — features, configuration table, quick start
 - [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) — reverse-proxy deployment topologies and nginx config examples
 - [DEPLOYMENT.md](DEPLOYMENT.md) — ports & listening, LAN deployment, HTTPS advice
 - [SECURITY.md](SECURITY.md) — threat model, OTP secret encryption, recovery paths

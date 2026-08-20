@@ -1,6 +1,6 @@
 # Deploying behind nginx
 
-> [简体中文](NGINX-DEPLOYMENT.md) | English
+> [简体中文](../zh/NGINX-DEPLOYMENT.md) | English
 
 `dsh-auth-gateway` is a gateway process with its own listening socket (running inside the dsh process). It can serve directly, or sit behind an nginx reverse proxy. This document covers four typical topologies, each with a complete configuration example.
 
@@ -325,5 +325,5 @@ location / {
 ## Related documents
 
 - [INSTALL.md](INSTALL.md) — install, update, uninstall
-- [DEPLOYMENT.md](DEPLOYMENT.md)（简体中文）｜ [DEPLOYMENT.en.md](DEPLOYMENT.en.md) (English) — port derivation, LAN deployment, troubleshooting
+- [DEPLOYMENT.md](DEPLOYMENT.md)（简体中文）｜ [简体中文](../zh/DEPLOYMENT.md) (English) — port derivation, LAN deployment, troubleshooting
 - [SECURITY.md](SECURITY.md) — threat model and OTP security design

@@ -1,6 +1,6 @@
 # Testing Guide
 
-> [简体中文](TESTING.md) | English
+> [简体中文](../zh/TESTING.md) | English
 
 ## Unit and contract tests
 

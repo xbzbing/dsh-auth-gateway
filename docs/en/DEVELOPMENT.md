@@ -1,6 +1,6 @@
 # Development Guide
 
-> [简体中文](DEVELOPMENT.md) | English
+> [简体中文](../zh/DEVELOPMENT.md) | English
 
 ## Architecture
 

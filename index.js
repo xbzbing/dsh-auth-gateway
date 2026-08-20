@@ -6,7 +6,7 @@
  * passes its auth gate before being forwarded verbatim to the internal dsh
  * webserver (whose bundle patch moves it to a loopback-only port).
  *
- * See docs/DEVELOPMENT.md for the architecture and docs/SECURITY.md for
+ * See docs/zh/DEVELOPMENT.md for the architecture and docs/zh/SECURITY.md for
  * the security model.
  */
 

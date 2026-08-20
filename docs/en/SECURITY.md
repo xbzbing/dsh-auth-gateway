@@ -1,6 +1,6 @@
 # Security Model
 
-> [简体中文](SECURITY.md) | English
+> [简体中文](../zh/SECURITY.md) | English
 
 This document describes the dsh-auth-gateway threat model, authentication security design, known limitations and recovery paths.
 

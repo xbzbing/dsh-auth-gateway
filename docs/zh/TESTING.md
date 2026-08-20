@@ -1,6 +1,6 @@
 # 测试指南
 
-> 中文文档 | [English](TESTING.en.md)
+> 中文文档 | [English](../en/TESTING.md)
 
 ## 单元与契约测试
 

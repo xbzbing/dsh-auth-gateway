@@ -26,16 +26,16 @@ dsh web --port 8080
 dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-- Supports installation from GitHub / local directory — see [docs/INSTALL.md](docs/INSTALL.md);
+- Supports installation from GitHub / local directory — see [docs/en/INSTALL.md](docs/en/INSTALL.md);
 - Forgot your password? Use `dsh-auth-gateway-reset` to reset (restart prints a new initial password to the console);
-- Deployment guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Deployment guide: [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)
 
 ## Features
 
 - **Password auth**: on first deployment an initial password is auto-generated and printed to the console (one-time credential); after login you are guided to set a personal password (scrypt-hashed), and every subsequent visit requires login;
 - **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost; **the OTP secret is stored encrypted at rest with AES-256-GCM** (master key from the `DSH_AUTH_GATEWAY_MASTER_KEY` env var or an auto-generated `auth-gate/otp-master.key`), so a disk disclosure no longer exposes the second-factor root key;
 - **Real request interception**: unauthenticated `/api/*` returns 401, page paths 302 to the login page, WebSocket upgrades are rejected outright; authenticated traffic is forwarded transparently (Host/Origin normalization, compatible with the internal trust fence);
-- **Sub-path deployment (basePath)**: supports mounting behind a reverse-proxy sub-path (e.g. `https://example.com/dsh/`). Configure `basePath: /dsh` and the gateway handles route stripping, 302 redirect prefixing, and upstream forwarding automatically; PWA metadata (`manifest`/`favicon`) and static assets (`/assets/*`) are served without authentication. **Note**: DSH is a root-path application — frontend JS references absolute URLs like `/assets/...`, `/api/...`, `/plugins/...`. Sub-path deployment requires nginx to proxy these root paths separately. **Subdomain deployment is recommended** (`dsh.example.com`, root path, zero conflicts) — see [docs/NGINX-DEPLOYMENT.md](docs/NGINX-DEPLOYMENT.md);
+- **Sub-path deployment (basePath)**: supports mounting behind a reverse-proxy sub-path (e.g. `https://example.com/dsh/`). Configure `basePath: /dsh` and the gateway handles route stripping, 302 redirect prefixing, and upstream forwarding automatically; PWA metadata (`manifest`/`favicon`) and static assets (`/assets/*`) are served without authentication. **Note**: DSH is a root-path application — frontend JS references absolute URLs like `/assets/...`, `/api/...`, `/plugins/...`. Sub-path deployment requires nginx to proxy these root paths separately. **Subdomain deployment is recommended** (`dsh.example.com`, root path, zero conflicts) — see [docs/en/NGINX-DEPLOYMENT.md](docs/en/NGINX-DEPLOYMENT.md);
 - **Login audit**: login success / failure / logout / password change are logged via `ctx.logger.info` (with source IP and failure reason — never any credentials), forming a complete audit trail alongside brute-force alerts;
 - **Authenticated LAN settings support**: before dsh client modules initialize, browsers reached through the gateway receive loopback-trusted connection state, enabling Models, Credentials, locale/theme preferences, and other host-backed settings to load and persist;
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
@@ -105,18 +105,18 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 
 ## Security model
 
-Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). **The OTP secret is sealed with AES-256-GCM before it is written to disk** and can only be read with the master key — by default an auto-generated `auth-gate/otp-master.key` (0600), or injected via `DSH_AUTH_GATEWAY_MASTER_KEY` (hex/base64, 32 bytes) to isolate disk disclosure. Login audit records only event kind, source IP and failure reason — never any credentials. The full threat model, known limitations and recovery paths are in [docs/SECURITY.md](docs/SECURITY.md) (Chinese).
+Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). **The OTP secret is sealed with AES-256-GCM before it is written to disk** and can only be read with the master key — by default an auto-generated `auth-gate/otp-master.key` (0600), or injected via `DSH_AUTH_GATEWAY_MASTER_KEY` (hex/base64, 32 bytes) to isolate disk disclosure. Login audit records only event kind, source IP and failure reason — never any credentials. The full threat model, known limitations and recovery paths are in [docs/en/SECURITY.md](docs/en/SECURITY.md).
 
 ## Documentation
 
 | Doc | Content |
 |---|---|
-| [docs/INSTALL.en.md](docs/INSTALL.en.md)（[简体中文](docs/INSTALL.md)） | Install, update, uninstall, credential reset — full step-by-step |
-| [docs/NGINX-DEPLOYMENT.en.md](docs/NGINX-DEPLOYMENT.en.md)（[简体中文](docs/NGINX-DEPLOYMENT.md)） | nginx deployment: bare-metal / subdomain / sub-path / Docker nginx container — four topologies with full config examples |
-| [docs/SECURITY.en.md](docs/SECURITY.en.md)（[简体中文](docs/SECURITY.md)） | Threat model, OTP security design, known limitations, recovery paths |
-| [docs/DEPLOYMENT.en.md](docs/DEPLOYMENT.en.md)（[简体中文](docs/DEPLOYMENT.md)） | Ports & listening, LAN deployment, HTTPS advice, nginx reverse proxy, troubleshooting |
-| [docs/TESTING.en.md](docs/TESTING.en.md)（[简体中文](docs/TESTING.md)） | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
-| [docs/DEVELOPMENT.en.md](docs/DEVELOPMENT.en.md)（[简体中文](docs/DEVELOPMENT.md)） | Architecture, build, development stats |
+| [docs/en/INSTALL.md](docs/en/INSTALL.md)（[简体中文](docs/zh/INSTALL.md)） | Install, update, uninstall, credential reset — full step-by-step |
+| [docs/en/NGINX-DEPLOYMENT.md](docs/en/NGINX-DEPLOYMENT.md)（[简体中文](docs/zh/NGINX-DEPLOYMENT.md)） | nginx deployment: bare-metal / subdomain / sub-path / Docker nginx container — four topologies with full config examples |
+| [docs/en/SECURITY.md](docs/en/SECURITY.md)（[简体中文](docs/zh/SECURITY.md)） | Threat model, OTP security design, known limitations, recovery paths |
+| [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)（[简体中文](docs/zh/DEPLOYMENT.md)） | Ports & listening, LAN deployment, HTTPS advice, nginx reverse proxy, troubleshooting |
+| [docs/en/TESTING.md](docs/en/TESTING.md)（[简体中文](docs/zh/TESTING.md)） | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
+| [docs/en/DEVELOPMENT.md](docs/en/DEVELOPMENT.md)（[简体中文](docs/zh/DEVELOPMENT.md)） | Architecture, build, development stats |
 
 All docs are bilingual (简体中文 / English).
 
@@ -132,7 +132,7 @@ All docs are bilingual (简体中文 / English).
 - End-to-end against a real instance: `node scripts/e2e.mjs` (Playwright; login/2FA/password-change flows)
 - Gate verification: `./scripts/verify.sh` (curl; 401/302/WS rejection/lockout)
 
-See [docs/TESTING.md](docs/TESTING.md) for details.
+See [docs/en/TESTING.md](docs/en/TESTING.md) for details.
 
 ## Model Experience
 

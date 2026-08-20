@@ -125,13 +125,16 @@ test('basePath redirect: unauthenticated /dsh/ → 302 to /dsh/login', async () 
   assert.equal(res.headers.location, '/dsh/login')
 })
 
-test('PWA metadata (manifest/favicon) is served without authentication', async () => {
+test('PWA metadata and static assets are served without authentication', async () => {
   // Browsers fetch <link rel="manifest"> with no credentials — the gateway
   // must not redirect them to /login.
   const manifest = await fetch(gw.address().port, '/manifest.webmanifest')
   assert.equal(manifest.status, 200)
   const favicon = await fetch(gw.address().port, '/favicon.svg')
   assert.equal(favicon.status, 200)
+  // Static assets (/assets/*) are also served without authentication
+  const asset = await fetch(gw.address().port, '/assets/index-abc123.js')
+  assert.equal(asset.status, 200)
 })
 
 test('basePath redirect: unauthenticated /dsh/api/test → 401 json', async () => {

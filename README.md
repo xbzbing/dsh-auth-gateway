@@ -36,7 +36,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
 - **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
 - **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
-- **子路径部署（basePath）**：支持挂在反向代理子路径下（如 `https://example.com/dsh/`）。配置 `basePath: /dsh` 后，网关自动处理路由剥离、302 跳转拼接与上游转发剥离；PWA 元数据（manifest/favicon）免认证放行；
+- **子路径部署（basePath）**：支持挂在反向代理子路径下（如 `https://example.com/dsh/`）。配置 `basePath: /dsh` 后，网关自动处理路由剥离、302 跳转拼接与上游转发剥离；PWA 元数据（manifest/favicon）和静态资源（`/assets/*`）免认证放行。**注意**：DSH 是根路径应用，前端 JS 引用 `/assets/...`、`/api/...`、`/plugins/...` 等绝对 URL——子路径部署时这些路径不会自动带前缀，需要 nginx 额外转发。**推荐子域名部署**（`dsh.example.com`，根路径，零冲突），详见 [docs/NGINX-DEPLOYMENT.md](docs/NGINX-DEPLOYMENT.md)；
 - **登录审计**：登录成功 / 失败 / 登出 / 改密均输出审计日志（`ctx.logger.info`，含来源 IP 与失败原因，不记录任何凭据），配合暴力破解告警形成完整可审计闭环；
 - **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；

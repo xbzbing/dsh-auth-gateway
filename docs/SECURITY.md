@@ -14,6 +14,7 @@
 | OTP 重放（同一验证码在窗口内复用） | 记录已接受时间步（`lastCounter`，持久化），同一步或更早步骤的验证码拒绝 |
 | 会话劫持（Cookie 窃取） | HttpOnly + SameSite=Strict；禁用 OTP、修改密码等敏感操作要求完整重验证 |
 | DNS-rebinding / 跨站请求 | 网关 Cookie 门禁接管（跨站请求无会话 Cookie 即被拒）；内部 fence 职责移交后，Host/Origin 改写为回环（见下） |
+| LAN 浏览器获得客户端 loopback trust | trust bootstrap 只随内部 DSH index 提供；外部浏览器必须先通过网关完整认证才能取得页面，内部 webserver 仍只监听回环，服务端 privileged fence 保持启用 |
 | 存储泄露（`$DSH_HOME` 文件被读取） | 密码与备份代码为 scrypt 哈希；**OTP 密钥为 AES-256-GCM 加密**（读取需主密钥，见"已知限制"） |
 | 首次部署抢占 | 初始密码由服务器自动生成（console 打印，本机可见）——无"先到先得"窗口；初始密码为一次性凭据，完成引导后失效 |
 
@@ -61,6 +62,12 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 ### 转发与 fence
 
 网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件将 webserver 钉在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
+
+### 认证后的浏览器 trust
+
+DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Settings 启动时一次性选择 host 或 memory scope。通过 LAN IP 访问时该值原本为 `false`，导致 Models、Credentials、Locale/Theme/Preferences 等 host-backed settings 在浏览器端被提前禁用，即使网关已经把服务端 Host/Origin 改写为回环也无法恢复。
+
+网关通过 `webServer.tapIndex` 在 DSH queue-mode `__ModuleLoader__` 之后、parser preload 之前插入兼容 bootstrap。bootstrap 只包装 `@deepseek-ai/dsh-client-connection`，并在其同步 `ctx.provide('connection', handle)` 发布服务前把 `handle.isLoopback` 设为 `true`；认证、HTTP/WS 拦截、Host/Origin 改写和服务端 privileged fence 均不变。对外页面仍必须先通过完整会话（含 onboarding/OTP）门禁；内部 DSH 必须继续只监听 `127.0.0.1`。若 loader 协议变化，网关记录兼容性告警而不会关闭任何安全检查。
 
 ## 已知限制
 

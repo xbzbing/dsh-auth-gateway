@@ -28,12 +28,11 @@ export const inject = ['webServer']
 export async function apply(ctx, config) {
   const gateway = createGateway(config)
 
-  // Browser-side injection into every index.html response: the
-  // crypto.randomUUID polyfill — the API exists only in secure contexts
-  // (HTTPS or localhost); the gateway is meant to be reached over plain HTTP
-  // on a LAN IP, where dsh's frontend would crash on it. A small polyfill
-  // over getRandomValues (always available) restores it.
-  const injectedScript = '<script>'
+  // Browser-side compatibility for authenticated LAN pages. The randomUUID
+  // polyfill can run at the start of <head>. The trusted-loopback bootstrap
+  // must run later: after dsh creates its queue-mode __ModuleLoader__, but
+  // before parser-preloaded client bundles register their factories.
+  const randomUUIDScript = '<script>'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'
     + 'crypto.randomUUID = function () {'
     + 'var b = crypto.getRandomValues(new Uint8Array(16));'
@@ -44,10 +43,102 @@ export async function apply(ctx, config) {
     + '};'
     + '}'
     + '</script>'
-  ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
-    '<head>',
-    `<head>${injectedScript}`,
-  )), 'dsh-auth-gateway: crypto.randomUUID polyfill')
+  const trustedLoopbackScript = `<script>(() => {
+  const targetId = "@deepseek-ai/dsh-client-connection"
+  const loader = globalThis.__ModuleLoader__
+  const bootstrapKey = "__dshAuthGatewayTrustedLoopbackBootstrap__"
+  if (loader && loader[bootstrapKey] === true) return
+  if (!loader || loader.mode !== "queue" || typeof loader.load !== "function" || typeof loader.create !== "function") {
+    console.error("dsh-auth-gateway: incompatible __ModuleLoader__ bootstrap; authenticated LAN settings remain unavailable")
+    return
+  }
+  Object.defineProperty(loader, bootstrapKey, { value: true, configurable: false, enumerable: false })
+
+  const wrappedFactories = new WeakSet()
+  const wrappedApplies = new WeakSet()
+  const wrappedLoads = new WeakSet()
+
+  const wrapRegistration = (registration) => {
+    if (!registration || (registration.id !== targetId && registration.id !== targetId + "/client")) return registration
+    const originalFactory = registration.factory
+    if (typeof originalFactory !== "function" || wrappedFactories.has(originalFactory)) return registration
+
+    const wrappedFactory = function () {
+      const moduleExports = originalFactory.apply(this, arguments)
+      if (!moduleExports || typeof moduleExports.apply !== "function" || wrappedApplies.has(moduleExports.apply)) return moduleExports
+      const originalApply = moduleExports.apply
+      const wrappedApply = function (ctx) {
+        const originalProvide = ctx.provide
+        ctx.provide = function (service, value) {
+          if (service === "connection") {
+            Object.defineProperty(value, "isLoopback", {
+              value: true,
+              writable: true,
+              configurable: true,
+              enumerable: true,
+            })
+          }
+          return originalProvide.apply(this, arguments)
+        }
+        try {
+          return originalApply.apply(this, arguments)
+        } finally {
+          ctx.provide = originalProvide
+        }
+      }
+      wrappedApplies.add(originalApply)
+      wrappedApplies.add(wrappedApply)
+      moduleExports.apply = wrappedApply
+      return moduleExports
+    }
+    wrappedFactories.add(originalFactory)
+    wrappedFactories.add(wrappedFactory)
+    registration.factory = wrappedFactory
+    return registration
+  }
+
+  const wrapLoad = () => {
+    const originalLoad = loader.load
+    if (wrappedLoads.has(originalLoad)) return
+    const wrappedLoad = function (registration) {
+      return originalLoad.call(this, wrapRegistration(registration))
+    }
+    wrappedLoads.add(wrappedLoad)
+    loader.load = wrappedLoad
+  }
+
+  wrapLoad()
+  const originalCreate = loader.create
+  loader.create = function () {
+    try {
+      return originalCreate.apply(this, arguments)
+    } finally {
+      wrapLoad()
+    }
+  }
+})()</script>`
+
+  let warnedMissingLoader = false
+  ctx.effect(() => ctx.webServer.tapIndex((html) => {
+    const withRandomUUID = html.replace('<head>', `<head>${randomUUIDScript}`)
+    const loaderMarker = 'window.__ModuleLoader__='
+    const loaderStart = withRandomUUID.indexOf(loaderMarker)
+    const loaderEnd = loaderStart === -1 ? -1 : withRandomUUID.indexOf('</script>', loaderStart)
+    if (loaderStart === -1 || loaderEnd === -1) {
+      if (!warnedMissingLoader) {
+        warnedMissingLoader = true
+        ctx.logger.warn(
+          '[dsh-auth-gateway] dsh client module bootstrap not found; '
+          + 'authenticated LAN settings compatibility was not installed',
+        )
+      }
+      return withRandomUUID
+    }
+    const insertAt = loaderEnd + '</script>'.length
+    return withRandomUUID.slice(0, insertAt)
+      + trustedLoopbackScript
+      + withRandomUUID.slice(insertAt)
+  }), 'dsh-auth-gateway: authenticated LAN browser compatibility')
 
   // Safety net: the whole design assumes the internal webserver is loopback-only.
   // The bundle patch enforces it, but a manual composition may forget.

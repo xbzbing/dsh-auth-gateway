@@ -11,6 +11,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 - **Password auth**: on first deployment an initial password is auto-generated and printed to the console (one-time credential); after login you are guided to set a personal password (scrypt-hashed), and every subsequent visit requires login;
 - **Two-factor authentication (TOTP)**: optional; works with Google Authenticator, Authy, 1Password and other mainstream authenticators; ships with one-time backup codes (scrypt-hashed, single-use) for recovery when a device is lost; **the OTP secret is stored encrypted at rest with AES-256-GCM** (master key from the `DSH_AUTH_GATEWAY_MASTER_KEY` env var or an auto-generated `auth-gate/otp-master.key`), so a disk disclosure no longer exposes the second-factor root key;
 - **Real request interception**: unauthenticated `/api/*` returns 401, page paths 302 to the login page, WebSocket upgrades are rejected outright; authenticated traffic is forwarded transparently (Host/Origin normalization, compatible with the internal trust fence);
+- **Authenticated LAN settings support**: before dsh client modules initialize, browsers reached through the gateway receive loopback-trusted connection state, enabling Models, Credentials, locale/theme preferences, and other host-backed settings to load and persist;
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
 - **Security events**: lockouts and exhausted rate-limit windows log warnings and broadcast a `dsh-auth-gateway/brute-force` Cordis event (JSON payload) for monitoring and automation;
@@ -50,6 +51,7 @@ Browser ──> dsh-auth-gateway gateway (external port, inside the dsh process)
 
 - The gateway's lifecycle is bound to dsh: it starts/stops with dsh, no separate process;
 - The bundle patch moves the webserver to a loopback port (external = `--port`, internal = external + 1), so remote clients cannot bypass the gateway and reach the backend directly;
+- The gateway establishes client-side loopback trust while dsh's `__ModuleLoader__` loads the connection module, before Settings consumers start. This compatibility layer does not replace login, the HTTP/WebSocket gates, or the server-side fence;
 - Auth state machine: `first deploy → initial-password login → onboarding (set a personal password) → login → (optional) OTP verification → session`; sessions that have not finished onboarding or 2FA can only reach their verification endpoints.
 
 ## Screenshots

@@ -4,7 +4,7 @@
 
 ```
 host（零构建，node:crypto / node:http）
-├── index.js          # Cordis 插件入口：gateway 生命周期、tapIndex 注入（randomUUID polyfill）、安全事件接线
+├── index.js          # Cordis 插件入口：gateway 生命周期、tapIndex 注入（randomUUID + authenticated LAN trust）、安全事件接线
 ├── lib/gateway.js    # 认证网关：HTTP/WS 拦截与转发、认证状态机、防爆破三层、防重放
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）
@@ -27,7 +27,8 @@ client（可选，源码构建）
 设计要点：
 
 - **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
-- **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（polyfill 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
+- **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（randomUUID 与 authenticated LAN trust 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
+- **客户端 trust 时序**：index transform 在 queue-mode `__ModuleLoader__` 建立后、parser preload 前插入 bootstrap；它同时包装 queue/live 注册，并在 `dsh-client-connection` 调用 `ctx.provide('connection', handle)` 前设置 `handle.isLoopback = true`，避免 Settings 过早绑定 memory scope。此处依赖 DSH 的内部 loader 协议，结构不匹配时只记录一次告警；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gate/otp-master.key`，见 SECURITY.md）。
 
 ## 构建

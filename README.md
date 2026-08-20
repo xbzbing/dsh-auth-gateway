@@ -11,6 +11,7 @@
 - **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
 - **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
 - **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
+- **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
 - **安全事件**：锁触发、限流耗尽时输出告警日志并广播 `dsh-auth-gateway/brute-force` Cordis 事件（JSON 负载），供监控与联动；
@@ -49,6 +50,7 @@ dsh web                 # 打开 http://<host>:<对外端口>
 
 - 网关生命周期与 dsh 绑定：随 dsh 启动/退出，无独立进程；
 - bundle patch 将 webserver 移到回环端口（对外 = `--port`，内部 = 对外 + 1），远程无法绕过网关直连后端；
+- 网关在 DSH 的 `__ModuleLoader__` 加载 connection 模块时、Settings 等消费者启动前建立客户端 loopback trust；该兼容层不替代登录、HTTP/WebSocket 门禁或服务端 fence；
 - 认证状态机：`首次部署 → 初始密码登录 → 引导（设置个人密码）→ 登录 →（可选）OTP 验证 → 会话`；未完成引导或 2FA 的会话仅能访问对应验证端点。
 
 ## 界面预览

@@ -1,6 +1,6 @@
 {
   "name": "dsh-auth-gateway",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Password login gateway plugin for dsh web: auto-generated initial password with forced onboarding, login, password change with real request interception, and OTP two-factor authentication.",
   "type": "module",
   "main": "index.js",

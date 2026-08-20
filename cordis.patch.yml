@@ -41,4 +41,3 @@
         listenPort: !!js ctx.webStartup.port ?? 3080
         upstreamHost: 127.0.0.1
         upstreamPort: !!js (ctx.webStartup.port ?? 3080) + 1
-        basePath: /dsh

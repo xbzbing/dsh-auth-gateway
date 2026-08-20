@@ -8,35 +8,36 @@
 
 <p align="center"><b>Language: 简体中文 | <a href="README.en.md">English</a></b></p>
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
 `dsh web` 本身没有任何认证层（其内置 trust fence 是可达性策略而非认证）。本插件以进程内网关形态补齐认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-## 安装
-
-插件已发布到 npm（`dsh-auth-gateway`），也可从 GitHub 或本地目录安装：
+## 安装和卸载
 
 ```bash
-# 方式一：npm（registry 安装）
+# 安装（从 npm registry）
 dsh plugin --profile web add dsh-auth-gateway
 
-# 方式二：GitHub 仓库（默认分支；可用 #main、#v0.2.0 等指定 ref）
-dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
+# 启动（对外端口 8080，内部 webserver 自动挪到 8081）
+dsh web --port 8080
 
-# 方式三：本地开发目录（file: 为安装时快照，改代码后需 remove + add 刷新）
-dsh plugin --profile web add file:/path/to/dsh-auth-gateway
-
-dsh web --dump-config   # 确认 webserver 为 127.0.0.1:<内部端口>，出现 dsh-auth-gateway 行
-dsh web                 # 打开 http://<host>:<对外端口>
+# 卸载（先清凭据，再移除插件）
+~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall
+dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-插件自带 `dsh.bundle` patch（webserver 回环化 + 插件行），无需手写组合配置。
+- 支持从 GitHub / 本地目录安装，见 [docs/INSTALL.md](docs/INSTALL.md)；
+- **卸载前必须先运行凭据清理命令**（`reset`/`uninstall`），否则 `$DSH_HOME/auth-gate/` 中的密码与 OTP 凭据会残留；
+- 忘记密码用 `dsh-auth-gateway-reset` 重置（重启后控制台打印新初始密码）；
+- 更新 / 详细步骤 / 故障处理见 [docs/INSTALL.md](docs/INSTALL.md)。
 
 ## 功能特性
 
 - **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
 - **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
 - **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
+- **子路径部署（basePath）**：支持挂在反向代理子路径下（如 `https://example.com/dsh/`）。配置 `basePath: /dsh` 后，网关自动处理路由剥离、302 跳转拼接与上游转发剥离；PWA 元数据（manifest/favicon）免认证放行；
+- **登录审计**：登录成功 / 失败 / 登出 / 改密均输出审计日志（`ctx.logger.info`，含来源 IP 与失败原因，不记录任何凭据），配合暴力破解告警形成完整可审计闭环；
 - **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
@@ -92,6 +93,7 @@ dsh web                 # 打开 http://<host>:<对外端口>
 |---|---|---|
 | `listenHost` / `listenPort` | `0.0.0.0` / `3080` | 网关对外监听地址与端口 |
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
+| `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |
@@ -104,30 +106,14 @@ dsh web                 # 打开 http://<host>:<对外端口>
 
 ## 安全模型
 
-认证状态变更（启用/禁用 OTP、修改密码）均要求完整验证：2FA 激活时禁用 OTP 需当前密码 + 验证码或备份代码；未完成 2FA 的会话不能访问敏感端点。OTP 验证防重放（记录已接受时间步）、防伪造（`x-forwarded-for` 不计入来源）。**OTP 密钥在落盘前以 AES-256-GCM 密封**，读取需主密钥——默认自动生成 `auth-gate/otp-master.key`（0600），也可经环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64，32 字节）注入以隔离磁盘泄露。完整威胁模型、已知限制与恢复路径见 [docs/SECURITY.md](docs/SECURITY.md)。
-
-## 卸载与重置
-
-**先运行插件自带的凭据命令，再 `remove`**——`dsh plugin remove` 会移除 profile 里的插件依赖，其 bin（`dsh-auth-gateway-reset` / `dsh-auth-gateway-uninstall`）随之失效，命令不可再用。
-
-```bash
-# 忘记密码：重置密码记录（2FA 绑定保留；丢失认证器时需再删 otp.json）
-~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-reset
-# 或彻底清理全部凭据（密码 + OTP 密钥 + 备份码）
-~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall
-
-# 凭据清理完成后再移除插件（remove 只移组合，不清理数据）
-dsh plugin --profile web remove dsh-auth-gateway
-```
-
-- `reset` 只删 `$DSH_HOME/auth-gate/password.json`（`$DSH_HOME` 默认 `~/.dsh`）：**重启 dsh web** 后新初始密码打印到控制台，登录走引导重新设置；
-- `uninstall` 删除整个 `auth-gate/` 目录（密码 + OTP 密钥 + 备份码）；
-- 两个命令链接在 profile 的 `node_modules/.bin`，默认不在 PATH 上，可用完整路径或 `export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"` 后直接调用；详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+认证状态变更（启用/禁用 OTP、修改密码）均要求完整验证：2FA 激活时禁用 OTP 需当前密码 + 验证码或备份代码；未完成 2FA 的会话不能访问敏感端点。OTP 验证防重放（记录已接受时间步）、防伪造（`x-forwarded-for` 不计入来源）。**OTP 密钥在落盘前以 AES-256-GCM 密封**，读取需主密钥——默认自动生成 `auth-gate/otp-master.key`（0600），也可经环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64，32 字节）注入以隔离磁盘泄露。登录审计只记录事件种类、来源 IP 与失败原因，不落任何凭据。完整威胁模型、已知限制与恢复路径见 [docs/SECURITY.md](docs/SECURITY.md)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
+| [docs/INSTALL.md](docs/INSTALL.md) | 安装、更新、卸载、凭据重置的完整操作步骤 |
+| [docs/NGINX-DEPLOYMENT.md](docs/NGINX-DEPLOYMENT.md) | 配合 nginx 部署：裸金属直连 / 宿主机 nginx / Docker nginx 容器三种拓扑与配置示例 |
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、OTP 安全设计、已知限制与恢复路径 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 端口与监听、LAN 部署、HTTPS 建议、故障排查 |
 | [docs/TESTING.md](docs/TESTING.md) | 单元测试、端到端（Playwright）、API/WebSocket 门禁验证 |
@@ -140,7 +126,8 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 ## 验证概览
 
-- 单元与契约测试：`npm test`（110 项，含 OTP 安全回归、client 契约、patch 端口推导）
+- 单元与契约测试：`npm test`（131 项，含 basePath 路由/重定向/转发、PWA 元数据放行、登录审计、OTP 安全回归、client 契约、patch 端口推导）
+- 部署流水线：`npm run deploy`（语法检查 → 全量测试 → 同步到 DSH 安装目录 → 安装后验证）
 - 实机端到端：`node scripts/e2e.mjs`（Playwright，登录/2FA/改密全流程）
 - 门禁验证：`./scripts/verify.sh`（curl，401/302/WS 拒绝/锁定）
 

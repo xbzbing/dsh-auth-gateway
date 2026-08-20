@@ -600,12 +600,13 @@ test('login accepts a backup code when 2FA is active (lost authenticator)', asyn
   assert.equal(noCode.status, 400)
   assert.equal(JSON.parse(noCode.body).error, 'otp-required')
 
-  // Wrong backup code → 401, nothing consumed.
+  // Wrong backup code → 401 with the UNIFIED code (a wrong code must not
+  // reveal the password was right; nothing is consumed).
   const wrong = await request('/login/auth', {
     method: 'POST', body: { password: 'Test1234!', backupCode: 'WRONGCODE' },
   })
   assert.equal(wrong.status, 401)
-  assert.equal(JSON.parse(wrong.body).error, 'invalid-backup-code')
+  assert.equal(JSON.parse(wrong.body).error, 'invalid-credentials')
 
   // Valid backup code → 200 + session, fully verified in one step.
   const good = await request('/login/auth', {
@@ -617,18 +618,47 @@ test('login accepts a backup code when 2FA is active (lost authenticator)', asyn
   const settings = await request('/login-api/settings', { cookie })
   assert.equal(settings.status, 200, 'backup-code session must be fully verified (no /otp/verify hop)')
 
-  // Backup codes are single-use: the same code must not log in twice.
+  // Backup codes are single-use: the same code must not log in twice. The
+  // failure also uses the unified code (replay is a wrong code, not a signal
+  // about the password).
   const replay = await request('/login/auth', {
     method: 'POST', body: { password: 'Test1234!', backupCode: backupCodes[0] },
   })
   assert.equal(replay.status, 401)
-  assert.equal(JSON.parse(replay.body).error, 'invalid-backup-code')
+  assert.equal(JSON.parse(replay.body).error, 'invalid-credentials')
 
   // The TOTP path still works alongside the backup path.
   const totpLogin = await request('/login/auth', {
     method: 'POST', body: { password: 'Test1234!', otp: generateTOTP(getOTPSecret()) },
   })
   assert.equal(totpLogin.status, 200)
+  await stopGateway()
+})
+
+test('login failures are indistinguishable: wrong password vs wrong OTP return the same error', async () => {
+  // Credential-stuffing mitigation: the 401 body must not reveal whether the
+  // password was right. A wrong code therefore surfaces the SAME code as a
+  // wrong password, so an attacker probing password candidates cannot use the
+  // error to confirm a hit.
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  await enableOTP({ backupCodeCount: 3 })
+  const activeSecret = getOTPSecret()
+
+  const wrongPassword = await request('/login/auth', {
+    method: 'POST', body: { password: 'wrong', otp: generateTOTP(activeSecret) },
+  })
+  assert.equal(wrongPassword.status, 401)
+  const wrongPasswordErr = JSON.parse(wrongPassword.body).error
+
+  const wrongOtp = await request('/login/auth', {
+    method: 'POST', body: { password: 'Test1234!', otp: '000000' },
+  })
+  assert.equal(wrongOtp.status, 401)
+  const wrongOtpErr = JSON.parse(wrongOtp.body).error
+
+  assert.equal(wrongPasswordErr, 'invalid-credentials', 'wrong password keeps the unified code')
+  assert.equal(wrongOtpErr, 'invalid-credentials', 'wrong OTP must not be distinguishable')
   await stopGateway()
 })
 

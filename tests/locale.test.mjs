@@ -96,9 +96,9 @@ test('onboarding pages render English copy with locale=en', () => {
   const step1 = onboardingPageHtml({ locale: 'en' })
   assert.ok(step1.includes('Bind a TOTP authenticator'), 'en step-1 title')
   assert.ok(step1.includes('Skip — set the password'), 'en skip button')
-  assert.ok(step1.includes("location.href='/onboarding/password'"), 'skip links to the password step')
+  assert.ok(step1.includes("location.href=__basePath+'/onboarding/password'"), 'skip links to the password step')
   assert.ok(step1.includes('Verify & enable'), 'en binding-flow button')
-  assert.ok(step1.includes("post('/otp/enable', {}"), 'binding flow auto-starts on load')
+  assert.ok(step1.includes("post(__basePath + '/otp/enable', {}"), 'binding flow auto-starts on load')
 
   // Step 2: mandatory personal password form (its script carries the errors).
   const step2 = onboardingPasswordPageHtml({ locale: 'en' })

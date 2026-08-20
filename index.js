@@ -163,6 +163,22 @@ export async function apply(ctx, config) {
     ctx.emit('dsh-auth-gateway/brute-force', payload)
   }
 
+  // Auth audit: login success/failure, logout and password change go to the
+  // host log at info level. Payloads carry only {kind, ip, reason?} — never
+  // credentials, OTP codes or session tokens.
+  gateway.onAuthEvent = (payload) => {
+    const { kind, ip, reason } = payload
+    const detail = reason === undefined ? '' : ` reason=${reason}`
+    const label = {
+      'login-success': '登录成功',
+      'login-failed': '登录失败',
+      'logout': '登出',
+      'password-change': '修改密码成功',
+      'password-change-failed': '修改密码失败',
+    }[kind] ?? kind
+    ctx.logger.info('[dsh-auth-gateway] %s ip=%s%s', label, ip, detail)
+  }
+
   // Fail loud on a taken port (misconfiguration), like the webserver does.
   await gateway.start()
 

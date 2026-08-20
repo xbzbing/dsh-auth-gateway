@@ -17,6 +17,7 @@ test('schema shape is Standard Schema v1', () => {
 test('undefined/null config gets defaults', () => {
   assert.deepEqual(validate(undefined), {
     value: {
+      basePath: '/',
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
@@ -29,6 +30,7 @@ test('partial config keeps defaults for omitted fields', () => {
   const result = validate({ listenPort: 4000 })
   assert.deepEqual(result, {
     value: {
+      basePath: '/',
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,

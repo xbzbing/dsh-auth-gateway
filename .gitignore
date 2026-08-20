@@ -2,3 +2,4 @@ node_modules/
 .DS_Store
 graphify-out/
 otp-master.key
+docs/local/

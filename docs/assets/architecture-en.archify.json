@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dsh-auth-gateway Architecture",
+    "subtitle": "The gateway exclusively owns the external port; the internal webserver is pinned to 127.0.0.1:<N+1> — every HTTP/WS request passes the auth gate first",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Primary request path",
+        "focus": [
+          "browser",
+          "gateway",
+          "internal"
+        ],
+        "note": "Unauthenticated traffic is rejected at the gateway; authenticated requests are forwarded transparently to the loopback port."
+      },
+      {
+        "id": "credentials",
+        "label": "Credential storage",
+        "focus": [
+          "gateway",
+          "store-password",
+          "store-otp"
+        ],
+        "note": "Passwords are scrypt-hashed and OTP secrets AES-256-GCM sealed, all inside a 0700 directory."
+      },
+      {
+        "id": "observability",
+        "label": "Audit & alerting",
+        "focus": [
+          "gateway",
+          "auditlog",
+          "eventbus"
+        ],
+        "note": "Audit events land in audit.log (daily rotation, 90-day retention); brute-force alerts broadcast a Cordis event."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "LAN / localhost",
+      "pos": [
+        40,
+        290
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "dsh-auth-gateway",
+      "sublabel": "Password + TOTP auth gate",
+      "tag": "对外 :3080 · 内部 :3081",
+      "pos": [
+        250,
+        265
+      ],
+      "size": [
+        200,
+        110
+      ]
+    },
+    {
+      "id": "pages",
+      "type": "frontend",
+      "label": "Login / Onboarding / OTP pages",
+      "sublabel": "Self-contained HTML · bilingual",
+      "pos": [
+        250,
+        80
+      ],
+      "size": [
+        200,
+        60
+      ]
+    },
+    {
+      "id": "internal",
+      "type": "backend",
+      "label": "dsh webserver",
+      "sublabel": "127.0.0.1 :3081 (pinned by bundle patch)",
+      "pos": [
+        550,
+        290
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "eventbus",
+      "type": "messagebus",
+      "label": "Host log / Cordis events",
+      "sublabel": "ctx.logger · brute-force broadcast",
+      "pos": [
+        810,
+        80
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "store-password",
+      "type": "security",
+      "label": "password.json",
+      "sublabel": "scrypt hash · 0600",
+      "pos": [
+        30,
+        470
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "store-otp",
+      "type": "security",
+      "label": "otp.json",
+      "sublabel": "AES-256-GCM sealed",
+      "pos": [
+        220,
+        470
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "auditlog",
+      "type": "database",
+      "label": "audit.log",
+      "sublabel": "JSONL · daily rotation · 90-day retention",
+      "pos": [
+        430,
+        470
+      ],
+      "size": [
+        190,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "dsh web process (Cordis host)",
+      "wraps": [
+        "gateway",
+        "pages",
+        "internal",
+        "eventbus"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "$DSH_HOME/auth-gate · 0700",
+      "wraps": [
+        "store-password",
+        "store-otp",
+        "auditlog"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-to-gateway",
+      "from": "browser",
+      "to": "gateway",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-internal",
+      "from": "gateway",
+      "to": "internal",
+      "label": "authenticated forward",
+      "variant": "emphasis",
+      "labelDy": 64
+    },
+    {
+      "id": "gateway-to-pages",
+      "from": "gateway",
+      "to": "pages",
+      "label": "built-in pages",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "gateway-to-eventbus",
+      "from": "gateway",
+      "to": "eventbus",
+      "label": "security event broadcast",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "gateway-to-password",
+      "from": "gateway",
+      "to": "store-password",
+      "label": "scrypt verify",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "gateway-to-otp",
+      "from": "gateway",
+      "to": "store-otp",
+      "label": "AES-GCM unseal",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": -60
+    },
+    {
+      "id": "gateway-to-auditlog",
+      "from": "gateway",
+      "to": "auditlog",
+      "label": "audit events",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Auth flow",
+      "items": [
+        "First boot mints a one-time initial password; onboarding forces a personal one",
+        "Optional TOTP: mainstream authenticators + one-time backup codes",
+        "Unauthenticated API 401, pages 302, WebSocket upgrade rejected"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Data & observability",
+      "items": [
+        "password.json scrypt-hashed; otp.json AES-256-GCM sealed",
+        "audit.log JSONL, daily rotation, 90-day retention, deduped failure alerts",
+        "Brute-force alerts also broadcast the dsh-auth-gateway/brute-force event"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security foundation",
+      "items": [
+        "Bundle patch pins the internal webserver to 127.0.0.1:<N+1>",
+        "Remote clients cannot bypass the gateway to reach the backend",
+        "Sessions are in-memory 256-bit tokens; password change revokes all"
+      ]
+    }
+  ]
+}

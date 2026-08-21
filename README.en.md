@@ -1,6 +1,10 @@
 # dsh-auth-gateway
 
 <p align="center">
+  <a href="docs/assets/architecture-en.html"><img src="docs/assets/architecture-en.png" alt="dsh-auth-gateway architecture" width="720"></a>
+</p>
+
+<p align="center">
 <a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/v/dsh-auth-gateway.svg" alt="npm version"></a>
 <a href="https://www.npmjs.com/package/dsh-auth-gateway"><img src="https://img.shields.io/npm/dt/dsh-auth-gateway.svg" alt="npm total downloads"></a>
 <a href="LICENSE"><img src="https://img.shields.io/npm/l/dsh-auth-gateway.svg" alt="npm license"></a>

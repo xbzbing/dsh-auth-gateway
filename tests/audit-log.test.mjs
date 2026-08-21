@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { link as fsLink } from 'node:fs/promises'
 import { AuditLogWriter, AUDIT_LOG_NAME, dayString } from '../lib/audit-log.js'
 
 function tempDir() {
@@ -292,6 +293,114 @@ test('a prune failure during rotation is caught — the event is never lost', as
     // The prune failure was reported to onError.
     assert.ok(errors.length >= 1, 'prune failure reaches onError')
     assert.equal(errors[0].code, 'EISDIR')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a failed rotation retries on the next append instead of pinning currentDay', async () => {
+  const dir = tempDir()
+  try {
+    // Day-1 live file; injected link fails with EPERM until released.
+    const live = join(dir, AUDIT_LOG_NAME)
+    writeFileSync(live, '{"ts":"yesterday","kind":"login-success","ip":"10.0.0.7"}\n')
+    utimesSync(live, new Date(at(2025, 8, 20, 9)), new Date(at(2025, 8, 20, 9)))
+
+    let failLinks = 2
+    const link = (from, to) => {
+      if (failLinks > 0) {
+        failLinks -= 1
+        return Promise.resolve().then(() => {
+          throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+        })
+      }
+      return fsLink(from, to)
+    }
+
+    const errors = []
+    let now = at(2025, 8, 21, 8)
+    const w = new AuditLogWriter({ dir, now: () => now, onError: (err) => errors.push(err), link })
+
+    // Rotation fails: the event still lands in the (un-rotated) live file.
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    assert.equal(errors.length, 1)
+    assert.equal(errors[0].code, 'EPERM')
+    assert.equal(JSON.parse(readFileSync(live, 'utf8').trim().split('\n').at(-1)).kind, 'logout')
+    assert.ok(!existsSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-20`)), 'nothing archived yet')
+
+    // Next append while still failing: retries the archive, never overwrites.
+    // Pin the live mtime inside the fake timeline after each failed-window
+    // append so the retry stamp stays deterministic.
+    now = at(2025, 8, 21, 9)
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    utimesSync(live, new Date(now), new Date(now))
+    assert.equal(errors.length, 2)
+
+    // Recover: the pending content archives under the remembered stamp —
+    // the day most of it belongs to — not the recovery-time day.
+    now = at(2025, 8, 22, 8)
+    await w.append({ kind: 'login-success', ip: '10.0.0.7' })
+    assert.ok(existsSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-20`)),
+      'the retry archives under the remembered content day')
+    const archived = readFileSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-20`), 'utf8')
+      .trim().split('\n').map((l) => JSON.parse(l).kind)
+    assert.deepEqual(archived, ['login-success', 'logout', 'logout'],
+      'both failed-window events ride along in the archive')
+
+    // The following day rotates normally again.
+    now = at(2025, 8, 23, 8)
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    assert.ok(existsSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-22`)),
+      'the next midnight rollover works after recovery')
+    const liveLines = readFileSync(live, 'utf8').trim().split('\n')
+    assert.equal(liveLines.length, 1)
+    assert.equal(JSON.parse(liveLines[0]).kind, 'logout')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('rotation failures stay deduped across successful appends; recovery fires once rotation succeeds', async () => {
+  const dir = tempDir()
+  try {
+    const live = join(dir, AUDIT_LOG_NAME)
+    writeFileSync(live, '{"ts":"yesterday","kind":"login-success","ip":"10.0.0.10"}\n')
+    utimesSync(live, new Date(at(2025, 8, 20, 9)), new Date(at(2025, 8, 20, 9)))
+
+    let failLinks = true
+    const link = () => {
+      if (failLinks) return Promise.resolve().then(() => {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      })
+      return fsLink(live, join(dir, `${AUDIT_LOG_NAME}.2025-08-20`))
+    }
+
+    const errors = []
+    const recovered = []
+    let now = at(2025, 8, 21, 8)
+    const w = new AuditLogWriter({
+      dir, now: () => now,
+      onError: (err) => errors.push(err),
+      onRecover: () => recovered.push(true),
+      link,
+    })
+
+    // Successful appends interleaved with a persistently failing rotation:
+    // the first failure reports once, the rest are silenced by the dedupe —
+    // a landed line must not reset the streak ("recovered" would be a lie).
+    for (let n = 0; n < 5; n++) {
+      now = at(2025, 8, 21, 8, n)
+      await w.append({ kind: 'logout', ip: '10.0.0.10' })
+    }
+    assert.equal(errors.length, 1, 'one warn for the whole failure streak')
+    assert.equal(recovered.length, 0, 'no recovery while rotation is still failing')
+
+    // Heal the rotation: the next append reports recovery exactly once.
+    failLinks = false
+    now = at(2025, 8, 21, 14)
+    await w.append({ kind: 'login-success', ip: '10.0.0.10' })
+    assert.equal(recovered.length, 1, 'recovery fires once when rotation succeeds')
+    assert.equal(errors.length, 1)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -32,7 +32,7 @@
     "build:client": "node client/build.mjs",
     "build:check": "npm run build:client && git diff --exit-code -- client/index.js client/index.js.map",
     "deploy": "bash scripts/deploy.sh",
-    "test": "node --test --test-force-exit tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs tests/otp.test.mjs tests/locale.test.mjs tests/basepath.test.mjs"
+    "test": "node --test --test-force-exit tests/gateway.test.mjs tests/config.test.mjs tests/policy.test.mjs tests/plugin-contract.test.mjs tests/patch-ports.test.mjs tests/client-contract.test.mjs tests/otp.test.mjs tests/locale.test.mjs tests/basepath.test.mjs tests/audit-log.test.mjs"
   },
   "dsh": {
     "bundle": {

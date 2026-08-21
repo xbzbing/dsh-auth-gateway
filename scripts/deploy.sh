@@ -12,6 +12,7 @@ SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
 DST="${DSH_PROFILE_DIR:-$HOME/.dsh/profiles/web}/node_modules/dsh-auth-gateway"
 
 JS_FILES=(
+  lib/audit-log.js
   lib/config.js
   lib/forward.js
   lib/gateway.js

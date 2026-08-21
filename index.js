@@ -12,6 +12,7 @@
 
 import { createGateway, lanAddresses } from './lib/gateway.js'
 import { Config } from './lib/config.js'
+import { AuditLogWriter } from './lib/audit-log.js'
 import { hasPassword, setPassword, generateInitialPassword } from './lib/store.js'
 
 export const name = 'dsh-auth-gateway'
@@ -158,6 +159,23 @@ export async function apply(ctx, config) {
     ctx.logger.warn('[dsh-auth-gateway] %s', err instanceof Error ? err.message : String(err))
   }
 
+  // Durable audit trail. ctx.logger is buffer-only in the current dsh runtime
+  // (its built-in exporter keeps the last 1000 records in memory), so auth
+  // events and brute-force alerts are additionally appended as JSONL to
+  // $DSH_HOME/auth-gate/audit.log — the persistent, greppable record. Daily
+  // rotation, 90-day retention; write failures degrade to a warn line and
+  // never touch the auth flow (see lib/audit-log.js).
+  const auditLog = new AuditLogWriter({
+    onError: (err) => {
+      const suppressed = err.suppressed > 0 ? `（已抑制 ${err.suppressed} 条重复告警）` : ''
+      ctx.logger.warn('[dsh-auth-gateway] 审计日志写入失败%s: %s', suppressed, err.message)
+    },
+    onRecover: () => {
+      ctx.logger.info('[dsh-auth-gateway] 审计日志写入已恢复')
+    },
+  })
+  auditLog.open()
+
   // Brute-force alerts, through dsh's official channels only: a Host log
   // line plus a Cordis event (`dsh-auth-gateway/brute-force`) any plugin
   // can listen to. No DOM/UI poking — surfacing this in the GUI would be a
@@ -165,11 +183,22 @@ export async function apply(ctx, config) {
   gateway.onSecurityEvent = (payload) => {
     ctx.logger.warn('[dsh-auth-gateway] 疑似暴力破解: %s', JSON.stringify(payload))
     ctx.emit('dsh-auth-gateway/brute-force', payload)
+    // Same alert lands in the file trail. sourceAddress is absent for the
+    // process-wide `global-rate-limit` event; the writer omits undefined
+    // fields, so the line carries only what the payload had.
+    auditLog.append({
+      kind: payload.kind,
+      ip: payload.sourceAddress,
+      limit: payload.limit,
+      windowSeconds: payload.windowSeconds,
+      maxFailures: payload.maxFailures,
+      lockedUntil: payload.lockedUntil,
+    })
   }
 
   // Auth audit: login success/failure, logout and password change go to the
-  // host log at info level. Payloads carry only {kind, ip, reason?} — never
-  // credentials, OTP codes or session tokens.
+  // host log at info level and to the audit.log file sink. Payloads carry
+  // only {kind, ip, reason?} — never credentials, OTP codes or session tokens.
   gateway.onAuthEvent = (payload) => {
     const { kind, ip, reason } = payload
     const detail = reason === undefined ? '' : ` reason=${reason}`
@@ -183,6 +212,7 @@ export async function apply(ctx, config) {
       'otp-disable-failed': '禁用 OTP 失败',
     }[kind] ?? kind
     ctx.logger.info('[dsh-auth-gateway] %s ip=%s%s', label, ip, detail)
+    auditLog.append(payload)
   }
 
   // Fail loud on a taken port (misconfiguration), like the webserver does.
@@ -219,6 +249,9 @@ export async function apply(ctx, config) {
 
   ctx.effect(() => async () => {
     await gateway.close()
+    // Graceful shutdown drains in-flight audit writes; a hard crash can
+    // still lose the single line that was being written.
+    await auditLog.flush()
   }, 'dsh-auth-gateway: gateway listen')
 
   // The real URL line. dsh's own line prints the INTERNAL webserver address

@@ -71,7 +71,9 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   let registeredComponent = null
   let registeredNs = null
   let registeredDicts = null
+  const effects = []
   const ctx = {
+    effect: (fn, name) => { effects.push({ fn, name }) },
     slots: {
       inject: (name, fn) => { slotName = name; registered = fn() },
       register: (def, component) => { registered = { ...def }; registeredComponent = component; return registered },
@@ -85,6 +87,11 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   assert.equal(slotName, 'settings.section')
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.locale, 'dsh-auth-gateway', 'slot must declare its locale namespace')
+
+  // The settings-nav icon adaptation is registered as a disposable effect.
+  assert.ok(effects.some((e) => e.name === 'dsh-auth-gateway: settings nav icon'),
+    'nav icon marker must be a lifecycle effect')
+  assert.equal(typeof effects[0].fn, 'function')
 
   // Dictionaries: own namespace, zh source of truth, en key set complete.
   assert.equal(registeredNs, 'dsh-auth-gateway')

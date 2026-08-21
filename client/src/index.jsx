@@ -374,7 +374,7 @@ function UserSettingsPanel({ api, t }) {
           margin: '0 0 4px', fontSize: '16px', lineHeight: '24px', fontWeight: 500,
           color: T.textPrimary, display: 'flex', alignItems: 'center', gap: '8px',
         }}>
-          <span>⚙️</span>{t('nav')}
+          {t('nav')}
         </h3>
         <p style={{ ...DESC, margin: '0 0 16px' }}>{t('header.desc')}</p>
 
@@ -567,6 +567,58 @@ function UserSettingsPanel({ api, t }) {
 /** Services this plugin's apply() actually uses (ctx.slots, ctx.locale). */
 const inject = ['slots', 'locale']
 
+// settings.section has no icon field — mark our nav row and swap the shell's
+// fallback gear via a currentColor mask.
+const NAV_MARKER = 'data-dsh-auth-gateway-settings-nav'
+
+const SHIELD_DATA_URI = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E"
+
+const NAV_ICON_CSS = [
+  `[${NAV_MARKER}] > svg:first-child { display: none }`,
+  `[${NAV_MARKER}]::before {`,
+  `  content: ''; flex: none; width: 16px; height: 16px; background: currentColor;`,
+  `  -webkit-mask: url("${SHIELD_DATA_URI}") center / contain no-repeat;`,
+  `  mask: url("${SHIELD_DATA_URI}") center / contain no-repeat;`,
+  `}`,
+].join('\n')
+
+function injectNavIconStyle() {
+  if (typeof document === 'undefined') return () => {}
+  const existing = document.querySelector('style[data-dsh-auth-gateway-nav]')
+  if (existing) return () => {}
+  const tag = document.createElement('style')
+  tag.dataset.dshAuthGatewayNav = ''
+  tag.textContent = NAV_ICON_CSS
+  document.head.appendChild(tag)
+  return () => tag.remove()
+}
+
+function markSettingsNav(label) {
+  let disposed = false
+  let scheduled = false
+  const sync = () => {
+    scheduled = false
+    if (disposed) return
+    for (const button of document.querySelectorAll('[role="dialog"] nav button')) {
+      if (button.textContent?.trim() === label().trim()) button.setAttribute(NAV_MARKER, '')
+      else button.removeAttribute(NAV_MARKER)
+    }
+  }
+  const schedule = () => {
+    if (scheduled) return
+    scheduled = true
+    queueMicrotask(sync)
+  }
+  sync()
+  const observer = new MutationObserver(schedule)
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  return () => {
+    disposed = true
+    observer.disconnect()
+    document.querySelectorAll(`[${NAV_MARKER}]`).forEach((el) => el.removeAttribute(NAV_MARKER))
+  }
+}
+
 /**
  * Gateway basePath ('' for root, '/dsh' for sub-path deployments), published
  * as a global by the host plugin's tapIndex injection (index.js). All panel
@@ -601,6 +653,11 @@ function apply(ctx) {
     logout: async () => (await fetch(BASE + '/login/logout', { method: 'POST' })).json(),
   }
   const injected = () => ({ api })
+  ctx.effect(() => {
+    const removeStyle = injectNavIconStyle()
+    const stopMarker = markSettingsNav(() => t('nav'))
+    return () => { stopMarker(); removeStyle() }
+  }, 'dsh-auth-gateway: settings nav icon')
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 20,
     label: () => t('nav'),

@@ -3,3 +3,8 @@ node_modules/
 graphify-out/
 otp-master.key
 docs/local/
+
+# Playwright browser cache (never commit downloaded browsers)
+ms-playwright/
+playwright-report/
+test-results/

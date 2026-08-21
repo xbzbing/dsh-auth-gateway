@@ -125,6 +125,11 @@ test('component takes no ctx prop and never fetches directly', () => {
   // a rename miss here silently shows OTP as disabled.
   assert.ok(source.includes("config?.['dsh-auth-gateway']"),
     'panel must read the dsh-auth-gateway config key')
+  // All panel API calls and redirects must go through the basePath global
+  // injected by index.js — root-absolute paths would break sub-path
+  // (reverse-proxy) deployments.
+  assert.ok(source.includes('__dshAuthGatewayBasePath__'),
+    'panel must derive its API base from the injected basePath global')
 })
 
 test('client bundle keeps react and slots as external requires (not inlined)', () => {

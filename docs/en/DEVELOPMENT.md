@@ -9,6 +9,7 @@ host (zero build, node:crypto / node:http)
 ├── index.js          # Cordis plugin entry: gateway lifecycle, tapIndex injection (randomUUID + authenticated LAN trust), security-event & login-audit wiring, first-run initial password
 ├── lib/gateway.js    # Auth gateway: HTTP/WS interception & forwarding, auth state machine, three-layer brute-force protection, replay protection, basePath routing/redirect/forward stripping, login-audit events, static-asset pass-through
 ├── lib/gateway-otp.js # OTP route handlers (/otp/setup|enable|verify-setup|verify|verify-backup|disable, split out of gateway.js)
+├── lib/forward.js    # HTTP/WS forwarding plumbing (loopback Host/Origin rewrite, upgrade piping, lanAddresses)
 ├── lib/auth.js       # Session table & cookies: in-memory 256-bit tokens, onboarding/OTP state flags, revocation on password change
 ├── lib/page-shell.js # Shared page scaffolding (base CSS, HTML skeleton, script head: ERRORS + post)
 ├── lib/errors.js     # Master page-error dictionary (zh/en; errorsFor selects per page with overrides)

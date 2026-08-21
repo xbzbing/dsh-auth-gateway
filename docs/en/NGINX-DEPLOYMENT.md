@@ -214,6 +214,8 @@ server {
 
 > **About the root-path resources referenced by dsh pages**: the HTML dsh generates references **root-path** absolute URLs like `/assets/...`, `/api/...`, `/plugins/...` (which do not carry the `/dsh/` prefix). These paths must be forwarded by nginx to the gateway (see the `location ~ ^/(api|plugins|sidebar|_dsh)` blocks above); the gateway's `basePath` logic handles them correctly.
 >
+> **The plugin's Auth Settings panel needs no extra forwarding**: the panel's API calls and redirects are driven by a basePath global injected into the page by the plugin (the `/dsh/` prefix is added automatically) and reach the gateway through the `location /dsh/` block above — they do not depend on the root-path forwarding list.
+>
 > **When other apps on the same domain conflict**: if other apps on that domain already use `/api/`, `/assets/` and other paths, put the dsh root-path forward blocks under **more specific matching** (e.g. distinguish prefixes with `location ~ ^/(api|plugins|sidebar|_dsh)`), or switch to a dedicated subdomain (e.g. `dsh.example.com`) root-path deployment to avoid conflicts with existing apps.
 
 ### WebSocket and SSE sub-paths

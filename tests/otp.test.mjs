@@ -590,6 +590,46 @@ test('OTP disable succeeds with an unused backup code', async () => {
   await stopGateway()
 })
 
+test('OTP disable audits failures and counts wrong-password guesses toward the lockout', async () => {
+  // Mirrors /login/change: a held session must not enable unlimited
+  // old-password guessing via the disable endpoint either.
+  await startGateway({ maxLoginFailures: 3, lockMinutes: 5 }, {})
+  const events = []
+  gateway.onAuthEvent = (payload) => events.push(payload)
+  const cookie = await loginCookie()
+
+  const first = await request('/otp/disable', { method: 'POST', cookie, body: { password: 'WrongPass1!' } })
+  assert.equal(first.status, 401)
+  assert.equal(JSON.parse(first.body).error, 'invalid-password')
+  const second = await request('/otp/disable', { method: 'POST', cookie, body: { password: 'WrongPass1!' } })
+  assert.equal(second.status, 401)
+
+  // Third failure trips the shared lockout → 429 like /login/change.
+  const third = await request('/otp/disable', { method: 'POST', cookie, body: { password: 'WrongPass1!' } })
+  assert.equal(third.status, 429)
+  assert.equal(JSON.parse(third.body).error, 'too-many-attempts')
+
+  const fails = events.filter((e) => e.kind === 'otp-disable-failed')
+  assert.equal(fails.filter((e) => e.reason === 'invalid-password').length, 2, 'each wrong password is audited')
+  assert.ok(fails.some((e) => e.reason === 'too-many-attempts'), 'the lockout trip is audited')
+  await stopGateway()
+})
+
+test('OTP disable emits an otp-disabled audit event on success', async () => {
+  await startGateway({}, { otpEnabled: true })
+  const events = []
+  gateway.onAuthEvent = (payload) => events.push(payload)
+  const cookie = await loginCookie()
+  await enableOTP({ backupCodeCount: 3 })
+  await verifySession(cookie)
+
+  const code = generateTOTP(getOTPSecret(), { timestamp: Date.now() + 30000 })
+  const res = await request('/otp/disable', { method: 'POST', cookie, body: { otp: code } })
+  assert.equal(res.status, 200)
+  assert.ok(events.some((e) => e.kind === 'otp-disabled'), 'success must leave an audit trail')
+  await stopGateway()
+})
+
 test('login accepts a backup code when 2FA is active (lost authenticator)', async () => {
   await startGateway({}, { otpEnabled: true })
   await setPassword('Test1234!')

@@ -212,6 +212,8 @@ server {
 
 > **关于 dsh 页面内引用的根路径资源**：dsh 生成的 HTML 会引用 `/assets/...`、`/api/...`、`/plugins/...` 等**根路径**绝对 URL（不走 `/dsh/` 前缀）。这些路径必须由 nginx 转发到网关（见上面的 `location ~ ^/(api|plugins|sidebar|_dsh)` 等块），网关的 `basePath` 逻辑会正确处理它们。
 >
+> **插件的「认证设置」面板无需额外转发**：面板的 API 请求与跳转由插件在页面注入的 basePath 全局量驱动（自动带 `/dsh/` 前缀），经上面的 `location /dsh/` 块即可到达网关，不依赖根路径转发清单。
+>
 > **与同域其他应用冲突时**：如果该域名下还有其他应用占用 `/api/`、`/assets/` 等路径，需要把 dsh 的根路径转发块放到**更具体的匹配**（如 `location ~ ^/(api|plugins|sidebar|_dsh)` 用前缀区分），或改用独立子域名（如 `dsh.example.com`）根路径部署，避免与现有应用冲突。
 
 ### WebSocket 与 SSE 子路径

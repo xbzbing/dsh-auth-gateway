@@ -46,6 +46,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 ## 约定
 
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
+- **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
 - **回环钉扎是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。
 - **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。

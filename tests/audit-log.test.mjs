@@ -274,8 +274,8 @@ test('a prune failure during rotation is caught — the event is never lost', as
     utimesSync(live, new Date(at(2025, 8, 20, 9)), new Date(at(2025, 8, 20, 9)))
 
     // Pre-create an audit.log.<date> as a DIRECTORY with a date OLD enough
-    // that prune will try to unlink it — unlink on a directory gives EISDIR
-    // (not ENOENT), so prune throws.
+    // that prune will try to unlink it — unlink on a directory fails with
+    // EISDIR (Linux) / EPERM (macOS), either way not ENOENT, so prune throws.
     mkdirSync(join(dir, `${AUDIT_LOG_NAME}.2024-01-01`), { recursive: true })
 
     const errors = []
@@ -292,7 +292,8 @@ test('a prune failure during rotation is caught — the event is never lost', as
     assert.equal(JSON.parse(lines[0]).kind, 'logout')
     // The prune failure was reported to onError.
     assert.ok(errors.length >= 1, 'prune failure reaches onError')
-    assert.equal(errors[0].code, 'EISDIR')
+    assert.ok(['EISDIR', 'EPERM'].includes(errors[0].code),
+      `unlink-on-directory errno is platform dependent, got ${errors[0].code}`)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

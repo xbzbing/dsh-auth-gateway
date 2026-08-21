@@ -29,10 +29,14 @@ export async function apply(ctx, config) {
   const gateway = createGateway(config)
 
   // Browser-side compatibility for authenticated LAN pages. The randomUUID
-  // polyfill can run at the start of <head>. The trusted-loopback bootstrap
-  // must run later: after dsh creates its queue-mode __ModuleLoader__, but
-  // before parser-preloaded client bundles register their factories.
+  // polyfill can run at the start of <head>; it also publishes the gateway's
+  // basePath ('' for root) as a global so the client settings panel builds
+  // API paths and redirects that survive sub-path (reverse-proxy) deployments.
+  // The trusted-loopback bootstrap must run later: after dsh creates its
+  // queue-mode __ModuleLoader__, but before parser-preloaded client bundles
+  // register their factories.
   const randomUUIDScript = '<script>'
+    + 'window.__dshAuthGatewayBasePath__=' + JSON.stringify(gateway.basePath) + ';'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'
     + 'crypto.randomUUID = function () {'
     + 'var b = crypto.getRandomValues(new Uint8Array(16));'
@@ -175,6 +179,8 @@ export async function apply(ctx, config) {
       'logout': '登出',
       'password-change': '修改密码成功',
       'password-change-failed': '修改密码失败',
+      'otp-disabled': '禁用 OTP 成功',
+      'otp-disable-failed': '禁用 OTP 失败',
     }[kind] ?? kind
     ctx.logger.info('[dsh-auth-gateway] %s ip=%s%s', label, ip, detail)
   }

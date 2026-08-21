@@ -393,7 +393,7 @@ window.__ModuleLoader__.load({
 		        setNewPassword("");
 		        setConfirmPassword("");
 		        setTimeout(() => {
-		          location.href = "/login";
+		          location.href = BASE + "/login";
 		        }, 1500);
 		      } else setStatus({ type: "error", message: t("error.changePassword", { message: data.error || t("error.unknown") }) });
 		    } catch (err) {
@@ -405,7 +405,7 @@ window.__ModuleLoader__.load({
 		  async function logout() {
 		    try {
 		      await api.logout();
-		      location.href = "/login";
+		      location.href = BASE + "/login";
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.logout", { message: err.message }) });
 		    }
@@ -654,7 +654,7 @@ window.__ModuleLoader__.load({
 		          }, children: status.message })
 		        ] }) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => {
-		          location.href = "/login";
+		          location.href = BASE + "/login";
 		        }, children: t("dialog.doneBtn") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: t("dialog.cancel") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? t("dialog.verifying") : t("dialog.verify") })
@@ -664,28 +664,29 @@ window.__ModuleLoader__.load({
 		  ] });
 		}
 		var inject = ["slots", "locale"];
+		var BASE = typeof window !== "undefined" && window.__dshAuthGatewayBasePath__ || "";
 		function apply(ctx) {
 		  ctx.locale.register(NS, { zh, en });
 		  const t = ctx.locale.bind(NS);
 		  const api = {
-		    getSettings: async () => (await fetch("/login-api/settings")).json(),
-		    enableOtp: async () => (await fetch("/otp/enable", { method: "POST" })).json(),
-		    verifyOtpSetup: async (otp) => (await fetch("/otp/verify-setup", {
+		    getSettings: async () => (await fetch(BASE + "/login-api/settings")).json(),
+		    enableOtp: async () => (await fetch(BASE + "/otp/enable", { method: "POST" })).json(),
+		    verifyOtpSetup: async (otp) => (await fetch(BASE + "/otp/verify-setup", {
 		      method: "POST",
 		      headers: { "content-type": "application/json" },
 		      body: JSON.stringify({ otp })
 		    })).json(),
-		    disableOtp: async (payload) => (await fetch("/otp/disable", {
+		    disableOtp: async (payload) => (await fetch(BASE + "/otp/disable", {
 		      method: "POST",
 		      headers: { "content-type": "application/json" },
 		      body: JSON.stringify(payload)
 		    })).json(),
-		    changePassword: async (oldPassword, newPassword) => (await fetch("/login/change", {
+		    changePassword: async (oldPassword, newPassword) => (await fetch(BASE + "/login/change", {
 		      method: "POST",
 		      headers: { "content-type": "application/json" },
 		      body: JSON.stringify({ oldPassword, newPassword })
 		    })).json(),
-		    logout: async () => (await fetch("/login/logout", { method: "POST" })).json()
+		    logout: async () => (await fetch(BASE + "/login/logout", { method: "POST" })).json()
 		  };
 		  const injected = () => ({ api });
 		  ctx.slots.inject("settings.section", () => ctx.slots.register({

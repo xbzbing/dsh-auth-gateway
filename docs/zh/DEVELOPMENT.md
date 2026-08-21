@@ -9,6 +9,7 @@ host（零构建，node:crypto / node:http）
 ├── index.js          # Cordis 插件入口：gateway 生命周期、tapIndex 注入（randomUUID + authenticated LAN trust）、安全事件与登录审计接线、首次部署初始密码
 ├── lib/gateway.js    # 认证网关：HTTP/WS 拦截与转发、认证状态机、防爆破三层、防重放、basePath 路由/跳转/转发剥离、登录审计事件、静态资产免认证
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
+├── lib/forward.js    # HTTP/WS 转发管道（Host/Origin 回环改写、upgrade 双向管道、lanAddresses）
 ├── lib/auth.js       # 会话表与 Cookie：内存 256-bit token、onboarding/OTP 状态标记、改密吊销
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）
 ├── lib/errors.js     # 页面错误文案总字典（中英双语，errorsFor 按页选取 + 覆盖）

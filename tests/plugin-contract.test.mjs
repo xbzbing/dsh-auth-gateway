@@ -73,6 +73,8 @@ window.__ModuleLoader__={
     assert.ok(polyfillAt < loaderAt, 'the randomUUID polyfill remains first in head')
     assert.ok(loaderAt < trustAt, 'trusted bootstrap runs after the queue loader exists')
     assert.ok(trustAt < preloadAt, 'trusted bootstrap runs before parser-preloaded bundles')
+    assert.ok(transformed.includes('__dshAuthGatewayBasePath__'),
+      'the transform publishes the gateway basePath global for the client panel')
 
     const inlineScripts = [...transformed.matchAll(/<script>([\s\S]*?)<\/script>/g)]
       .map((match) => match[1])
@@ -196,7 +198,19 @@ window.__ModuleLoader__={
   }
 })
 
-async function captureIndexTransform() {
+test('index transform publishes the configured basePath for sub-path deployments', async () => {
+  const capture = await captureIndexTransform({ basePath: '/dsh' })
+  try {
+    const html = '<!doctype html><html><head><title>x</title></head><body></body></html>'
+    const transformed = capture.transform(html)
+    assert.ok(transformed.includes('window.__dshAuthGatewayBasePath__="/dsh"'),
+      'the basePath global must carry the configured sub-path prefix')
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+async function captureIndexTransform(extraConfig = {}) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-contract-'))
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -236,6 +250,7 @@ async function captureIndexTransform() {
       listenPort,
       upstreamHost: '127.0.0.1',
       upstreamPort: 9,
+      ...extraConfig,
     })
   } catch (error) {
     await cleanup()

@@ -352,14 +352,14 @@ function UserSettingsPanel({ api, t }) {
       if (data.ok) {
         setStatus({ type: 'success', message: t('status.passwordChanged') })
         setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('')
-        setTimeout(() => { location.href = '/login' }, 1500)
+        setTimeout(() => { location.href = BASE + '/login' }, 1500)
       } else setStatus({ type: 'error', message: t('error.changePassword', { message: data.error || t('error.unknown') }) })
     } catch (err) { setStatus({ type: 'error', message: t('error.changePassword', { message: err.message }) }) }
     finally { setChangingPassword(false) }
   }
 
   async function logout() {
-    try { await api.logout(); location.href = '/login' }
+    try { await api.logout(); location.href = BASE + '/login' }
     catch (err) { setStatus({ type: 'error', message: t('error.logout', { message: err.message }) }) }
   }
 
@@ -547,7 +547,7 @@ function UserSettingsPanel({ api, t }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '0 24px 24px', marginTop: '20px' }}>
               {setupDone ? (
-                <Button variant="primary" onClick={() => { location.href = '/login' }}>{t('dialog.doneBtn')}</Button>
+                <Button variant="primary" onClick={() => { location.href = BASE + '/login' }}>{t('dialog.doneBtn')}</Button>
               ) : (
                 <>
                   <Button variant="outline" onClick={closeQRModal}>{t('dialog.cancel')}</Button>
@@ -567,6 +567,15 @@ function UserSettingsPanel({ api, t }) {
 /** Services this plugin's apply() actually uses (ctx.slots, ctx.locale). */
 const inject = ['slots', 'locale']
 
+/**
+ * Gateway basePath ('' for root, '/dsh' for sub-path deployments), published
+ * as a global by the host plugin's tapIndex injection (index.js). All panel
+ * API calls and redirects must go through it so they survive reverse-proxy
+ * sub-path deployments — root-absolute paths would bypass the /dsh/ prefix
+ * and never reach the gateway.
+ */
+const BASE = (typeof window !== 'undefined' && window.__dshAuthGatewayBasePath__) || ''
+
 function apply(ctx) {
   // Dictionaries for the settings section: registered under our own
   // namespace so the slot's `t` seat follows the dsh UI language.
@@ -575,21 +584,21 @@ function apply(ctx) {
   // Gateway access lives in the apply world; the component only sees the
   // api object through the slot's inject face (no direct fetch in props).
   const api = {
-    getSettings: async () => (await fetch('/login-api/settings')).json(),
-    enableOtp: async () => (await fetch('/otp/enable', { method: 'POST' })).json(),
-    verifyOtpSetup: async (otp) => (await fetch('/otp/verify-setup', {
+    getSettings: async () => (await fetch(BASE + '/login-api/settings')).json(),
+    enableOtp: async () => (await fetch(BASE + '/otp/enable', { method: 'POST' })).json(),
+    verifyOtpSetup: async (otp) => (await fetch(BASE + '/otp/verify-setup', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ otp }),
     })).json(),
-    disableOtp: async (payload) => (await fetch('/otp/disable', {
+    disableOtp: async (payload) => (await fetch(BASE + '/otp/disable', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     })).json(),
-    changePassword: async (oldPassword, newPassword) => (await fetch('/login/change', {
+    changePassword: async (oldPassword, newPassword) => (await fetch(BASE + '/login/change', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ oldPassword, newPassword }),
     })).json(),
-    logout: async () => (await fetch('/login/logout', { method: 'POST' })).json(),
+    logout: async () => (await fetch(BASE + '/login/logout', { method: 'POST' })).json(),
   }
   const injected = () => ({ api })
   ctx.slots.inject('settings.section', () => ctx.slots.register({

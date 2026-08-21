@@ -13,6 +13,7 @@ DST="${DSH_PROFILE_DIR:-$HOME/.dsh/profiles/web}/node_modules/dsh-auth-gateway"
 
 JS_FILES=(
   lib/config.js
+  lib/forward.js
   lib/gateway.js
   lib/gateway-otp.js
   lib/login-page.js

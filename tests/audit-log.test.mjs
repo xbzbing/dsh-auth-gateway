@@ -360,6 +360,68 @@ test('a failed rotation retries on the next append instead of pinning currentDay
   }
 })
 
+test('a failed rotation spanning multiple days archives under the original content day', async () => {
+  const dir = tempDir()
+  try {
+    // Day-1 live file; injected link fails 3 times then delegates to fsLink.
+    const live = join(dir, AUDIT_LOG_NAME)
+    writeFileSync(live, '{"ts":"day1","kind":"login-success","ip":"10.0.0.7"}\n')
+    utimesSync(live, new Date(at(2025, 8, 20, 9)), new Date(at(2025, 8, 20, 9)))
+
+    let failLinks = 3
+    const link = (from, to) => {
+      if (failLinks > 0) {
+        failLinks -= 1
+        return Promise.resolve().then(() => {
+          throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+        })
+      }
+      return fsLink(from, to)
+    }
+
+    const errors = []
+    let now = at(2025, 8, 21, 8)
+    const w = new AuditLogWriter({ dir, now: () => now, onError: (err) => errors.push(err), link })
+
+    // Day 2 — two failed rotations.
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    assert.equal(errors.length, 1)
+    now = at(2025, 8, 21, 9)
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    utimesSync(live, new Date(now), new Date(now))
+    assert.equal(errors.length, 2)
+
+    // Day 3 — still failing.
+    now = at(2025, 8, 22, 8)
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    assert.equal(errors.length, 3)
+    utimesSync(live, new Date(now), new Date(now))
+
+    // Day 4 — rotation finally succeeds: everything archives under the
+    // ORIGINAL content day (8/20), not the recovery day (8/23).
+    now = at(2025, 8, 23, 8)
+    await w.append({ kind: 'login-success', ip: '10.0.0.7' })
+    assert.ok(existsSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-20`)),
+      'the retry archives under the remembered content day, not the recovery day')
+    const archived = readFileSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-20`), 'utf8')
+      .trim().split('\n').map((l) => JSON.parse(l).kind)
+    assert.deepEqual(archived,
+      ['login-success', 'logout', 'logout', 'logout'],
+      'all failure-window events ride along in the archive')
+
+    // The following day rotates normally again.
+    now = at(2025, 8, 24, 8)
+    await w.append({ kind: 'logout', ip: '10.0.0.7' })
+    assert.ok(existsSync(join(dir, `${AUDIT_LOG_NAME}.2025-08-23`)),
+      'the next midnight rollover works after recovery')
+    const liveLines = readFileSync(live, 'utf8').trim().split('\n')
+    assert.equal(liveLines.length, 1)
+    assert.equal(JSON.parse(liveLines[0]).kind, 'logout')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('rotation failures stay deduped across successful appends; recovery fires once rotation succeeds', async () => {
   const dir = tempDir()
   try {

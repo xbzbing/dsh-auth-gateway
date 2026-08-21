@@ -1,7 +1,7 @@
 # dsh-auth-gateway
 
 <p align="center">
-  <a href="docs/assets/architecture-en.html"><img src="docs/assets/architecture-en.png" alt="dsh-auth-gateway architecture" width="720"></a>
+  <img src="docs/assets/architecture-en.png" alt="dsh-auth-gateway architecture" width="720">
 </p>
 
 <p align="center">

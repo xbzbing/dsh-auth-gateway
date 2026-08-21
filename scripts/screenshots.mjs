@@ -13,9 +13,8 @@
  */
 
 import { chromium } from 'playwright'
-import os from 'node:os'
 import path from 'node:path'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, existsSync, readdirSync } from 'node:fs'
 import { generateTOTP } from '../lib/totp.js'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8002'
@@ -24,13 +23,41 @@ const INITIAL = process.env.INITIAL_PASSWORD
 const OUT = new URL('../docs/assets/', import.meta.url).pathname
 mkdirSync(OUT, { recursive: true })
 
-const CACHED_CHROMIUM = path.join(
-  os.homedir(),
-  'Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/'
-  + 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-)
+/**
+ * Chromium resolution order (first hit wins):
+ *   1. CHROMIUM_PATH env — explicit executable
+ *   2. playwright's own registry (ms-playwright cache, chromium-* dirs)
+ *   3. system chromium binaries on PATH (/usr/bin/chromium etc.)
+ */
+function resolveChromium() {
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH
+  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH
+    || path.join(process.env.HOME ?? '', '.cache', 'ms-playwright')
+  if (existsSync(cache)) {
+    for (const dir of fs.readdirSync(cache).sort().reverse()) {
+      if (!dir.startsWith('chromium-')) continue
+      for (const rel of ['chrome-linux64/chrome', 'chrome-linux/chrome']) {
+        const exe = path.join(cache, dir, rel)
+        if (existsSync(exe)) return exe
+      }
+    }
+  }
+  for (const name of ['chromium', 'chromium-browser', 'google-chrome']) {
+    const exe = `/usr/bin/${name}`
+    if (existsSync(exe)) return exe
+  }
+  return undefined
+}
 
-const browser = await chromium.launch({ executablePath: CACHED_CHROMIUM, headless: true })
+const executablePath = resolveChromium()
+if (!executablePath) {
+  console.error('no chromium found: set CHROMIUM_PATH, run `npx playwright install chromium`,'
+    + ' or install a system chromium')
+  process.exit(2)
+}
+console.log('chromium:', executablePath)
+
+const browser = await chromium.launch({ executablePath, headless: true })
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } })
 const page = await ctx.newPage()
 

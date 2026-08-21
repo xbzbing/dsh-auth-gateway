@@ -8,3 +8,4 @@ docs/local/
 ms-playwright/
 playwright-report/
 test-results/
+.dsh-vision-toolkit/

@@ -11,6 +11,7 @@ host（零构建，node:crypto / node:http）
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
 ├── lib/forward.js    # HTTP/WS 转发管道（Host/Origin 回环改写、upgrade 双向管道、lanAddresses）
 ├── lib/auth.js       # 会话表与 Cookie：内存 256-bit token、onboarding/OTP 状态标记、改密吊销
+├── lib/audit-log.js  # 审计日志文件 sink（JSONL，$DSH_HOME/auth-gate/audit.log，按天轮转、保留 90 天）
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）
 ├── lib/errors.js     # 页面错误文案总字典（中英双语，errorsFor 按页选取 + 覆盖）
 ├── lib/locale.js     # 页面语言解析（dsh 偏好 > Accept-Language > zh）
@@ -37,7 +38,7 @@ scripts / tests
 ├── scripts/verify.sh         # curl 门禁验证（401/302/WS 拒绝/锁定）
 ├── scripts/reset.mjs         # dsh-auth-gateway-reset：仅删 password.json（双语输出）
 ├── scripts/uninstall.mjs     # dsh-auth-gateway-uninstall：删整个 auth-gate/（双语输出）
-└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract
+└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract / audit-log
 ```
 
 设计要点：
@@ -47,7 +48,7 @@ scripts / tests
 - **basePath 子路径部署**：网关路由先剥离 `basePath` 前缀（带边界检查，`/dsh2/foo` 不会被误当作 `/dsh` 前缀），302 跳转统一拼接前缀，转发上游时再剥离；PWA 元数据（`manifest.webmanifest` / `favicon.svg`）与静态资产（`/assets/*`）免认证放行（浏览器子资源请求，无敏感信息）；
 - **客户端 trust 时序**：index transform 在 queue-mode `__ModuleLoader__` 建立后、parser preload 前插入 bootstrap；它同时包装 queue/live 注册，并在 `dsh-client-connection` 调用 `ctx.provide('connection', handle)` 前设置 `handle.isLoopback = true`，避免 Settings 过早绑定 memory scope。此处依赖 DSH 的内部 loader 协议，结构不匹配时只记录一次告警；
 - **页面双语**：`lib/locale.js` 解析渲染语言（`$DSH_HOME/settings.yaml` 的 `locale.preference` > 请求 `Accept-Language` > zh），页面文案按语言选取；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
-- **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据）；
+- **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gate/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gate/otp-master.key`，见 SECURITY.md）。
 
 ## 构建

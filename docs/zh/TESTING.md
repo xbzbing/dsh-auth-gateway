@@ -8,7 +8,7 @@
 npm test
 ```
 
-131 项测试（node:test），覆盖：
+测试以 node:test 编写，覆盖：
 
 | 文件 | 覆盖 |
 |---|---|
@@ -21,6 +21,7 @@ npm test
 | `tests/plugin-contract.test.mjs` | Cordis 插件契约（loader normalize、Config 校验） |
 | `tests/patch-ports.test.mjs` | bundle patch 端口表达式推导（`--port` 跟随） |
 | `tests/client-contract.test.mjs` | client bundle 契约（loader 注册、inject 对齐、api inject face、无 ctx、external） |
+| `tests/audit-log.test.mjs` | 审计日志文件 sink（JSONL 追加、按天轮转、同日重启接管、重启接管陈旧文件、90 天清理、归档名冲突后缀、写失败隔离、flush 排空、权限 0600/0700 与启动收紧） |
 
 ## 构建一致性
 

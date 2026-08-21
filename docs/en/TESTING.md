@@ -8,7 +8,7 @@
 npm test
 ```
 
-131 tests (node:test), covering:
+Written with node:test, covering:
 
 | File | Coverage |
 |---|---|
@@ -21,6 +21,7 @@ npm test
 | `tests/plugin-contract.test.mjs` | Cordis plugin contract (loader normalize, Config validation) |
 | `tests/patch-ports.test.mjs` | Bundle-patch port expression derivation (`--port` following) |
 | `tests/client-contract.test.mjs` | Client bundle contract (loader registration, inject alignment, api inject face, no ctx, externals) |
+| `tests/audit-log.test.mjs` | Audit-log file sink (JSONL appends, daily rotation, stale-file adoption after restart, 90-day pruning, archive-name collision suffixes, write-failure isolation, 0600/0700 modes) |
 
 ## Build consistency
 

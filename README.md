@@ -36,7 +36,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gate/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
 - **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
 - **子路径部署（basePath）**：支持挂在反向代理子路径下（如 `https://example.com/dsh/`）。配置 `basePath: /dsh` 后，网关自动处理路由剥离、302 跳转拼接与上游转发剥离；PWA 元数据（manifest/favicon）和静态资源（`/assets/*`）免认证放行。**注意**：DSH 是根路径应用，前端 JS 引用 `/assets/...`、`/api/...`、`/plugins/...` 等绝对 URL——子路径部署时这些路径不会自动带前缀，需要 nginx 额外转发。**推荐子域名部署**（`dsh.example.com`，根路径，零冲突），详见 [docs/zh/NGINX-DEPLOYMENT.md](docs/zh/NGINX-DEPLOYMENT.md)；
-- **登录审计**：登录成功 / 失败 / 登出 / 改密均输出审计日志（`ctx.logger.info`，含来源 IP 与失败原因，不记录任何凭据），配合暴力破解告警形成完整可审计闭环；
+- **登录审计**：登录成功 / 失败 / 登出 / 改密与暴力破解告警（锁定/限流）均输出审计日志（`ctx.logger.info`/`warn`，含来源 IP 与失败原因，不记录任何凭据），并**持久化落盘** `$DSH_HOME/auth-gate/audit.log`（JSONL，按天轮转、保留 90 天），形成完整可审计闭环；
 - **认证后的 LAN 设置支持**：在 DSH 客户端模块初始化前，将经过网关访问的浏览器连接标记为 loopback-trusted，使 Models、Credentials、语言/主题偏好和其他 host-backed settings 可读取并持久化；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
@@ -125,7 +125,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 ## 验证概览
 
-- 单元与契约测试：`npm test`（131 项，含 basePath 路由/重定向/转发、PWA 元数据放行、登录审计、OTP 安全回归、client 契约、patch 端口推导）
+- 单元与契约测试：`npm test`（覆盖 basePath 路由/重定向/转发、PWA 元数据放行、登录审计、审计日志轮转/清理、OTP 安全回归、client 契约、patch 端口推导）
 - 部署流水线：`npm run deploy`（语法检查 → 全量测试 → 同步到 DSH 安装目录 → 安装后验证）
 - 实机端到端：`node scripts/e2e.mjs`（Playwright，登录/2FA/改密全流程）
 - 门禁验证：`./scripts/verify.sh`（curl，401/302/WS 拒绝/锁定）

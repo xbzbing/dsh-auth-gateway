@@ -13,6 +13,7 @@ lib/
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
   forward.js    HTTP/WS 转发管道：Host/Origin 回环改写、upgrade 双向管道、lanAddresses
   auth.js       内存会话表（256-bit token）+ Cookie 编解码
+  audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gate/audit.log，按天轮转、保留 90 天）
   locale.js     页面语言解析（settings.yaml preference > Accept-Language > zh）
   errors.js     页面错误文案总字典（中英；errorsFor 按页选取 + 场景覆盖）
   store.js      密码存储（异步 scrypt，$DSH_HOME/auth-gate/password.json）
@@ -25,7 +26,7 @@ lib/
 client/         设置面板（slot settings.section）；src/index.jsx 源码，index.js+.map 为入库构建产物
 scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；smoke.mjs 冒烟；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图
-tests/          node:test 单测（9 个文件，134 项）
+tests/          node:test 单测（文件清单见 package.json 的 test script）
 docs/           zh/ 与 en/ 双语文档目录
 ```
 
@@ -50,7 +51,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。
 - **客户端面板经注入的 basePath 全局量构造 API 路径**（`window.__dshAuthGatewayBasePath__`，由 index.js tapIndex 写入）：面板内禁止根绝对路径 fetch/跳转，否则子路径部署失效。
 - **登录失败只返回统一错误码** `invalid-credentials`（防凭据枚举）；受保护流程（OTP 绑定/禁用）才允许细分错误码。页面文案一律走 lib/errors.js 字典，不硬编码。
-- **安全状态变更必须留审计**：登录/登出/改密/OTP 启停经 `onAuthEvent` 输出（只含 kind/ip/reason，绝不带凭据）；错误密码计入与登录共享的按地址锁定。
+- **安全状态变更必须留审计**：登录/登出/改密/OTP 启停经 `onAuthEvent` 输出（只含 kind/ip/reason，绝不带凭据），并与暴力破解告警（`onSecurityEvent`）一同落盘 `audit.log`（lib/audit-log.js）；错误密码计入与登录共享的按地址锁定。
 - **凭据落盘模式**：原子写（temp + rename）、文件 0600 / 目录 0700；scrypt 只用异步 API；OTP secret 先 AES-256-GCM 密封再写盘，主密钥缺失时显式报错、绝不静默重生成。
 - **CLI 脚本输出中英双语**（reset/uninstall 及首次部署控制台提示），保持既有格式风格。
 

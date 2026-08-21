@@ -11,6 +11,7 @@ host (zero build, node:crypto / node:http)
 ├── lib/gateway-otp.js # OTP route handlers (/otp/setup|enable|verify-setup|verify|verify-backup|disable, split out of gateway.js)
 ├── lib/forward.js    # HTTP/WS forwarding plumbing (loopback Host/Origin rewrite, upgrade piping, lanAddresses)
 ├── lib/auth.js       # Session table & cookies: in-memory 256-bit tokens, onboarding/OTP state flags, revocation on password change
+├── lib/audit-log.js  # Audit-log file sink (JSONL, $DSH_HOME/auth-gate/audit.log, daily rotation, 90-day retention)
 ├── lib/page-shell.js # Shared page scaffolding (base CSS, HTML skeleton, script head: ERRORS + post)
 ├── lib/errors.js     # Master page-error dictionary (zh/en; errorsFor selects per page with overrides)
 ├── lib/locale.js     # Page language resolution (dsh preference > Accept-Language > zh)
@@ -37,7 +38,7 @@ scripts / tests
 ├── scripts/verify.sh         # curl gate verification (401/302/WS rejection/lockout)
 ├── scripts/reset.mjs         # dsh-auth-gateway-reset: deletes only password.json (bilingual output)
 ├── scripts/uninstall.mjs     # dsh-auth-gateway-uninstall: deletes the whole auth-gate/ (bilingual output)
-└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract
+└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract / audit-log
 ```
 
 Design points:
@@ -47,7 +48,7 @@ Design points:
 - **basePath sub-path deployment**: the gateway strips the `basePath` prefix before routing (with a boundary check, so `/dsh2/foo` is not mistaken for the `/dsh` prefix), prepends it to 302 redirects, and strips it again when forwarding upstream; PWA metadata (`manifest.webmanifest` / `favicon.svg`) and static assets (`/assets/*`) pass through without authentication (browser sub-resource requests, no sensitive data);
 - **Client trust timing**: the index transform inserts the bootstrap after the queue-mode `__ModuleLoader__` is created and before parser-preloaded bundles register; it wraps both queue/live registrations and sets `handle.isLoopback = true` before `dsh-client-connection` calls `ctx.provide('connection', handle)`, preventing Settings from binding to the memory scope too early. This depends on DSH's internal loader protocol; on a structural mismatch it logs a single warning;
 - **Bilingual pages**: `lib/locale.js` resolves the render language (`locale.preference` in `$DSH_HOME/settings.yaml` > the request's `Accept-Language` > zh) and page copy is selected by language; error messages are maintained in one place, `lib/errors.js` (login failures return the single `invalid-credentials` code to prevent credential enumeration);
-- **Login audit**: login success/failure/logout/password change go through the `gateway.onAuthEvent` callback to the audit log (`ctx.logger.info`, only event kind + IP + reason — never credentials);
+- **Login audit**: login success/failure/logout/password change go through the `gateway.onAuthEvent` callback to the audit log (`ctx.logger.info`, only event kind + IP + reason — never credentials) and, together with brute-force alerts (`onSecurityEvent`), are appended by lib/audit-log.js to `$DSH_HOME/auth-gate/audit.log` (JSONL, daily rotation, 90-day retention; write failures only warn and never touch the auth flow) — the current dsh runtime keeps `ctx.logger` records in an in-memory buffer only, so this file is the single persistent audit record;
 - **Storage**: atomic writes (temp + rename), 0600/0700, same pattern as the password; the OTP secret is stored AES-256-GCM encrypted (master key from `DSH_AUTH_GATEWAY_MASTER_KEY` or `auth-gate/otp-master.key`, see SECURITY.md).
 
 ## Build

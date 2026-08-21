@@ -59,7 +59,7 @@ When the key comes from an environment variable, it should live on an encrypted 
 | Source | Failure lockout (5 failures / 5 min) | Password and OTP failures count toward the same lockout |
 | Source | Independent OTP window (10/min) | OTP/backup-code verification |
 
-`x-forwarded-for` never counts toward source determination (anti-spoofing). Lockout triggers and exhausted rate-limit windows log via `ctx.logger.warn` and broadcast a `dsh-auth-gateway/brute-force` event (`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`, JSON payload, once per lockout/window).
+`x-forwarded-for` never counts toward source determination (anti-spoofing). Lockout triggers and exhausted rate-limit windows log via `ctx.logger.warn` and broadcast a `dsh-auth-gateway/brute-force` event (`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`, JSON payload, once per lockout/window). Auth events and brute-force alerts are also **persisted** to `$DSH_HOME/auth-gate/audit.log` (JSONL, one `{ts, kind, ip, reason?, ...}` object per line, file mode 0600): the live file rolls over per local calendar day into `audit.log.<YYYY-MM-DD>`, archives are kept for 90 days and then deleted; on startup the existing file's mode is tightened and expired archives pruned, and graceful shutdown drains in-flight writes (only a hard crash can lose the single line being written); write failures degrade to a warning log with dedupe (the first failure reports immediately, a sustained failure reminds at most every 5 minutes with a silenced count attached, and recovery logs an info) and never affect the auth flow.
 
 ### Forwarding and the fence
 

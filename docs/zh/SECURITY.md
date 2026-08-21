@@ -59,7 +59,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 | 来源 | 失败锁定（5 次/5 分钟） | 密码失败与 OTP 失败计入同一锁定 |
 | 来源 | OTP 独立窗口（10 次/分钟） | OTP/备份码验证 |
 
-`x-forwarded-for` 不参与来源判定（防止伪造）；锁触发与限流耗尽时输出 `ctx.logger.warn` 并广播 `dsh-auth-gateway/brute-force` 事件（`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`，JSON 负载，每个锁定/窗口一次）。
+`x-forwarded-for` 不参与来源判定（防止伪造）；锁触发与限流耗尽时输出 `ctx.logger.warn` 并广播 `dsh-auth-gateway/brute-force` 事件（`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`，JSON 负载，每个锁定/窗口一次）。认证事件与暴力破解告警同时**持久化落盘** `$DSH_HOME/auth-gate/audit.log`（JSONL，每行一个 `{ts, kind, ip, reason?, ...}` 对象，文件 0600）：活跃文件按本地日历日轮转为 `audit.log.<YYYY-MM-DD>`，归档保留 90 天后删除；启动时收紧既有文件权限至 0600 并清理过期归档，优雅停机时等待在途写入落盘（仅硬崩溃可能丢失正在写入的最后一行）；写失败降级为告警日志且自动去重（首次即时上报，持续失败每 5 分钟提醒一次并附抑制计数，恢复时记录 info），绝不影响认证流程。
 
 ### 转发与 fence
 

@@ -61,7 +61,7 @@ test('inject declares only services apply() actually uses', () => {
   const mod = handoff.factory(requireStub)
   // Spread into a host-realm array: the VM realm's Array prototype differs,
   // which trips deepStrictEqual's prototype check.
-  assert.deepEqual([...mod.inject], ['slots', 'locale'])
+  assert.deepEqual([...mod.inject], ['slots', 'locale', 'connection'])
 })
 
 test('LAN trust installs a permanent getter on the connection handle (official seam only)', () => {

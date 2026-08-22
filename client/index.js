@@ -660,7 +660,7 @@ window.__ModuleLoader__.load({
 		    ] })
 		  ] });
 		}
-		var inject = ["slots", "locale"];
+		var inject = ["slots", "locale", "connection"];
 		function installLanTrust(ctx) {
 		  if (typeof location === "undefined" || !location.hostname) return;
 		  const hn = location.hostname;

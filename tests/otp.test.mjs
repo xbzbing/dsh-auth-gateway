@@ -197,7 +197,7 @@ test('OTP secret is sealed at rest, never plaintext on disk', async () => {
   // The in-memory value returned by getOTPSecret must round-trip.
   assert.equal(getOTPSecret(), secret)
   // On disk it must be a sealed blob, NOT the raw Base32 secret.
-  const onDisk = JSON.parse(readFileSync(join(home, 'auth-gate', 'otp.json'), 'utf8'))
+  const onDisk = JSON.parse(readFileSync(join(home, 'auth-gateway', 'otp.json'), 'utf8'))
   assert.ok(isSealed(onDisk.secret), 'stored secret should be sealed')
   assert.notEqual(onDisk.secret, secret, 'stored secret must not equal plaintext')
   assert.ok(!onDisk.secret.startsWith(secret), 'ciphertext must not leak plaintext')
@@ -245,7 +245,7 @@ test('master key from DSH_AUTH_GATEWAY_MASTER_KEY env overrides key file', async
 
 test('seal generates a master key file on first use', () => {
   _resetMasterKeyCache()
-  const dir = join(process.env.DSH_HOME, 'auth-gate')
+  const dir = join(process.env.DSH_HOME, 'auth-gateway')
   rmSync(dir, { recursive: true, force: true })
   const token = seal('JBSWY3DPEHPK3PXP')
   const keyFile = join(dir, 'otp-master.key')
@@ -258,7 +258,7 @@ test('unseal with missing master key throws (no silent regeneration)', () => {
   // Simulate a backup restore that copied only otp.json (sealed) but lost the key.
   _resetMasterKeyCache()
   const token = seal('JBSWY3DPEHPK3PXP') // generates + writes key file, caches key
-  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gateway', 'otp-master.key')
   rmSync(keyFile, { force: true })
   _resetMasterKeyCache() // drop cached key so resolution must hit disk
   assert.throws(() => unseal(token), /master key missing/)
@@ -269,7 +269,7 @@ test('unseal with missing master key throws (no silent regeneration)', () => {
 test('missing master key surfaces as typed otp-master-key-missing error', () => {
   _resetMasterKeyCache()
   const token = seal('JBSWY3DPEHPK3PXP')
-  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gateway', 'otp-master.key')
   rmSync(keyFile, { force: true })
   _resetMasterKeyCache()
 
@@ -286,8 +286,8 @@ test('missing master key surfaces as typed otp-master-key-missing error', () => 
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
-  mkdirSync(join(process.env.DSH_HOME, 'auth-gate'), { recursive: true })
-  writeFileSync(join(process.env.DSH_HOME, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+  mkdirSync(join(process.env.DSH_HOME, 'auth-gateway'), { recursive: true })
+  writeFileSync(join(process.env.DSH_HOME, 'auth-gateway', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
 
   // getOTPSecret must categorise the failure into a typed error with a stable code.
   assert.throws(
@@ -302,7 +302,7 @@ test('wrong master key surfaces as typed otp-secret-corrupted error', () => {
   _resetMasterKeyCache()
   // Seal under one key, then swap in a different key file (e.g. regenerated/rotated).
   const token = seal('JBSWY3DPEHPK3PXP')
-  const keyFile = join(process.env.DSH_HOME, 'auth-gate', 'otp-master.key')
+  const keyFile = join(process.env.DSH_HOME, 'auth-gateway', 'otp-master.key')
   writeFileSync(keyFile, Buffer.alloc(32, 9), { mode: 0o600 })
   _resetMasterKeyCache() // drop cached key so the swapped file is read
 
@@ -347,8 +347,8 @@ test('legacy plaintext secret is still readable (migration)', async () => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
-  mkdirSync(join(home, 'auth-gate'), { recursive: true })
-  writeFileSync(join(home, 'auth-gate', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
+  mkdirSync(join(home, 'auth-gateway'), { recursive: true })
+  writeFileSync(join(home, 'auth-gateway', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
   assert.equal(getOTPSecret(), 'LEGACYPLAINTEXTSECRET')
 })
 
@@ -374,7 +374,7 @@ test('verifyAndUseBackupCode works correctly', async () => {
 })
 
 test('corrupt otp.json fails loud instead of silently disabling 2FA', async () => {
-  const dir = join(home, 'auth-gate')
+  const dir = join(home, 'auth-gateway')
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   writeFileSync(join(dir, 'otp.json'), '{not json', { mode: 0o600 })
 

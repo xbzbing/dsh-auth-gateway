@@ -47,7 +47,7 @@ The TOTP secret is the root key of the second factor: whoever holds it can gener
 Master key (32 bytes) resolution priority:
 
 1. The `DSH_AUTH_GATEWAY_MASTER_KEY` environment variable (hex or base64, 32 bytes); when set, it is used and no key file is written;
-2. Otherwise an `auth-gate/otp-master.key` is auto-generated on first OTP enable (0600, directory 0700), cached once per process.
+2. Otherwise an `auth-gateway/otp-master.key` is auto-generated on first OTP enable (0600, directory 0700), cached once per process.
 
 When the key comes from an environment variable, it should live on an encrypted volume or in external key management (KMS / Docker secret etc.) to truly isolate disk disclosure — on the default auto-generated path the key and the ciphertext share a directory, so the local trust model is unchanged (a local user who can read `$DSH_HOME` can obtain both).
 
@@ -59,7 +59,7 @@ When the key comes from an environment variable, it should live on an encrypted 
 | Source | Failure lockout (5 failures / 5 min) | Password and OTP failures count toward the same lockout |
 | Source | Independent OTP window (10/min) | OTP/backup-code verification |
 
-`x-forwarded-for` never counts toward source determination (anti-spoofing). Lockout triggers and exhausted rate-limit windows log via `ctx.logger.warn` and broadcast a `dsh-auth-gateway/brute-force` event (`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`, JSON payload, once per lockout/window). Auth events and brute-force alerts are also **persisted** to `$DSH_HOME/auth-gate/audit.log` (JSONL, one `{ts, kind, ip, reason?, ...}` object per line, file mode 0600): the live file rolls over per local calendar day into `audit.log.<YYYY-MM-DD>`, archives are kept for 90 days and then deleted; on startup the existing file's mode is tightened and expired archives pruned, and graceful shutdown drains in-flight writes (only a hard crash can lose the single line being written); write failures degrade to a warning log with dedupe (the first failure reports immediately, a sustained failure reminds at most every 5 minutes with a silenced count attached, and recovery logs an info) and never affect the auth flow.
+`x-forwarded-for` never counts toward source determination (anti-spoofing). Lockout triggers and exhausted rate-limit windows log via `ctx.logger.warn` and broadcast a `dsh-auth-gateway/brute-force` event (`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`, JSON payload, once per lockout/window). Auth events and brute-force alerts are also **persisted** to `$DSH_HOME/auth-gateway/audit.log` (JSONL, one `{ts, kind, ip, reason?, ...}` object per line, file mode 0600): the live file rolls over per local calendar day into `audit.log.<YYYY-MM-DD>`, archives are kept for 90 days and then deleted; on startup the existing file's mode is tightened and expired archives pruned, and graceful shutdown drains in-flight writes (only a hard crash can lose the single line being written); write failures degrade to a warning log with dedupe (the first failure reports immediately, a sustained failure reminds at most every 5 minutes with a silenced count attached, and recovery logs an info) and never affect the auth flow.
 
 ### Forwarding and the fence
 
@@ -73,7 +73,7 @@ The gateway's client plugin (client/src/index.jsx) declares a `connection` depen
 
 ## Known limitations
 
-- **OTP secret encryption at rest**: the Base32 secret in `$DSH_HOME/auth-gate/otp.json` is AES-256-GCM encrypted (lib/otp-crypto.js) and requires the master key to read. The master key comes from the `DSH_AUTH_GATEWAY_MASTER_KEY` environment variable (hex/base64) or an auto-generated `auth-gate/otp-master.key` (0600) created on first enable; this is still the local trust model — a local user who can read `$DSH_HOME` can obtain the key too, so put the master key on an encrypted volume or in external key management to truly isolate disk disclosure;
+- **OTP secret encryption at rest**: the Base32 secret in `$DSH_HOME/auth-gateway/otp.json` is AES-256-GCM encrypted (lib/otp-crypto.js) and requires the master key to read. The master key comes from the `DSH_AUTH_GATEWAY_MASTER_KEY` environment variable (hex/base64) or an auto-generated `auth-gateway/otp-master.key` (0600) created on first enable; this is still the local trust model — a local user who can read `$DSH_HOME` can obtain the key too, so put the master key on an encrypted volume or in external key management to truly isolate disk disclosure;
 - **Plaintext HTTP**: passwords and cookies travel in cleartext on the network. For LAN deployments, keep it on a trusted network or put a TLS reverse proxy in front (see DEPLOYMENT.md);
 - **OTP-enable permission (DoS surface)**: `/otp/enable` and `/otp/verify-setup` only require any valid session — enabling 2FA is a user action (no deployment switch). If a password leaks, an attacker could log in with it and bind their own authenticator, locking out the real user. This is not credential theft; it is mainly a DoS surface. Mitigation: enabling OTP **revokes all sessions** (including the enabler's own, forcing re-login under the 2FA policy); a future direction is requiring password re-verification when enabling;
 - **In-memory sessions**: everyone is logged out on dsh restart (must log in again; with OTP enabled, 2FA must be redone);
@@ -86,12 +86,12 @@ When you forgot the password, lost the authenticator, or hit the DoS surface abo
 
 ```bash
 # Clear the password record (equivalent to dsh-auth-gateway-reset below)
-rm -f "$DSH_HOME/auth-gate/password.json"
+rm -f "$DSH_HOME/auth-gateway/password.json"
 # If the authenticator was lost, clear the OTP binding too
-rm -f "$DSH_HOME/auth-gate/otp.json"
+rm -f "$DSH_HOME/auth-gateway/otp.json"
 # If the OTP master key is lost (or you want to drop encryption entirely):
 # delete the key file; a new key is generated when OTP is re-enabled
-rm -f "$DSH_HOME/auth-gate/otp-master.key"
+rm -f "$DSH_HOME/auth-gateway/otp-master.key"
 ```
 
 > **A lost master key = undecryptable OTP**: if the master key was injected via `DSH_AUTH_GATEWAY_MASTER_KEY` and that value can no longer be recovered, the ciphertext in `otp.json` cannot be decrypted and every 2FA verification fails. In that case delete `otp.json` (and `otp-master.key` if present), restart, and rebind the authenticator; deleting `otp.json` does not affect password login.

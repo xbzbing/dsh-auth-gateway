@@ -39,8 +39,8 @@ dsh web                # 默认：对外 3080，内部 3081
 - **LAN 部署**：置于可信网络；网关默认监听所有网卡，跨网络暴露前务必配置防火墙；
 - **HTTPS**：插件当前服务明文 HTTP（`Secure` Cookie 未启用）。生产建议前置 TLS 反向代理（nginx/Caddy 等）到网关端口，并配置 `trustedHosts`（见下）；启用 TLS 后可将 Cookie 的 `Secure` 标记纳入后续版本；
 - **trustedHosts**：若经反向代理/自定义域名访问，需在 `dsh-client-connection` 行配置 `trustedHosts`（内部 fence 的授权权威；本插件转发已改写 Host/Origin 为回环，正常情况下无需配置，特殊拓扑下按 dsh 文档配置）；
-- **备份**：凭据数据位于 `$DSH_HOME/auth-gate/`（password.json、otp.json、otp-master.key），备份时注意加密（OTP 密钥已 AES-256-GCM 加密，但主密钥 `otp-master.key` 同样需保护，见 SECURITY.md）。
-- **OTP 主密钥管理**：默认自动生成 `auth-gate/otp-master.key`，密钥与密文同目录（本机可信模型）。要隔离磁盘泄露，部署前设置环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64 编码的 32 字节），并把它放到加密卷或外部密钥管理（KMS / Docker secret / systemd credentials 等）；设置了环境变量即不再生成/读取密钥文件。生成示例：`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`。详见 [SECURITY.md](SECURITY.md) 的「OTP 密钥加密」。
+- **备份**：凭据数据位于 `$DSH_HOME/auth-gateway/`（password.json、otp.json、otp-master.key），备份时注意加密（OTP 密钥已 AES-256-GCM 加密，但主密钥 `otp-master.key` 同样需保护，见 SECURITY.md）。
+- **OTP 主密钥管理**：默认自动生成 `auth-gateway/otp-master.key`，密钥与密文同目录（本机可信模型）。要隔离磁盘泄露，部署前设置环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64 编码的 32 字节），并把它放到加密卷或外部密钥管理（KMS / Docker secret / systemd credentials 等）；设置了环境变量即不再生成/读取密钥文件。生成示例：`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`。详见 [SECURITY.md](SECURITY.md) 的「OTP 密钥加密」。
 
 ## 配合 nginx / 反向代理部署
 
@@ -67,7 +67,7 @@ dsh web                # 默认：对外 3080，内部 3081
 
 ## 凭据重置与卸载命令
 
-插件包自带两个命令（`package.json` 的 `bin`）：`dsh-auth-gateway-reset`（仅删除密码记录）与 `dsh-auth-gateway-uninstall`（删除整个 `$DSH_HOME/auth-gate/`）。`dsh plugin add` 通过 pnpm 把命令链接到 profile 的 `node_modules/.bin`——**该目录默认不在 PATH 上**，直接敲短名会提示 command not found。两种运行方式：
+插件包自带两个命令（`package.json` 的 `bin`）：`dsh-auth-gateway-reset`（仅删除密码记录）与 `dsh-auth-gateway-uninstall`（删除整个 `$DSH_HOME/auth-gateway/`）。`dsh plugin add` 通过 pnpm 把命令链接到 profile 的 `node_modules/.bin`——**该目录默认不在 PATH 上**，直接敲短名会提示 command not found。两种运行方式：
 
 ```bash
 # 方式一：完整路径（把 profile 名换成你实际使用的）
@@ -78,9 +78,9 @@ export PATH="$HOME/.dsh/profiles/web/node_modules/.bin:$PATH"
 dsh-auth-gateway-reset
 ```
 
-> **`$DSH_HOME` 在哪**：凭据数据在 `$DSH_HOME/auth-gate/`（password.json、otp.json、otp-master.key）。`$DSH_HOME` 默认取 `~/.dsh`（即 `$HOME/.dsh`），可用环境变量覆盖——dsh 与插件读取同一值。
+> **`$DSH_HOME` 在哪**：凭据数据在 `$DSH_HOME/auth-gateway/`（password.json、otp.json、otp-master.key）。`$DSH_HOME` 默认取 `~/.dsh`（即 `$HOME/.dsh`），可用环境变量覆盖——dsh 与插件读取同一值。
 
-`dsh-auth-gateway-reset` 删除密码记录后，**必须重启 dsh web**：初始密码在启动时生成并打印到控制台（插件没有"设置密码"页面），登录后走引导流程设置个人密码。丢失认证器时还需删除 `$DSH_HOME/auth-gate/otp.json`（或直接运行 `dsh-auth-gateway-uninstall`）。
+`dsh-auth-gateway-reset` 删除密码记录后，**必须重启 dsh web**：初始密码在启动时生成并打印到控制台（插件没有"设置密码"页面），登录后走引导流程设置个人密码。丢失认证器时还需删除 `$DSH_HOME/auth-gateway/otp.json`（或直接运行 `dsh-auth-gateway-uninstall`）。
 
 > **顺序提醒**：如需同时卸载插件，**先运行上面的凭据命令，再执行 `dsh plugin --profile web remove dsh-auth-gateway`**——remove 会移除 profile 里的插件依赖，两个命令的 bin 链接随之失效（悬空指向已删除的目标）。
 

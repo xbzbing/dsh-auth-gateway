@@ -20,6 +20,7 @@ JS_FILES=(
   lib/login-page.js
   lib/onboarding-page.js
   lib/otp-page.js
+  lib/paths.js
 )
 
 ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml)

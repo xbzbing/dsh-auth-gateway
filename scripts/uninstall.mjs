@@ -5,8 +5,9 @@
  * `dsh plugin --profile web remove` only removes the composition row and
  * bundle layer — it never runs plugin code, so the password record stays on
  * disk. Run this script to delete the plugin's data directory
- * ($DSH_HOME/auth-gate). Stop dsh web first; a running gateway keeps
- * serving from memory until it exits.
+ * ($DSH_HOME/auth-gateway, plus the legacy auth-gate/ from pre-rename
+ * deployments). Stop dsh web first; a running gateway keeps serving from
+ * memory until it exits.
  */
 
 import { rmSync } from 'node:fs'
@@ -14,7 +15,7 @@ import { join } from 'node:path'
 import os from 'node:os'
 
 const home = process.env.DSH_HOME || join(os.homedir(), '.dsh')
-const dir = join(home, 'auth-gate')
+const dirs = [join(home, 'auth-gateway'), join(home, 'auth-gate')]
 
 const LINE = '═'.repeat(56)
 
@@ -24,11 +25,11 @@ console.log('  dsh-auth-gateway uninstall · remove all credentials')
 console.log(LINE)
 
 try {
-  rmSync(dir, { recursive: true, force: true })
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true })
   console.log()
   console.log('✓ 已删除全部凭据（密码 + OTP）')
   console.log('  All credentials removed (password + OTP)')
-  console.log(`  → ${dir}`)
+  for (const dir of dirs) console.log(`  → ${dir}`)
   console.log()
   console.log('▸ 提示 / Note')
   console.log('  · 请先停止 dsh web：运行中的网关会继续从内存提供登录服务，')
@@ -41,7 +42,6 @@ try {
 } catch (err) {
   console.error()
   console.error('✗ 删除失败 / Failed to remove')
-  console.error(`  → ${dir}`)
   console.error(`  ${err.message}`)
   process.exit(1)
 }

@@ -47,7 +47,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 主密钥（32 字节）解析优先级：
 
 1. 环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64，32 字节）；设置了即用它，不再写密钥文件；
-2. 否则首次启用 OTP 时自动生成 `auth-gate/otp-master.key`（0600，目录 0700），进程内缓存一次。
+2. 否则首次启用 OTP 时自动生成 `auth-gateway/otp-master.key`（0600，目录 0700），进程内缓存一次。
 
 密钥来自环境变量时，应将它置于加密卷或外部密钥管理（KMS / Docker secret 等），方能真正隔离磁盘泄露——默认自动生成路径下密钥与密文同目录，本机可信模型不变（能读 `$DSH_HOME` 的本机用户可取二者）。
 
@@ -59,7 +59,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 | 来源 | 失败锁定（5 次/5 分钟） | 密码失败与 OTP 失败计入同一锁定 |
 | 来源 | OTP 独立窗口（10 次/分钟） | OTP/备份码验证 |
 
-`x-forwarded-for` 不参与来源判定（防止伪造）；锁触发与限流耗尽时输出 `ctx.logger.warn` 并广播 `dsh-auth-gateway/brute-force` 事件（`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`，JSON 负载，每个锁定/窗口一次）。认证事件与暴力破解告警同时**持久化落盘** `$DSH_HOME/auth-gate/audit.log`（JSONL，每行一个 `{ts, kind, ip, reason?, ...}` 对象，文件 0600）：活跃文件按本地日历日轮转为 `audit.log.<YYYY-MM-DD>`，归档保留 90 天后删除；启动时收紧既有文件权限至 0600 并清理过期归档，优雅停机时等待在途写入落盘（仅硬崩溃可能丢失正在写入的最后一行）；写失败降级为告警日志且自动去重（首次即时上报，持续失败每 5 分钟提醒一次并附抑制计数，恢复时记录 info），绝不影响认证流程。
+`x-forwarded-for` 不参与来源判定（防止伪造）；锁触发与限流耗尽时输出 `ctx.logger.warn` 并广播 `dsh-auth-gateway/brute-force` 事件（`{kind: 'lockout'|'global-rate-limit'|'otp-rate-limit', ...}`，JSON 负载，每个锁定/窗口一次）。认证事件与暴力破解告警同时**持久化落盘** `$DSH_HOME/auth-gateway/audit.log`（JSONL，每行一个 `{ts, kind, ip, reason?, ...}` 对象，文件 0600）：活跃文件按本地日历日轮转为 `audit.log.<YYYY-MM-DD>`，归档保留 90 天后删除；启动时收紧既有文件权限至 0600 并清理过期归档，优雅停机时等待在途写入落盘（仅硬崩溃可能丢失正在写入的最后一行）；写失败降级为告警日志且自动去重（首次即时上报，持续失败每 5 分钟提醒一次并附抑制计数，恢复时记录 info），绝不影响认证流程。
 
 ### 转发与 fence
 
@@ -73,7 +73,7 @@ DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Se
 
 ## 已知限制
 
-- **OTP 密钥加密存储**：`$DSH_HOME/auth-gate/otp.json` 中的 Base32 密钥已用 AES-256-GCM 加密（lib/otp-crypto.js），读取需主密钥。主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64）或首次启用时自动生成的 `auth-gate/otp-master.key`（0600）；仍属本机可信模型——能读 `$DSH_HOME` 的本机用户同时可取密钥，故需将主密钥置于加密卷或外部密钥管理方能真正隔离磁盘泄露；
+- **OTP 密钥加密存储**：`$DSH_HOME/auth-gateway/otp.json` 中的 Base32 密钥已用 AES-256-GCM 加密（lib/otp-crypto.js），读取需主密钥。主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64）或首次启用时自动生成的 `auth-gateway/otp-master.key`（0600）；仍属本机可信模型——能读 `$DSH_HOME` 的本机用户同时可取密钥，故需将主密钥置于加密卷或外部密钥管理方能真正隔离磁盘泄露；
 - **明文 HTTP**：密码与 Cookie 在网络中明文传输。局域网部署建议置于可信网络，或前置 TLS 反向代理（见 DEPLOYMENT.md）；
 - **OTP 启用权限（DoS 面）**：`/otp/enable` 与 `/otp/verify-setup` 仅要求任意有效会话——启用 2FA 是用户操作（无需部署开关），密码泄露场景下攻击者可用泄露的密码登录后绑定自己的认证器，锁死真实用户登录。这不构成凭据窃取，主要是 DoS 面；缓解为启用成功后**吊销全部会话**（含启用者自身，强制在 2FA 策略下重新登录）；后续方向为启用时要求密码重验证；
 - **内存会话**：dsh 重启后全员下线（需重新登录；OTP 已启用时需重新完成 2FA）；
@@ -86,11 +86,11 @@ DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Se
 
 ```bash
 # 清除密码记录（等价于下面的 dsh-auth-gateway-reset）
-rm -f "$DSH_HOME/auth-gate/password.json"
+rm -f "$DSH_HOME/auth-gateway/password.json"
 # 丢失认证器时，一并清除 OTP 绑定
-rm -f "$DSH_HOME/auth-gate/otp.json"
+rm -f "$DSH_HOME/auth-gateway/otp.json"
 # OTP 主密钥丢失（或想彻底弃用加密）：删除密钥文件，重新启用 OTP 时会生成新密钥
-rm -f "$DSH_HOME/auth-gate/otp-master.key"
+rm -f "$DSH_HOME/auth-gateway/otp-master.key"
 ```
 
 > **主密钥丢失 = OTP 不可解密**：若此前用环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 注入主密钥、且该值已无法恢复，则 `otp.json` 中的密文无法解密、2FA 验证全部失败。此时删除 `otp.json`（必要时连同 `otp-master.key`）后重启，重新绑定认证器即可；删除 `otp.json` 不影响密码登录。

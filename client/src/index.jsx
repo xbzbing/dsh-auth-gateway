@@ -564,8 +564,10 @@ function UserSettingsPanel({ api, t }) {
   )
 }
 
-/** Services this plugin's apply() actually uses (ctx.slots, ctx.locale). */
-const inject = ['slots', 'locale']
+/** Services this plugin's apply() actually uses (ctx.slots, ctx.locale,
+ * ctx.connection — declared so the LAN trust getter install below is a
+ * legitimate Cordis service access rather than an undeclared read). */
+const inject = ['slots', 'locale', 'connection']
 
 /**
  * LAN trust through the official plugin seam.

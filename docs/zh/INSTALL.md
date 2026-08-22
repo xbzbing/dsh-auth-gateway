@@ -57,8 +57,8 @@ dsh web --port 8080
 
 | 命令 | 作用 | 影响范围 |
 |---|---|---|
-| `dsh-auth-gateway-reset` | 重置密码记录 | 删除 `$DSH_HOME/auth-gate/password.json`，重启后打印新初始密码 |
-| `dsh-auth-gateway-uninstall` | 彻底清理全部凭据 | 删除整个 `$DSH_HOME/auth-gate/`（密码 + OTP 密钥 + 备份码） |
+| `dsh-auth-gateway-reset` | 重置密码记录 | 删除 `$DSH_HOME/auth-gateway/password.json`，重启后打印新初始密码 |
+| `dsh-auth-gateway-uninstall` | 彻底清理全部凭据 | 删除整个 `$DSH_HOME/auth-gateway/`（密码 + OTP 密钥 + 备份码） |
 
 运行方式（二选一）：
 
@@ -84,7 +84,7 @@ dsh-auth-gateway-reset     # 1. 删除密码记录
 
 ```bash
 # 删除 OTP 记录（含备份码），密码保留
-rm ~/.dsh/auth-gate/otp.json
+rm ~/.dsh/auth-gateway/otp.json
 # 重启 dsh web 后重新绑定 OTP
 ```
 
@@ -141,12 +141,12 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 | 现象 | 原因与处理 |
 |---|---|
-| 首次启动看不到初始密码 | 说明凭据已存在（`$DSH_HOME/auth-gate/password.json`）——非首次部署。用已有密码登录，或 `reset` 后重启 |
+| 首次启动看不到初始密码 | 说明凭据已存在（`$DSH_HOME/auth-gateway/password.json`）——非首次部署。用已有密码登录，或 `reset` 后重启 |
 | 安装后启动失败（EADDRINUSE） | 组合树中出现重复的 dsh-auth-gateway 行（重复安装导致）——删除重复行后重启 |
 | `file:` 安装改了代码不生效 | 快照未刷新——remove + add 重新安装 |
 | 登录被 429 拒绝 | 触发全局速率限制或 OTP 限流——等待窗口重置（1 分钟 / 锁定 5 分钟） |
 | `dsh-auth-gateway-reset` 提示 command not found | profile bin 不在 PATH——用完整路径或先 `export PATH=...` |
-| 卸载后凭据仍残留 | 没有先运行凭据命令就 remove 了——手动删除 `$DSH_HOME/auth-gate/` 目录 |
+| 卸载后凭据仍残留 | 没有先运行凭据命令就 remove 了——手动删除 `$DSH_HOME/auth-gateway/` 目录 |
 
 ---
 

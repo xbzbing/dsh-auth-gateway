@@ -12,10 +12,10 @@ lib/
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
   forward.js    HTTP/WS 转发管道：Host/Origin 回环改写、upgrade 双向管道、lanAddresses
   auth.js       内存会话表（256-bit token）+ Cookie 编解码
-  audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gate/audit.log，按天轮转、保留 90 天）
+  audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/audit.log，按天轮转、保留 90 天）
   locale.js     页面语言解析（settings.yaml preference > Accept-Language > zh）
   errors.js     页面错误文案总字典（中英；errorsFor 按页选取 + 场景覆盖）
-  store.js      密码存储（异步 scrypt，$DSH_HOME/auth-gate/password.json）
+  store.js      密码存储（异步 scrypt，$DSH_HOME/auth-gateway/password.json）
   otp-store.js  OTP 记录（mtime+size 缓存；secret AES-256-GCM 密封落盘）
   otp-crypto.js 主密钥解析（env > key 文件）与 seal/unseal；解密失败分类为 OTPCryptoError
   totp.js       TOTP RFC 6238/4226 + 备份码；qr-svg.js 零依赖 QR SVG

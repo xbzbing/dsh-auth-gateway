@@ -200,7 +200,7 @@ test('component takes no ctx prop and never fetches directly', () => {
     'component must receive props (api) and the locale seat (t)')
   assert.ok(!source.includes('function UserSettingsPanel({ ctx })'),
     'component must not receive ctx')
-  assert.ok(source.includes('const inject = [\'slots\', \'locale\']'), 'inject must declare slots and locale')
+  assert.ok(source.includes("const inject = ['slots', 'locale', 'connection']"), 'inject must declare slots, locale and connection')
   // The settings key the panel reads must match the gateway's
   // /login-api/settings response key (lib/gateway.js #handleGetSettings) —
   // a rename miss here silently shows OTP as disabled.

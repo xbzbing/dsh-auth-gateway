@@ -58,8 +58,8 @@ The plugin package ships two commands (linked into the profile's `node_modules/.
 
 | Command | Purpose | Scope |
 |---|---|---|
-| `dsh-auth-gateway-reset` | Reset the password record | Deletes `$DSH_HOME/auth-gate/password.json`; a new initial password is printed after restart |
-| `dsh-auth-gateway-uninstall` | Remove all credentials | Deletes the whole `$DSH_HOME/auth-gate/` (password + OTP secret + backup codes) |
+| `dsh-auth-gateway-reset` | Reset the password record | Deletes `$DSH_HOME/auth-gateway/password.json`; a new initial password is printed after restart |
+| `dsh-auth-gateway-uninstall` | Remove all credentials | Deletes the whole `$DSH_HOME/auth-gateway/` (password + OTP secret + backup codes) |
 
 Run them either way:
 
@@ -85,7 +85,7 @@ dsh-auth-gateway-reset     # 1. delete the password record
 
 ```bash
 # Delete the OTP record (incl. backup codes); the password is kept
-rm ~/.dsh/auth-gate/otp.json
+rm ~/.dsh/auth-gateway/otp.json
 # Rebind OTP after restarting dsh web
 ```
 
@@ -142,12 +142,12 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 | Symptom | Cause & fix |
 |---|---|
-| No initial password on first start | Credentials already exist (`$DSH_HOME/auth-gate/password.json`) — this is not a first deployment. Log in with the existing password, or `reset` and restart |
+| No initial password on first start | Credentials already exist (`$DSH_HOME/auth-gateway/password.json`) — this is not a first deployment. Log in with the existing password, or `reset` and restart |
 | Startup fails after install (EADDRINUSE) | A duplicate dsh-auth-gateway row in the composition tree (caused by duplicate installation) — remove the duplicate row and restart |
 | `file:` install: code changes have no effect | The snapshot was not refreshed — reinstall with remove + add |
 | Login rejected with 429 | Global rate limit or OTP throttle triggered — wait for the window to reset (1 minute / 5-minute lockout) |
 | `dsh-auth-gateway-reset` says command not found | The profile bin is not on PATH — use the full path or `export PATH=...` first |
-| Credentials remain after uninstall | The plugin was removed without running the credential command first — delete `$DSH_HOME/auth-gate/` manually |
+| Credentials remain after uninstall | The plugin was removed without running the credential command first — delete `$DSH_HOME/auth-gateway/` manually |
 
 ---
 

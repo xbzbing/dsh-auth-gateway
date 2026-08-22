@@ -6,8 +6,7 @@ dsh-auth-gateway 是 dsh web 前面的密码 + TOTP 认证网关（Cordis 插件
 
 ```
 index.js        插件入口：gateway 生命周期、tapIndex 注入（randomUUID polyfill +
-                basePath 全局量 + authenticated LAN trust bootstrap）、初始密码铸造、
-                安全事件与登录审计接线
+                basePath 全局量）、初始密码铸造、安全事件与登录审计接线
 lib/
   gateway.js    认证门禁：路由、认证状态机（会话/onboarding/OTP 三态）、三层防爆破、basePath 剥离
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
@@ -45,6 +44,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 
 ## 约定
 
+- **一切变更必须符合 dsh/Cordis 规范（最高优先级）**：只用官方扩展点——`ctx.effect`、`ctx.inject`、`ctx.slots`、`ctx.emit`、`webServer.tapIndex`（仅限自包含全局量注入）、`dsh.bundle` patch、client 插件 inject 声明。禁止触碰宿主运行时内部：不包装/替换 `window.__ModuleLoader__` 的任何方法，不包装第三方模块的 factory/apply/provide，不做全局 DOM 探测与样式注入。跨插件冲突或对 dsh 升级敏感的实现，一律视为规范违规并重构。
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
 - **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
 - **回环钉扎是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。

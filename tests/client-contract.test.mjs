@@ -31,6 +31,7 @@ function loadBundle() {
         load: (h) => { handoff = h },
       },
     },
+    location: { hostname: '127.0.0.1' },
     require: (spec) => {
       if (spec === 'react') return { useState: () => [], useEffect: () => {}, Fragment: 'fragment' }
       if (spec === 'react/jsx-runtime') return { jsx: () => ({}), jsxs: () => ({}), Fragment: 'fragment' }
@@ -63,6 +64,79 @@ test('inject declares only services apply() actually uses', () => {
   assert.deepEqual([...mod.inject], ['slots', 'locale'])
 })
 
+test('LAN trust installs a permanent getter on the connection handle (official seam only)', () => {
+  const handoff = loadBundle()
+  const mod = handoff.factory(requireStub)
+  const seen = []
+  const connection = { isLoopback: false }
+  const ctx = {
+    slots: {
+      inject: () => {},
+      register: () => ({}),
+    },
+    locale: {
+      register: () => {},
+      bind: () => (key) => '[' + key + ']',
+    },
+    get connection() { seen.push('get'); return connection },
+  }
+  // Simulate the LAN case: hostname is not loopback in this VM realm? The
+  // sandbox pins 127.0.0.1, so override through the same global the bundle
+  // reads — delete-and-replace keeps the test on the bundle's real code path.
+  vm.runInContext('location = { hostname: "172.19.0.1" }', vm.createContext(globalThis.__clientSandbox ?? undefined))
+  // Re-run apply against a LAN-flavoured sandbox built the same way:
+  let handoff2 = null
+  const lanSandbox = {
+    window: { __ModuleLoader__: { load: (h) => { handoff2 = h } } },
+    location: { hostname: '172.19.0.1' },
+    require: (spec) => requireStub(spec),
+    Object,
+    Symbol,
+    console,
+  }
+  vm.createContext(lanSandbox)
+  vm.runInContext(code, lanSandbox)
+  const mod2 = handoff2.factory((spec) => requireStub(spec))
+  mod2.apply({
+    slots: ctx.slots,
+    locale: ctx.locale,
+    connection,
+  })
+  assert.equal(seen.length, 0, 'the host-realm probe stays untouched')
+  assert.equal(connection.isLoopback, true, 'LAN hostname must yield a trusted getter')
+  const descriptor = Object.getOwnPropertyDescriptor(connection, 'isLoopback')
+  assert.equal(typeof descriptor.get, 'function', 'isLoopback must be installed as a getter')
+  assert.equal(descriptor.get(), true)
+
+  // Loopback access must be a no-op: hostname detection already reports true.
+  const plainConnection = { isLoopback: false }
+  let handoff3 = null
+  const loopSandbox = {
+    window: { __ModuleLoader__: { load: (h) => { handoff3 = h } } },
+    location: { hostname: '127.0.0.1' },
+    require: (spec) => requireStub(spec),
+    Object,
+    Symbol,
+    console,
+  }
+  vm.createContext(loopSandbox)
+  vm.runInContext(code, loopSandbox)
+  const mod3 = handoff3.factory((spec) => requireStub(spec))
+  mod3.apply({ slots: ctx.slots, locale: ctx.locale, connection: plainConnection })
+  assert.equal(plainConnection.isLoopback, false, 'loopback pages keep dsh native state')
+
+  // A missing connection service must not break the panel registration.
+  let registered = false
+  mod.apply({
+    slots: {
+      inject: (name, fn) => { fn(); registered = true },
+      register: () => ({}),
+    },
+    locale: { register: () => {}, bind: () => () => '' },
+  })
+  assert.ok(registered, 'panel still registers without a connection service')
+})
+
 test('client apply() registers dictionaries and the settings.section slot', () => {
   const handoff = loadBundle()
   const mod = handoff.factory(requireStub)
@@ -88,10 +162,10 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.locale, 'dsh-auth-gateway', 'slot must declare its locale namespace')
 
-  // The settings-nav icon adaptation is registered as a disposable effect.
-  assert.ok(effects.some((e) => e.name === 'dsh-auth-gateway: settings nav icon'),
-    'nav icon marker must be a lifecycle effect')
-  assert.equal(typeof effects[0].fn, 'function')
+  // The registration follows the standard settings.section seam only —
+  // no DOM probing, no style injection (the shell renders its own icon).
+  assert.ok(!source.includes('MutationObserver'), 'no MutationObserver in the client source')
+  assert.ok(!source.includes('NAV_MARKER'), 'no nav-marker DOM patching in the client source')
 
   // Dictionaries: own namespace, zh source of truth, en key set complete.
   assert.equal(registeredNs, 'dsh-auth-gateway')

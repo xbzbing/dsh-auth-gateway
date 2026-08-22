@@ -69,7 +69,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Settings 启动时一次性选择 host 或 memory scope。通过 LAN IP 访问时该值原本为 `false`，导致 Models、Credentials、Locale/Theme/Preferences 等 host-backed settings 在浏览器端被提前禁用，即使网关已经把服务端 Host/Origin 改写为回环也无法恢复。
 
-网关通过 `webServer.tapIndex` 在 DSH queue-mode `__ModuleLoader__` 之后、parser preload 之前插入兼容 bootstrap。bootstrap 只包装 `@deepseek-ai/dsh-client-connection`，并在其同步 `ctx.provide('connection', handle)` 发布服务前把 `handle.isLoopback` 设为 `true`；认证、HTTP/WS 拦截、Host/Origin 改写和服务端 privileged fence 均不变。对外页面仍必须先通过完整会话（含 onboarding/OTP）门禁；内部 DSH 必须继续只监听 `127.0.0.1`。若 loader 协议变化，网关记录兼容性告警而不会关闭任何安全检查。
+网关的 client 插件（client/src/index.jsx）通过官方 inject seam 声明依赖 `connection` 服务，在 apply 时对 LAN hostname（非 loopback）把 `handle.isLoopback` 改写为恒真的 getter——任何消费者无论何时读取都得到信任值。不触碰 DSH 模块加载器与第三方模块的激活路径，完全符合 dsh/Cordis 扩展规范；认证、HTTP/WS 拦截、Host/Origin 改写和服务端 privileged fence 均不变。对外页面仍必须先通过完整会话（含 onboarding/OTP）门禁；内部 DSH 必须继续只监听 `127.0.0.1`。
 
 ## 已知限制
 

@@ -43,7 +43,7 @@ test('resolveConfig step validates before apply (fiber semantics)', () => {
   assert.equal(bad, undefined, 'invalid config must be rejected')
 })
 
-test('authenticated LAN bootstrap patches connection before service publication', async () => {
+test('index transform injects only self-contained globals (no module-loader surgery)', async () => {
   const capture = await captureIndexTransform()
   try {
     const loaderScript = `<script>(() => {
@@ -65,134 +65,27 @@ window.__ModuleLoader__={
     const html = `<!doctype html><html><head>${loaderScript}${preload}</head><body></body></html>`
     const transformed = capture.transform(html)
 
-    const polyfillAt = transformed.indexOf('crypto.randomUUID')
-    const loaderAt = transformed.indexOf('window.__ModuleLoader__=')
-    const trustAt = transformed.indexOf('__dshAuthGatewayTrustedLoopbackBootstrap__')
-    const preloadAt = transformed.indexOf(preload)
-    assert.ok(polyfillAt !== -1, 'the existing randomUUID polyfill is retained')
-    assert.ok(polyfillAt < loaderAt, 'the randomUUID polyfill remains first in head')
-    assert.ok(loaderAt < trustAt, 'trusted bootstrap runs after the queue loader exists')
-    assert.ok(trustAt < preloadAt, 'trusted bootstrap runs before parser-preloaded bundles')
+    // The transform must keep the randomUUID polyfill and basePath global.
+    assert.ok(transformed.includes('crypto.randomUUID'), 'the randomUUID polyfill is retained')
     assert.ok(transformed.includes('__dshAuthGatewayBasePath__'),
       'the transform publishes the gateway basePath global for the client panel')
 
-    const inlineScripts = [...transformed.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-      .map((match) => match[1])
-    assert.equal(inlineScripts.length, 3, 'polyfill, loader, and trust scripts are inline')
+    // Standard-dsh contract: the plugin must NOT touch the module loader —
+    // no loader wrapping, no third-party module surgery, no extra inline
+    // scripts beyond its own polyfill. Loader/registration semantics stay
+    // exactly as dsh served them, so coexisting plugins are unaffected.
+    assert.ok(!transformed.includes('__dshAuthGatewayTrustedLoopbackBootstrap__'),
+      'the retired module-loader bootstrap must be gone')
+    const before = (html.match(/<script>/g) || []).length
+    const after = (transformed.match(/<script>/g) || []).length
+    assert.equal(after, before + 1,
+      'exactly one injected inline script: the self-contained polyfill')
+    assert.equal(transformed.indexOf('crypto.randomUUID') < transformed.indexOf(preload),
+      true, 'the polyfill still lands before parser-preloaded bundles')
 
-    const browserErrors = []
-    const sandbox = {
-      console: { error: (...args) => browserErrors.push(args.join(' ')) },
-    }
-    sandbox.window = sandbox
-    sandbox.globalThis = sandbox
-    vm.createContext(sandbox)
-    vm.runInContext(inlineScripts[1], sandbox)
-    vm.runInContext(inlineScripts[2], sandbox)
-
-    const loader = sandbox.__ModuleLoader__
-    const factoryOwner = {}
-    const applyOwner = {}
-    const config = { marker: 'config' }
-    const extra = { marker: 'extra' }
-    let factoryThis
-    let factoryRequire
-    let applyThis
-    let applyArgs
-    let publication
-
-    const originalFactory = function (require) {
-      factoryThis = this
-      factoryRequire = require
-      return {
-        inject: [],
-        apply: function () {
-          applyThis = this
-          applyArgs = [...arguments]
-          const [ctx] = arguments
-          const handle = { isLoopback: false }
-          const provided = ctx.provide('connection', handle)
-          return { provided, handle }
-        },
-      }
-    }
-    const queued = {
-      id: '@deepseek-ai/dsh-client-connection',
-      factory: originalFactory,
-      untouched: 'kept',
-    }
-    loader.load(queued)
-    assert.notEqual(queued.factory, originalFactory, 'queue registration factory is wrapped')
-    assert.equal(queued.untouched, 'kept', 'other registration fields are preserved')
-
-    const live = loader.create()
-    assert.equal(live.length, 1)
-    assert.equal(live[0], queued)
-
-    const requireToken = () => {}
-    const connectionExports = queued.factory.call(factoryOwner, requireToken)
-    assert.equal(factoryThis, factoryOwner, 'factory this is preserved')
-    assert.equal(factoryRequire, requireToken, 'factory arguments are preserved')
-    assert.deepEqual(connectionExports.inject, [], 'non-apply exports are preserved')
-
-    const originalProvide = function (service, value) {
-      publication = {
-        thisValue: this,
-        service,
-        descriptor: Object.getOwnPropertyDescriptor(value, 'isLoopback'),
-      }
-      return 'provided'
-    }
-    const clientContext = { provide: originalProvide }
-    const result = connectionExports.apply.call(applyOwner, clientContext, config, extra)
-    assert.equal(applyThis, applyOwner, 'apply this is preserved')
-    assert.deepEqual(applyArgs, [clientContext, config, extra], 'apply arguments are preserved')
-    assert.equal(result.provided, 'provided', 'apply return value is preserved')
-    assert.equal(result.handle.isLoopback, true)
-    assert.deepEqual(publication.descriptor, {
-      value: true,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    }, 'connection is trusted before original ctx.provide observes it')
-    assert.equal(publication.thisValue, clientContext, 'ctx.provide this is preserved')
-    assert.equal(publication.service, 'connection')
-    assert.equal(clientContext.provide, originalProvide, 'ctx.provide is restored after success')
-
-    const otherFactory = () => ({ apply() {} })
-    const other = { id: 'unrelated-client-plugin', factory: otherFactory }
-    loader.load(other)
-    assert.equal(live.at(-1), other)
-    assert.equal(other.factory, otherFactory, 'non-target registrations are untouched')
-
-    const liveLoad = loader.load
-    vm.runInContext(inlineScripts[2], sandbox)
-    assert.equal(loader.load, liveLoad, 'repeated bootstrap does not wrap the live loader again')
-    assert.deepEqual(browserErrors, [])
-
-    const thrown = new Error('connection apply failed')
-    const throwingRegistration = {
-      id: '@deepseek-ai/dsh-client-connection/client',
-      factory: () => ({
-        apply(ctx) {
-          ctx.provide('connection', { isLoopback: false })
-          throw thrown
-        },
-      }),
-    }
-    loader.load(throwingRegistration)
-    const throwingExports = throwingRegistration.factory()
-    const throwingContext = { provide: originalProvide }
-    assert.throws(() => throwingExports.apply(throwingContext), (error) => error === thrown)
-    assert.equal(throwingContext.provide, originalProvide, 'ctx.provide is restored after throw')
-
-    const noLoaderHtml = '<html><head><title>compatibility change</title></head></html>'
-    const fallback1 = capture.transform(noLoaderHtml)
-    const fallback2 = capture.transform(noLoaderHtml)
-    assert.ok(fallback1.includes('crypto.randomUUID'), 'polyfill survives a loader compatibility mismatch')
-    assert.equal(fallback1, fallback2)
-    assert.equal(capture.warnings.length, 1, 'missing loader marker warns only once')
-    assert.match(capture.warnings[0], /module bootstrap not found/)
+    // A loader-less page still gets the polyfill, identically every time.
+    const noLoaderHtml = '<html><head><title>x</title></head><body></body></html>'
+    assert.equal(capture.transform(noLoaderHtml), capture.transform(noLoaderHtml))
   } finally {
     await capture.cleanup()
   }

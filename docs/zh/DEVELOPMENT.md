@@ -46,7 +46,7 @@ scripts / tests
 - **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
 - **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（randomUUID 与 authenticated LAN trust 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
 - **basePath 子路径部署**：网关路由先剥离 `basePath` 前缀（带边界检查，`/dsh2/foo` 不会被误当作 `/dsh` 前缀），302 跳转统一拼接前缀，转发上游时再剥离；PWA 元数据（`manifest.webmanifest` / `favicon.svg`）与静态资产（`/assets/*`）免认证放行（浏览器子资源请求，无敏感信息）；
-- **客户端 trust 时序**：index transform 在 queue-mode `__ModuleLoader__` 建立后、parser preload 前插入 bootstrap；它同时包装 queue/live 注册，并在 `dsh-client-connection` 调用 `ctx.provide('connection', handle)` 前设置 `handle.isLoopback = true`，避免 Settings 过早绑定 memory scope。此处依赖 DSH 的内部 loader 协议，结构不匹配时只记录一次告警；
+- **客户端 trust 时序**：client 插件经 inject 声明依赖 `connection`，在 apply 时对 LAN hostname 把 `handle.isLoopback` 改写为恒真 getter——早于任何消费者的持久化决策生效。全程只用官方扩展点，不触碰 DSH 模块加载器；
 - **页面双语**：`lib/locale.js` 解析渲染语言（`$DSH_HOME/settings.yaml` 的 `locale.preference` > 请求 `Accept-Language` > zh），页面文案按语言选取；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
 - **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gate/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gate/otp-master.key`，见 SECURITY.md）。

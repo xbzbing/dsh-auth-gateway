@@ -43,7 +43,7 @@ test('resolveConfig step validates before apply (fiber semantics)', () => {
   assert.equal(bad, undefined, 'invalid config must be rejected')
 })
 
-test('index transform injects only self-contained globals (no module-loader surgery)', async () => {
+test('index transform injects self-contained globals and the minimal LAN trust bootstrap', async () => {
   const capture = await captureIndexTransform()
   try {
     const loaderScript = `<script>(() => {
@@ -70,18 +70,21 @@ window.__ModuleLoader__={
     assert.ok(transformed.includes('__dshAuthGatewayBasePath__'),
       'the transform publishes the gateway basePath global for the client panel')
 
-    // Standard-dsh contract: the plugin must NOT touch the module loader —
-    // no loader wrapping, no third-party module surgery, no extra inline
-    // scripts beyond its own polyfill. Loader/registration semantics stay
-    // exactly as dsh served them, so coexisting plugins are unaffected.
-    assert.ok(!transformed.includes('__dshAuthGatewayTrustedLoopbackBootstrap__'),
-      'the retired module-loader bootstrap must be gone')
+    // LAN trust bootstrap: exactly one additional inline script. It may wrap
+    // the module loader ONLY to intercept the connection registration; it
+    // must not break the polyfill ordering or add further scripts.
     const before = (html.match(/<script>/g) || []).length
     const after = (transformed.match(/<script>/g) || []).length
-    assert.equal(after, before + 1,
-      'exactly one injected inline script: the self-contained polyfill')
+    assert.equal(after, before + 2,
+      'exactly two injected inline scripts: polyfill + LAN trust bootstrap')
+    assert.ok(transformed.includes('__dshAuthGatewayTrustedLoopbackBootstrap__'),
+      'the LAN trust bootstrap is present')
     assert.equal(transformed.indexOf('crypto.randomUUID') < transformed.indexOf(preload),
       true, 'the polyfill still lands before parser-preloaded bundles')
+    // The LAN trust bootstrap must sit AFTER the loader definition so
+    // `window.__ModuleLoader__` exists in queue mode when it runs.
+    assert.ok(transformed.indexOf('__dshAuthGatewayTrustedLoopbackBootstrap__') > transformed.indexOf('window.__ModuleLoader__='),
+      'the LAN trust bootstrap runs after the loader bootstrap')
 
     // A loader-less page still gets the polyfill, identically every time.
     const noLoaderHtml = '<html><head><title>x</title></head><body></body></html>'

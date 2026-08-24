@@ -14,6 +14,7 @@ import { createGateway, lanAddresses } from './lib/gateway.js'
 import { Config } from './lib/config.js'
 import { AuditLogWriter } from './lib/audit-log.js'
 import { hasPassword, setPassword, generateInitialPassword } from './lib/store.js'
+import { buildLanTrustScript } from './lib/lan-trust-script.js'
 
 export const name = 'dsh-auth-gateway'
 
@@ -50,10 +51,23 @@ export async function apply(ctx, config) {
     + '}'
     + '</script>'
 
-  ctx.effect(() => ctx.webServer.tapIndex((html) => html.replace(
-    '<head>',
-    `<head>${randomUUIDScript}`,
-  )), 'dsh-auth-gateway: randomUUID polyfill + basePath global')
+  ctx.effect(() => ctx.webServer.tapIndex((html) => {
+    const withPolyfill = html.replace('<head>', `<head>${randomUUIDScript}`)
+    // The LAN trust script must run AFTER the loader bootstrap has defined
+    // `window.__ModuleLoader__` (queue mode) but before any bundle registers.
+    // dsh's index defines it inline (window.__ModuleLoader__={...}); insert
+    // right after that script tag, falling back to the end of <head>.
+    const marker = 'window.__ModuleLoader__='
+    const loaderStart = withPolyfill.indexOf(marker)
+    const loaderEnd = loaderStart === -1 ? -1 : withPolyfill.indexOf('</script>', loaderStart)
+    if (loaderStart === -1 || loaderEnd === -1) {
+      // No recognizable loader bootstrap — still inject at <head> end so the
+      // polyfill works; the LAN trust guard degrades silently.
+      return withPolyfill.replace('</head>', `${buildLanTrustScript()}</head>`)
+    }
+    const insertAt = loaderEnd + '</script>'.length
+    return withPolyfill.slice(0, insertAt) + buildLanTrustScript() + withPolyfill.slice(insertAt)
+  }), 'dsh-auth-gateway: randomUUID + basePath global + LAN trust bootstrap')
 
   // Safety net: the whole design assumes the internal webserver is loopback-only.
   // The bundle patch enforces it, but a manual composition may forget.

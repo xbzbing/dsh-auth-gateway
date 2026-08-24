@@ -14,7 +14,9 @@
 
 A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: **password auth + TOTP two-factor authentication + layered brute-force protection + session management + login audit**, with **real interception of every request** (HTTP and WebSocket) at the gateway layer — unauthenticated traffic never reaches the backend.
 
-`dsh web` ships with no authentication layer (its built-in trust fence is a reachability policy, not auth). This plugin fills that gap as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
+`dsh web` ships with no authentication layer; its configuration plane (settings/credentials RPCs) is pinned to loopback — the official comment says "until a real authentication layer exists", but no solution has ever been implemented or specified. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
+
+This project supports the latest dsh 0.1.1-rc.2 release.
 
 ## Installation and Uninstallation
 
@@ -42,7 +44,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **Login audit**: login success / failure / logout / password change and brute-force alerts (lockouts / rate limits) are logged via `ctx.logger.info`/`warn` (with source IP and failure reason — never any credentials) and **persisted** to `$DSH_HOME/auth-gateway/audit.log` (JSONL, rotated daily, 90-day retention), forming a complete audit trail;
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
-- **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built), all through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`).
+- **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built); the bulk goes through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`) — with one recorded security exception: LAN trust (minimal interception of the connection registration so the Models settings page works on domain/reverse-proxy access; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md)).
 
 ## How it works
 
@@ -56,7 +58,7 @@ Browser ──> dsh-auth-gateway gateway (external port, inside the dsh process)
 
 - The gateway's lifecycle is bound to dsh: it starts/stops with dsh, no separate process;
 - The bundle patch moves the webserver to a loopback port (external = `--port`, internal = external + 1), so remote clients cannot bypass the gateway and reach the backend directly;
-- The gateway establishes client-side loopback trust while dsh's `__ModuleLoader__` loads the connection module, before Settings consumers start. This compatibility layer does not replace login, the HTTP/WebSocket gates, or the server-side fence;
+- The gateway establishes client-side loopback trust while dsh's `__ModuleLoader__` loads the connection module, before Settings consumers start — this is the **single recorded security exception** (it intercepts only the connection registration; every other plugin passes through untouched). This compatibility layer does not replace login, the HTTP/WebSocket gates, or the server-side fence; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md);
 - Auth state machine: `first deploy → initial-password login → onboarding (set a personal password) → login → (optional) OTP verification → session`; sessions that have not finished onboarding or 2FA can only reach their verification endpoints.
 
 ## Screenshots
@@ -115,6 +117,7 @@ Authentication-state changes (enable/disable OTP, change password) always requir
 | [docs/en/NGINX-DEPLOYMENT.md](docs/en/NGINX-DEPLOYMENT.md)（[简体中文](docs/zh/NGINX-DEPLOYMENT.md)） | nginx deployment: bare-metal / subdomain / sub-path / Docker nginx container — four topologies with full config examples |
 | [docs/en/SECURITY.md](docs/en/SECURITY.md)（[简体中文](docs/zh/SECURITY.md)） | Threat model, OTP security design, known limitations, recovery paths |
 | [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)（[简体中文](docs/zh/DEPLOYMENT.md)） | Ports & listening, LAN deployment, HTTPS advice, nginx reverse proxy, troubleshooting |
+| [docs/en/TROUBLESHOOTING.md](docs/en/TROUBLESHOOTING.md)（[简体中文](docs/zh/TROUBLESHOOTING.md)） | Real-world cases: Models page over domain, blocked native builds, bundle load failures, version-line credentials, cross-border tuning |
 | [docs/en/TESTING.md](docs/en/TESTING.md)（[简体中文](docs/zh/TESTING.md)） | Unit tests, end-to-end (Playwright), API/WebSocket gate verification |
 | [docs/en/DEVELOPMENT.md](docs/en/DEVELOPMENT.md)（[简体中文](docs/zh/DEVELOPMENT.md)） | Architecture, build, development stats |
 
@@ -123,7 +126,7 @@ All docs are bilingual (简体中文 / English).
 ## Acknowledgements
 
 - **@adra2n** — implemented OTP two-factor authentication ([PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)) and added AES-256-GCM encryption at rest for the OTP secret with error classification ([PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6));
-- **@meowtech** — implemented authenticated LAN browser settings support ([PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)), fixing the host-backed settings unavailability issue when accessing remotely.
+- **@meowtech** — reported and initially implemented a fix for LAN browser settings becoming unavailable on newer dsh releases (rc8+ moved the configuration plane to loopback) ([PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)); that implementation (loader wrapping + provide hijacking) was later proven to break coexisting plugins, so this repository rewrote it with a minimal-intervention approach.
 
 ## Verification overview
 

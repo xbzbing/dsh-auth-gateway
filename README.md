@@ -14,7 +14,9 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
-`dsh web` 本身没有任何认证层（其内置 trust fence 是可达性策略而非认证）。本插件以进程内网关形态补齐认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
+`dsh web` 本身没有任何认证层；配置平面（settings/credentials RPC）被 dsh 钉死在 loopback——官方注释写道"直到真实认证层存在"（until a real authentication layer exists），但从未实现或指定方案。本插件以进程内网关形态自行承担该角色补齐认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
+
+本项目已支持最新的 dsh 0.1.1-rc.2 版本。
 
 ## 安装和卸载
 
@@ -42,7 +44,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **登录审计**：登录成功 / 失败 / 登出 / 改密与暴力破解告警（锁定/限流）均输出审计日志（`ctx.logger.info`/`warn`，含来源 IP 与失败原因，不记录任何凭据），并**持久化落盘** `$DSH_HOME/auth-gateway/audit.log`（JSONL，按天轮转、保留 90 天），形成完整可审计闭环；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
-- **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）。
+- **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），主体全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）；唯有一项记录在案的安全例外——LAN trust（为域名/反代访问下模型设置页可用而对 connection 注册做最小介入，见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)）。
 
 ## 工作原理
 
@@ -56,7 +58,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - 网关生命周期与 dsh 绑定：随 dsh 启动/退出，无独立进程；
 - bundle patch 将 webserver 移到回环端口（对外 = `--port`，内部 = 对外 + 1），远程无法绕过网关直连后端；
-- 网关在 DSH 的 `__ModuleLoader__` 加载 connection 模块时、Settings 等消费者启动前建立客户端 loopback trust；该兼容层不替代登录、HTTP/WebSocket 门禁或服务端 fence；
+- 网关在 DSH 的 `__ModuleLoader__` 加载 connection 模块时、Settings 等消费者启动前建立客户端 loopback trust——这是**唯一记录在案的安全例外**（仅拦截 connection 注册，其他插件原样通过）；该兼容层不替代登录、HTTP/WebSocket 门禁或服务端 fence，详见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)；
 - 认证状态机：`首次部署 → 初始密码登录 → 引导（设置个人密码）→ 登录 →（可选）OTP 验证 → 会话`；未完成引导或 2FA 的会话仅能访问对应验证端点。
 
 ## 界面预览
@@ -115,13 +117,14 @@ dsh plugin --profile web remove dsh-auth-gateway
 | [docs/zh/NGINX-DEPLOYMENT.md](docs/zh/NGINX-DEPLOYMENT.md)（[English](docs/en/NGINX-DEPLOYMENT.md)） | 配合 nginx 部署：裸金属直连 / 子域名 / 子路径 / Docker nginx 容器四种拓扑与配置示例 |
 | [docs/zh/SECURITY.md](docs/zh/SECURITY.md)（[English](docs/en/SECURITY.md)） | 威胁模型、OTP 安全设计、已知限制与恢复路径 |
 | [docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md)（[English](docs/en/DEPLOYMENT.md)） | 端口与监听、LAN 部署、HTTPS 建议、nginx 反向代理、故障排查 |
+| [docs/zh/TROUBLESHOOTING.md](docs/zh/TROUBLESHOOTING.md)（[English](docs/en/TROUBLESHOOTING.md)） | 实机故障案例：域名下模型页不可用、原生依赖构建被拦、bundle 加载失败、版本线凭据格式、跨境超时优化 |
 | [docs/zh/TESTING.md](docs/zh/TESTING.md)（[English](docs/en/TESTING.md)） | 单元测试、端到端（Playwright）、API/WebSocket 门禁验证 |
 | [docs/DEVELOPMENT.md](docs/zh/DEVELOPMENT.md)（[English](docs/en/DEVELOPMENT.md)） | 架构说明、构建、开发统计 |
 
 ## 致谢
 
 - **@adra2n** — 实现 OTP 双因素认证（[PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)），并添加 OTP 密钥 AES-256-GCM 静态加密存储与解密路径错误分类（[PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6)）；
-- **@meowtech** — 实现认证后 LAN 浏览器设置支持（[PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)），修复远程访问下 host-backed settings 不可用的问题。
+- **@meowtech** — 报告并初步实现了 dsh 新版本（rc8+ 配置平面收归 loopback）下 LAN 浏览器设置不可用问题的修复（[PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)）；该实现（loader 包装 + provide 劫持）随后被证实会破坏共存插件，本仓库已改用最小介入方案重写。
 
 ## 验证概览
 

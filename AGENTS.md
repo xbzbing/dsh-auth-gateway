@@ -45,6 +45,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 ## 约定
 
 - **一切变更必须符合 dsh/Cordis 规范（最高优先级）**：只用官方扩展点——`ctx.effect`、`ctx.inject`、`ctx.slots`、`ctx.emit`、`webServer.tapIndex`（仅限自包含全局量注入）、`dsh.bundle` patch、client 插件 inject 声明。禁止触碰宿主运行时内部：不包装/替换 `window.__ModuleLoader__` 的任何方法，不包装第三方模块的 factory/apply/provide，不做全局 DOM 探测与样式注入。跨插件冲突或对 dsh 升级敏感的实现，一律视为规范违规并重构。
+- **LAN trust 是本项目唯一记录在案的安全例外**：dsh 把配置平面（settings/credentials RPC）钉死在 loopback，官方注释写明"直到真实认证层存在"（`until a real authentication layer exists`）但从未实现——本项目自行承担该认证层角色，因此允许对 `window.__ModuleLoader__` 做**最小介入**：在 `loader.load` 上套**透传代理**，**仅拦截** `@deepseek-ai/dsh-client-connection` 的注册（其余插件原样通过，否则视为违规）；其 `apply` 包装**不得**赋值 `ctx.provide`（mixin-bound accessor，会污染共享 ReflectService 并让所有 provide 落入 connection 的 fiber scope——这是 0.4.2 破坏 better-sidebar 的机制），只能在共享 `ctx.reflect` 上临时替换未绑定的 `provide` 本体捕获 handle、转发 `originalProvide.call(this, ...)` 保调用者归属，apply 返回后同步翻转 `connection.isLoopback`。实现见 `lib/lan-trust-script.js`；任何放宽（如包装其他插件、触碰 ctx.provide、修改 loader 语义）都属破坏性变更。
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
 - **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
 - **回环钉扎是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。

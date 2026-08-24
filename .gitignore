@@ -9,3 +9,8 @@ ms-playwright/
 playwright-report/
 test-results/
 .dsh-vision-toolkit/
+
+# Architecture diagram sources (repo keeps only the exported PNG)
+docs/assets/architecture.html
+docs/assets/architecture-en.html
+docs/assets/architecture.json

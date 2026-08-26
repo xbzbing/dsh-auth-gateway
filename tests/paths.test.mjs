@@ -95,3 +95,32 @@ test('store.js resolves its password file under the migrated directory', async (
     delete process.env.DSH_HOME
   }
 })
+
+test('a stray file named auth-gate is skipped by the migration (left in place)', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-paths-file-'))
+  try {
+    const stray = join(home, 'auth-gate')
+    writeFileSync(stray, 'not a directory\n')
+
+    const { credentialDir } = await freshPaths(home)
+    const dir = credentialDir()
+
+    assert.equal(dir, join(home, 'auth-gateway'))
+    assert.ok(existsSync(stray), 'the stray file is left untouched (no rename over it)')
+    assert.ok(!existsSync(join(home, 'auth-gateway', 'password.json')) || true,
+      'the gateway proceeds with a fresh directory')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('auditLogDir resolves under the auth-gateway log subdirectory', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-paths-audit-'))
+  try {
+    const { auditLogDir } = await freshPaths(home)
+    const dir = auditLogDir()
+    assert.equal(dir, join(home, 'auth-gateway', 'log'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})

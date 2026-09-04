@@ -46,11 +46,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built); the bulk goes through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`) — with one recorded security exception: LAN trust (minimal interception of the connection registration so the Models settings page works on domain/reverse-proxy access; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md)).
 
-## What this plugin intentionally does not do
-
-- **Multi-account login / multi-tenancy**: dsh is a single-user tool — one Home, one set of model credentials, and every session and data file (`sessions/`, `workspace/`, `.credentials.yaml`) lives on local disk under the authority of the OS account running dsh. An account layer on top of the gateway can only distinguish *who is logging in* (access control + audit); it cannot isolate *who can see what*: any authenticated user can read every session and credential of the same Home through dsh's tool execution. Real data isolation requires a process/OS boundary (one instance per tenant with separate OS accounts or containers), which is beyond the scope of an authentication gateway.
-- **Role-based permission limits (user/admin)**: likewise, roles can only take effect at the gateway's own HTTP routing layer (e.g. restricting gateway-admin features); they cannot constrain dsh's internal capability surface — once a normal user passes the authentication gate, they hold the full power of that instance (tool execution, session read/write, configuration and credential access). For scenarios that need "restricted users", deploy OS-isolated instances and manage accounts yourself. This plugin's boundary is: **the authentication gate (who may enter) + interception and audit (who did what) — it does not implement an authorization model**.
-
 ## How it works
 
 ```
@@ -113,6 +108,13 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 ## Security model
 
 Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). **The OTP secret is sealed with AES-256-GCM before it is written to disk** and can only be read with the master key — by default an auto-generated `auth-gateway/otp-master.key` (0600), or injected via `DSH_AUTH_GATEWAY_MASTER_KEY` (hex/base64, 32 bytes) to isolate disk disclosure. Login audit records only event kind, source IP and failure reason — never any credentials. The full threat model, known limitations and recovery paths are in [docs/en/SECURITY.md](docs/en/SECURITY.md).
+
+## What this plugin does not do
+
+The following requirements **cannot truly be delivered on a single instance** — they presuppose process/OS-enforced execution and storage isolation (separate OS accounts, containers, or a sandbox), and this plugin, an authentication gateway running inside the dsh process, cannot provide that layer. They are listed here so expectations stay honest:
+
+- **Multi-account login / multi-tenancy**: dsh is a single-user tool — one Home, one set of model credentials, and every session and data file (`sessions/`, `workspace/`, `.credentials.yaml`) lives on local disk under the authority of the OS account running dsh. An account layer on top of the gateway can only distinguish *who is logging in* (access control + audit); it cannot isolate *who can see what*: any authenticated user can read every session and credential of the same Home through dsh's tool execution. **Without OS/container/sandbox isolation there is no real multi-tenancy** — this plugin does not and cannot do it.
+- **Role-based permission limits (user/admin)**: likewise, roles can only take effect at the gateway's own HTTP routing layer (e.g. restricting gateway-admin features); they cannot constrain dsh's internal capability surface — once a normal user passes the authentication gate, they hold the full power of that instance (tool execution, session read/write, configuration and credential access). For scenarios that need "restricted users", deploy OS-isolated instances and manage accounts yourself. This plugin's job is: **the authentication gate (who may enter) + interception and audit (who did what) — it does not and cannot implement authorization or isolation models**.
 
 ## Documentation
 

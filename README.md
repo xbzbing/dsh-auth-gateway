@@ -46,6 +46,11 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），主体全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）；唯有一项记录在案的安全例外——LAN trust（为域名/反代访问下模型设置页可用而对 connection 注册做最小介入，见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)）。
 
+## 本插件不做的事情（边界）
+
+- **多账号登录 / 多租户**：dsh 是单用户工具——一个 Home、一份模型凭据，全部会话与数据（`sessions/`、`workspace/`、`.credentials.yaml`）都以运行 dsh 的 OS 帐号权限存放在本地。网关叠加"账号体系"只能区分**谁在登录**（访问控制 + 审计），无法隔离**谁能看到什么**：任何通过认证的用户都能经 dsh 的工具执行读取同一 Home 下的全部会话与凭据。真正的数据隔离需要进程/OS 边界（每租户独立实例 + 独立 OS 帐号或容器），超出认证网关的定位。
+- **角色权限限制（用户/管理员）**：同理，角色只能在网关自身的 HTTP 路由层生效（例如限制网关管理功能），挡不住 dsh 内部的能力面——普通用户一旦通过认证门，即拥有该实例的完整能力（工具执行、会话读写、配置与凭据访问）。需要"普通用户受限"的场景请使用 OS 级隔离的多实例部署并自行管理账号；本插件的职责边界是：**认证门禁（谁能进入）+ 拦截与审计（谁做了什么），不承担授权模型**。
+
 ## 工作原理
 
 ```

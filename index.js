@@ -129,9 +129,9 @@ export async function apply(ctx, config) {
   // Durable audit trail. ctx.logger is buffer-only in the current dsh runtime
   // (its built-in exporter keeps the last 1000 records in memory), so auth
   // events and brute-force alerts are additionally appended as JSONL to
-  // $DSH_HOME/auth-gate/audit.log — the persistent, greppable record. Daily
-  // rotation, 90-day retention; write failures degrade to a warn line and
-  // never touch the auth flow (see lib/audit-log.js).
+  // $DSH_HOME/auth-gateway/log/audit.log — the persistent, greppable record.
+  // Daily rotation, 90-day retention; write failures degrade to a warn line
+  // and never touch the auth flow (see lib/audit-log.js).
   const auditLog = new AuditLogWriter({
     onError: (err) => {
       const suppressed = err.suppressed > 0 ? `（已抑制 ${err.suppressed} 条重复告警）` : ''

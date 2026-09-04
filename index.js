@@ -37,9 +37,16 @@ const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
 const UPSTREAM_SECRET_REFRESH_MS = 60 * 1000
 
 /**
- * Build the synchronous secret source handed down to the forwarder: reads
- * hit an in-process cache; the official async readRecord() refreshes it at
- * most once per window (fire-and-forget — the sync fast path never waits).
+ * Build the upstream browser-auth secret source. Returns two faces:
+ *
+ * - `secret` — synchronous reader handed down to the forwarder: reads hit an
+ *   in-process cache; the official async readRecord() refreshes it at most
+ *   once per window (fire-and-forget — the sync fast path never waits).
+ * - `warm` — awaitable first read, so the cache is populated before the
+ *   gateway starts listening and the very first forwarded request can never
+ *   race ahead of the secret (a fire-and-forget warm-up could otherwise let
+ *   the first request upstream with no cookie and eat one visible 401).
+ *
  * No record (dsh ≤ 0.1.1) → undefined → verbatim forwarding, byte-for-byte
  * the pre-0.1.2 behavior. The key is the joined `scope/id` string form of
  * CredentialKey (the brand is compile-time only) so lib/ stays free of dsh
@@ -49,11 +56,10 @@ const UPSTREAM_SECRET_REFRESH_MS = 60 * 1000
 function upstreamSecretReader(ctx) {
   let cachedSecret
   let readAt = 0
-  let inFlight = false
+  let pending
   const refresh = () => {
-    if (inFlight) return
-    inFlight = true
-    ctx.credentials.readRecord(UPSTREAM_RECORD_KEY)
+    if (pending !== undefined) return pending
+    pending = ctx.credentials.readRecord(UPSTREAM_RECORD_KEY)
       .then((record) => { cachedSecret = extractSessionSecret(record) })
       .catch((err) => {
         // Transient read failure: keep the last known secret so forwarding
@@ -62,12 +68,25 @@ function upstreamSecretReader(ctx) {
         ctx.logger.warn('[dsh-auth-gateway] 读取 upstream browser-session 密钥失败: %s',
           err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { readAt = Date.now(); inFlight = false })
+      .finally(() => { readAt = Date.now(); pending = undefined })
+    return pending
   }
-  return () => {
-    if (typeof ctx.credentials?.readRecord !== 'function') return undefined
-    if (!inFlight && Date.now() - readAt > UPSTREAM_SECRET_REFRESH_MS) refresh()
-    return cachedSecret
+  return {
+    secret: () => {
+      if (typeof ctx.credentials?.readRecord !== 'function') return undefined
+      if (pending === undefined && Date.now() - readAt > UPSTREAM_SECRET_REFRESH_MS) refresh()
+      return cachedSecret
+    },
+    warm: () => {
+      if (typeof ctx.credentials?.readRecord !== 'function') return Promise.resolve()
+      // A fresh cache has nothing to wait for; otherwise read now (or join the
+      // in-flight read). A failed read resolves too — no secret just means
+      // verbatim forwarding, same as dsh ≤ 0.1.1.
+      if (cachedSecret !== undefined && Date.now() - readAt <= UPSTREAM_SECRET_REFRESH_MS) {
+        return Promise.resolve()
+      }
+      return refresh()
+    },
   }
 }
 
@@ -76,9 +95,13 @@ function upstreamSecretReader(ctx) {
  * @param {object} [config] - plugin config from the composition
  */
 export async function apply(ctx, config) {
-  const reader = upstreamSecretReader(ctx)
-  reader() // warm the cache before the first forwarded request can need it
-  const gateway = createGateway(config, { upstreamSecretReader: reader })
+  const upstream = upstreamSecretReader(ctx)
+  // Populate the upstream browser-auth secret cache BEFORE the gateway
+  // listens: the first forwarded request must never race ahead of the read
+  // (fire-and-forget warm-up could cost one visible upstream 401). A failed
+  // or absent read still resolves — no secret means verbatim forwarding.
+  await upstream.warm()
+  const gateway = createGateway(config, { upstreamSecretReader: upstream.secret })
 
   // Browser-side compatibility for authenticated pages. The randomUUID
   // polyfill can run at the start of <head>; it also publishes the gateway's

@@ -10,6 +10,7 @@ host (zero build, node:crypto / node:http)
 ├── lib/gateway.js    # Auth gateway: HTTP/WS interception & forwarding, auth state machine, three-layer brute-force protection, replay protection, basePath routing/redirect/forward stripping, login-audit events, static-asset pass-through
 ├── lib/gateway-otp.js # OTP route handlers (/otp/setup|enable|verify-setup|verify|verify-backup|disable, split out of gateway.js)
 ├── lib/forward.js    # HTTP/WS forwarding plumbing (loopback Host/Origin rewrite, upgrade piping, lanAddresses)
+├── lib/upstream-auth.js # dsh ≥ 0.1.2 upstream browser-auth bridge (secret via the credentials service, minted loopback-hop cookie; record-late fast retry / background probing and rotation re-mint)
 ├── lib/auth.js       # Session table & cookies: in-memory 256-bit tokens, onboarding/OTP state flags, revocation on password change
 ├── lib/audit-log.js  # Audit-log file sink (JSONL, $DSH_HOME/auth-gateway/audit.log, daily rotation, 90-day retention)
 ├── lib/page-shell.js # Shared page scaffolding (base CSS, HTML skeleton, script head: ERRORS + post)

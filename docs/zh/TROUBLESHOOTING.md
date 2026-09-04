@@ -10,7 +10,7 @@
 
 **根因**（dsh 官方设计，非网关故障）：
 
-1. dsh 把配置平面（`settings.describe`/`settings.update` 等特权 RPC）钉在 loopback-same-origin——官方注释原文：*"until a real authentication layer exists"*（`packages/client/connection/src/index.ts` 的 `PRIVILEGED_METHODS` 注释）。
+1. dsh 把配置平面（`settings.describe`/`settings.update` 等特权 RPC）钉在 loopback-same-origin——最初以注释 *"until a real authentication layer exists"* 说明（该注释已在 dsh 0.1.2 实现 BrowserAuth 时移除，配置面访问改由浏览器会话认证接管）。
 2. 客户端侧，`ui-settings` 在**自身 apply 的瞬间**快照 `connection.isLoopback`（由 `location.hostname` 判定：`127.0.0.1`/`localhost` 为 true，任何域名为 false），并把 settings 持久化锁定为 **host**（loopback）或 **memory**（域名）。
 3. memory 模式下 settings mirror 的 `load()/ensure()` 是**空操作**——请求根本不发，`view` 永远 undefined。
 4. 模型页把「提供方目录」与「settings 视图」绑在同一个 `Promise.all` 里，视图缺失即整页报错，`Retry` 调用的 `load()` 同样是空操作 → 永久失败。
@@ -103,3 +103,15 @@ gzip on;
 gzip_types application/javascript text/javascript application/json;
 gzip_min_length 1024;
 ```
+## 6. upstream 返回 `dsh web authentication required`（dsh ≥ 0.1.2）
+
+**症状**：登录网关成功，但页面与 `/api` 报文本 `dsh web authentication required; reopen the URL printed by dsh web.`。该文本是 dsh 0.1.2+ 内部 webserver 的 BrowserAuth 401——请求已穿过网关到达内部服务器，但没带有效的上游 cookie。
+
+**背景**：dsh 0.1.2 起内部服务器对 index 与 `/api` 强制浏览器认证；网关需经官方 `credentials` 服务读取 `client-connection/browser-session` 密钥，为回环一跳铸造同构 cookie（机制见 SECURITY.md）。下列场景会缺失该 cookie：
+
+| 场景 | 现象 | 修复 |
+|---|---|---|
+| 插件是 npm 旧版（≤ 0.5.1，无 `lib/upstream-auth.js` 桥接） | 所有转发永久 401 | 改用 GitHub main（`dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main`）或等 npm 发版后重新安装 |
+| 全新部署/撤销后重启的启动窗口（record 由 dsh 的 Connection 激活时创建，可能晚于网关启动） | 启动初期短暂 401，随后自行恢复 | 升级到含快速重试（2s）+ 后台轮询的版本（`eca3b0b` 起） |
+
+**排查**：确认插件版本与 `node_modules/dsh-auth-gateway/lib/upstream-auth.js` 存在；查看启动日志有无 `读取 upstream browser-session 密钥失败` 告警（持续 401 + 告警 = 密钥读取问题，而非版本问题）。

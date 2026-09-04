@@ -10,6 +10,7 @@ host（零构建，node:crypto / node:http）
 ├── lib/gateway.js    # 认证网关：HTTP/WS 拦截与转发、认证状态机、防爆破三层、防重放、basePath 路由/跳转/转发剥离、登录审计事件、静态资产免认证
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
 ├── lib/forward.js    # HTTP/WS 转发管道（Host/Origin 回环改写、upgrade 双向管道、lanAddresses）
+├── lib/upstream-auth.js # dsh ≥ 0.1.2 上游浏览器认证桥接（经 credentials 服务读密钥、为回环一跳铸同构 cookie；含 record 晚到快速重试/后台轮询与轮换重铸）
 ├── lib/auth.js       # 会话表与 Cookie：内存 256-bit token、onboarding/OTP 状态标记、改密吊销
 ├── lib/audit-log.js  # 审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/audit.log，按天轮转、保留 90 天）
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）

@@ -69,7 +69,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 dsh 0.1.2 起，内部 webserver 自身启用 BrowserAuth：index 页与 `/api` 要求进程启动 token（一次性 `?token=` 交换）或一枚绑定 authority 的持久签名 cookie。浏览器只持有网关会话 cookie，无法完成 upstream 的 token 交换——网关若不处理，所有转发请求都会被 upstream 判 401。网关的补齐方式：
 
-- **密钥经官方通道读取**：通过注入的 `credentials` 服务读取官方 record `client-connection/browser-session`（与 dsh 自身 BrowserAuth 读写的是同一条 `ctx.credentials.readRecord` 通道；`kind: grant`、payload `version: 1`、32 字节密钥，与 dsh 的 `storedSecret` 同一校验口径）。不依赖 `.credentials.yaml` 的私有文件形态；record 不存在（dsh ≤ 0.1.1）时静默退化为逐字转发，行为与旧版一致。密钥缓存 60s 异步刷新，转发请求只走同步快路径。
+- **密钥经官方通道读取**：通过注入的 `credentials` 服务读取官方 record `client-connection/browser-session`（与 dsh 自身 BrowserAuth 读写的是同一条 `ctx.credentials.readRecord` 通道；`kind: grant`、payload `version: 1`、32 字节密钥，与 dsh 的 `storedSecret` 同一校验口径）。不依赖 `.credentials.yaml` 的私有文件形态；record 不存在（dsh ≤ 0.1.1）时静默退化为逐字转发，行为与旧版一致。缓存语义：**从未读到过密钥时**（全新部署，record 由 dsh 的 Connection 激活时创建、可能晚于网关启动）按 2s 快速重试并在后台轮询，record 一出现转发即携带铸出的 cookie；**读到过密钥后**按 60s 异步刷新跟随轮换。转发请求只走同步快路径。
 - **cookie 仅存在于回环一跳**：网关用该密钥为改写后的回环 authority（`127.0.0.1:<内部端口>`，与 dsh 从 Host 头派生 authority 的口径一致）铸造与 dsh 自身签发同构的 cookie（`dsh-auth-<b64url(sha256(authority))>` = `v1.<payload>.<HMAC-SHA256>`，24h TTL，短于 dsh 默认 30 天上限），只附加在已通过密码/OTP 门禁的转发请求（HTTP 与 WS 升级）上，绝不 Set-Cookie 给浏览器；认证前的公开静态资产转发（manifest/favicon/assets）也不携带。
 - **轮换即时跟随**：铸造的 cookie 记录所用密钥指纹，密钥一变（dsh 侧轮换/全局撤销删除 record）立即重铸或停止附加，不会在 TTL 内拿着失效 cookie 反复 401。
 

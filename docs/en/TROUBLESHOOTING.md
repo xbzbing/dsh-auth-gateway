@@ -10,7 +10,7 @@ Real-world failure cases from dsh-auth-gateway deployments: symptoms, root cause
 
 **Root cause** (dsh official design, not a gateway fault):
 
-1. dsh pins its configuration plane (`settings.describe` / `settings.update` privileged RPCs) to loopback-same-origin — official comment: *"until a real authentication layer exists"* (`PRIVILEGED_METHODS` note in `packages/client/connection/src/index.ts`).
+1. dsh pins its configuration plane (`settings.describe` / `settings.update` privileged RPCs) to loopback-same-origin — originally explained by the comment *"until a real authentication layer exists"* (removed when dsh 0.1.2 implemented BrowserAuth; configuration-plane access is now governed by the browser-session authentication).
 2. Client-side, `ui-settings` snapshots `connection.isLoopback` (derived from `location.hostname`: true for `127.0.0.1`/`localhost`, false for any domain) at ITS apply instant and locks settings persistence to **host** (loopback) or **memory** (domain).
 3. In memory mode the settings mirror's `load()/ensure()` are **no-ops** — no request is ever sent and `view` stays undefined forever.
 4. The Models page binds the provider directory and the settings view into one `Promise.all`; a missing view fails the whole page, and `Retry` calls the same no-op `load()` — permanent failure.
@@ -103,3 +103,15 @@ gzip on;
 gzip_types application/javascript text/javascript application/json;
 gzip_min_length 1024;
 ```
+## 6. Upstream answers `dsh web authentication required` (dsh ≥ 0.1.2)
+
+**Symptom**: logging into the gateway succeeds, but pages and `/api` answer `dsh web authentication required; reopen the URL printed by dsh web.` That text is the BrowserAuth 401 of the dsh ≥ 0.1.2 internal webserver — the request already crossed the gateway and reached the internal server, but carried no valid upstream cookie.
+
+**Background**: since dsh 0.1.2 the internal server enforces browser authentication on the index page and `/api`; the gateway must read the `client-connection/browser-session` secret through the official `credentials` service and mint an identical cookie for the loopback hop (see SECURITY.md). The cookie is missing in these scenarios:
+
+| Scenario | Symptom | Fix |
+|---|---|---|
+| Plugin is an old npm release (≤ 0.5.1, no `lib/upstream-auth.js` bridge) | Every forward is permanently 401 | Install from GitHub main (`dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main`) or re-install after the npm release |
+| Fresh deployment / post-revocation restart window (the record is created by dsh's Connection on activation, possibly after the gateway warmed) | Brief 401s right after boot, then self-recovery | Upgrade to a build with fast retry (2s) + background probing (since `eca3b0b`) |
+
+**Triage**: confirm the plugin version and that `node_modules/dsh-auth-gateway/lib/upstream-auth.js` exists; check the startup log for the `读取 upstream browser-session 密钥失败` warning (persistent 401 + warning = a secret-read problem, not a version problem).

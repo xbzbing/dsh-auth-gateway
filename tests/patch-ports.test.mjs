@@ -87,3 +87,17 @@ test('web-runtime row: printUrl off, trustedHosts flows through webStartup', () 
   const e = evalPatch(8080, { webStartup: { port: 8080, trustedHosts: ['lan.example:8080'] } })
   assert.deepEqual(e('trustedHosts'), ['lan.example:8080'])
 })
+
+test('webserver row: whole-config replacement must restate the compression defaults', () => {
+  const patchLines = patch.split('\n')
+  const webserver = patchLines.indexOf('- id: webserver')
+  assert.ok(webserver !== -1, 'patch must carry the webserver row')
+  const block = patchLines.slice(webserver, patchLines.indexOf('- id: web-runtime'))
+  const row = block.join('\n')
+  // The patch replaces the web-app bundle's whole config; dsh 0.1.2's
+  // webserver defaults to gzip — omitting these would silently drop
+  // response compression from the internal server.
+  assert.ok(row.includes('compression: gzip'), 'gzip must be restated (schema default is none)')
+  assert.ok(row.includes('compressionLevel: 1'))
+  assert.ok(row.includes('compressionThresholdBytes: 1024'))
+})

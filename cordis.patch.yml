@@ -20,6 +20,13 @@
   config:
     host: 127.0.0.1
     port: !!js (ctx.webStartup.port ?? 3080) + 1
+    # Whole-config replacement: the web-app bundle's compression defaults
+    # (gzip / level 1 / ≥1024 bytes) must be restated here too, or the row
+    # falls back to the schema defaults ('none') and the internal server
+    # stops compressing responses.
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
 
 # web-app's own URL line prints the INTERNAL webserver address
 # (http://127.0.0.1:<internal port>), which is loopback-only by design and

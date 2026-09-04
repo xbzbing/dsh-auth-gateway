@@ -71,13 +71,21 @@ try {
     await page.click('button[type=submit]')
     // Must be forced into onboarding, not into the app.
     await page.waitForURL('**/onboarding', { timeout: 15000 })
+    // Step 1 is the OPTIONAL OTP binding page; skip it to step 2 (the
+    // mandatory personal-password form lives at /onboarding/password).
+    await page.waitForSelector('#otp-setup', { timeout: 10000 })
+    await page.click('text=跳过，直接设置密码')
+    ok('initial password login is routed to onboarding step 1 (OTP optional)')
+    await page.waitForURL('**/onboarding/password', { timeout: 10000 })
     await page.waitForSelector('#change-form', { timeout: 10000 })
-    ok('initial password login is routed to the onboarding page')
     await page.fill('#oldPassword', INITIAL)
     await page.fill('#newPassword', PASSWORD)
     await page.fill('#confirm', PASSWORD)
     await page.click('#change-form button[type=submit]')
-    await page.waitForSelector('#auth', { timeout: 15000 })
+    // Setting the personal password revokes every session: back to the
+    // login form, then re-login with the new password.
+    await page.waitForURL('**/login', { timeout: 15000 })
+    await page.waitForSelector('#auth', { timeout: 10000 })
     await page.fill('#password', PASSWORD)
     await page.click('button[type=submit]')
     ok('onboarding sets a personal password; re-login succeeds')

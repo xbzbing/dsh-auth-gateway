@@ -16,7 +16,7 @@ import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractSessionSecret, createUpstreamCookieMinter } from '../lib/upstream-auth.js'
+import { extractSessionSecret, createUpstreamCookieMinter, createCachedSecretReader } from '../lib/upstream-auth.js'
 import { LoginGateway } from '../lib/gateway.js'
 import { setPassword } from '../lib/store.js'
 
@@ -144,6 +144,47 @@ test('minter re-mints after the TTL lapses and drops the cookie when the record 
   } finally {
     Date.now = realNow
   }
+})
+
+// ── cached secret reader (fresh-deployment record-late race) ────────────
+
+test('cached reader retries fast while no secret was ever read, then cools to refreshMs', async () => {
+  let clock = 0
+  let record
+  const reader = createCachedSecretReader({
+    key: 'client-connection/browser-session',
+    readRecord: async () => record,
+    now: () => clock,
+    refreshMs: 60_000,
+    retryMs: 2_000,
+  })
+
+  // Fresh deployment: the record does not exist yet (dsh's own BrowserAuth
+  // writes it only when Connection activates, possibly after gateway warm).
+  await reader.warm()
+  assert.equal(reader.secret(), undefined, 'absent record must yield undefined')
+
+  // Inside the retry window no re-read happens.
+  clock += 1_000
+  assert.equal(reader.secret(), undefined)
+
+  // The record appears; after the retry window the next call re-reads and
+  // picks it up immediately (this is the first-boot 401 fix).
+  const secret = randomBytes(32)
+  record = sessionRecord(secret)
+  clock += 2_000
+  await reader.warm() // cachedSecret still undefined -> refresh, awaited
+  assert.deepEqual(reader.secret(), secret, 'record-late must be followed within retryMs')
+
+  // Once a secret was seen, the long refresh window governs rotation pick-up.
+  const seen = reader.secret()
+  const rotated = randomBytes(32)
+  record = sessionRecord(rotated)
+  clock += 30_000
+  assert.equal(reader.secret(), seen, 'inside refreshMs the cached secret stays')
+  clock += 31_000 // 61s total since the last read
+  await reader.warm()
+  assert.deepEqual(reader.secret(), rotated, 'rotation is picked up after refreshMs')
 })
 
 // ── end-to-end: gateway forwards through a 401-ing upstream ─────────────

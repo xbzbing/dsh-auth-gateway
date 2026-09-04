@@ -15,7 +15,7 @@ import { Config } from './lib/config.js'
 import { AuditLogWriter } from './lib/audit-log.js'
 import { hasPassword, setPassword, generateInitialPassword } from './lib/store.js'
 import { buildLanTrustScript } from './lib/lan-trust-script.js'
-import { extractSessionSecret } from './lib/upstream-auth.js'
+import { createCachedSecretReader } from './lib/upstream-auth.js'
 
 export const name = 'dsh-auth-gateway'
 
@@ -32,62 +32,32 @@ export const inject = ['webServer', 'credentials']
 
 /** The credential record dsh persists its upstream browser-session secret in. */
 const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
-/** How often the record is re-read, so a dsh-side secret rotation is picked
- *  up without a gateway restart. Requests only ever touch the cached value. */
-const UPSTREAM_SECRET_REFRESH_MS = 60 * 1000
 
 /**
- * Build the upstream browser-auth secret source. Returns two faces:
- *
- * - `secret` — synchronous reader handed down to the forwarder: reads hit an
- *   in-process cache; the official async readRecord() refreshes it at most
- *   once per window (fire-and-forget — the sync fast path never waits).
- * - `warm` — awaitable first read, so the cache is populated before the
- *   gateway starts listening and the very first forwarded request can never
- *   race ahead of the secret (a fire-and-forget warm-up could otherwise let
- *   the first request upstream with no cookie and eat one visible 401).
- *
- * No record (dsh ≤ 0.1.1) → undefined → verbatim forwarding, byte-for-byte
- * the pre-0.1.2 behavior. The key is the joined `scope/id` string form of
- * CredentialKey (the brand is compile-time only) so lib/ stays free of dsh
- * runtime imports.
+ * Build the upstream browser-auth secret source (see
+ * createCachedSecretReader in lib/upstream-auth.js for the caching and
+ * retry semantics). `secret` is the synchronous reader handed down to the
+ * forwarder; `warm` is awaited before the gateway listens so the first
+ * forwarded request can never race ahead of the cache. On dsh ≤ 0.1.1 the
+ * record service lacks readRecord → undefined source → verbatim forwarding,
+ * byte-for-byte the pre-0.1.2 behavior.
  * @param {import('@deepseek-ai/cordis').Context} ctx
  */
 function upstreamSecretReader(ctx) {
-  let cachedSecret
-  let readAt = 0
-  let pending
-  const refresh = () => {
-    if (pending !== undefined) return pending
-    pending = ctx.credentials.readRecord(UPSTREAM_RECORD_KEY)
-      .then((record) => { cachedSecret = extractSessionSecret(record) })
-      .catch((err) => {
-        // Transient read failure: keep the last known secret so forwarding
-        // keeps working; a truly revoked secret surfaces as upstream 401s
-        // (visible) rather than a silent gateway-side refusal.
-        ctx.logger.warn('[dsh-auth-gateway] 读取 upstream browser-session 密钥失败: %s',
-          err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => { readAt = Date.now(); pending = undefined })
-    return pending
+  if (typeof ctx.credentials?.readRecord !== 'function') {
+    return { secret: () => undefined, warm: () => Promise.resolve() }
   }
-  return {
-    secret: () => {
-      if (typeof ctx.credentials?.readRecord !== 'function') return undefined
-      if (pending === undefined && Date.now() - readAt > UPSTREAM_SECRET_REFRESH_MS) refresh()
-      return cachedSecret
+  return createCachedSecretReader({
+    key: UPSTREAM_RECORD_KEY,
+    readRecord: (key) => ctx.credentials.readRecord(key),
+    onError: (err) => {
+      // Transient read failure: keep the last known secret so forwarding
+      // keeps working; a truly revoked secret surfaces as upstream 401s
+      // (visible) rather than a silent gateway-side refusal.
+      ctx.logger.warn('[dsh-auth-gateway] 读取 upstream browser-session 密钥失败: %s',
+        err instanceof Error ? err.message : String(err))
     },
-    warm: () => {
-      if (typeof ctx.credentials?.readRecord !== 'function') return Promise.resolve()
-      // A fresh cache has nothing to wait for; otherwise read now (or join the
-      // in-flight read). A failed read resolves too — no secret just means
-      // verbatim forwarding, same as dsh ≤ 0.1.1.
-      if (cachedSecret !== undefined && Date.now() - readAt <= UPSTREAM_SECRET_REFRESH_MS) {
-        return Promise.resolve()
-      }
-      return refresh()
-    },
-  }
+  })
 }
 
 /**

@@ -77,6 +77,7 @@ As long as the process is alive and the session valid, the gateway forwards byte
 |---|---|---|
 | 0.1.0-rc.7 / rc.8 | Flat: `KEY: value` | Top-level keys must be non-empty strings |
 | 0.1.1-rc.1 / rc.2 | `version: 1` + `refs:` / `records:` | Flat files are migrated automatically on boot (**one-way**) |
+| 0.1.2-rc.1+ | Same as 0.1.1, plus the `client-connection/browser-session` record | The internal webserver gains browser authentication (BrowserAuth); this plugin adapts automatically by reading that record through the official `credentials` service — no manual action needed |
 
 **Symptom**: after switching versions, `dsh web` exits at startup with `credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a string`; nothing listens on the external port, and the browser shows a white page or the section-3 loader error.
 

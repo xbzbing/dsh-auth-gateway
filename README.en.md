@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web` ships with no authentication layer; its configuration plane (settings/credentials RPCs) is pinned to loopback — the official comment says "until a real authentication layer exists", but no solution has ever been implemented or specified. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports the latest dsh 0.1.1-rc.2 release.
+This project supports the latest dsh 0.1.2-rc.1 release. Starting with dsh 0.1.2, the internal webserver enforces built-in browser authentication (BrowserAuth): the gateway reads the upstream session secret through the official `credentials` service and automatically mints an upstream cookie for loopback forwarding — transparent to the browser and to your deployment (see [docs/en/SECURITY.md](docs/en/SECURITY.md) for the mechanism).
 
 ## Installation and Uninstallation
 

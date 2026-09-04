@@ -14,11 +14,13 @@ import { apply } from '../index.js'
 const UPSTREAM_PORT = 3181
 const LISTEN_PORT = 3180
 
-// Fake upstream: any page 200, any /api 200 json, no upgrade handling.
+// Fake upstream: any page 200, any /api 200 json, no upgrade handling. The
+// captured tapIndex transform runs on the index page, like the real server.
+let indexTransform
 const upstream = http.createServer((req, res) => {
   if (req.url === '/') {
     res.writeHead(200, { 'content-type': 'text/html' })
-    res.end('<h1>fake dsh web</h1>')
+    res.end(indexTransform ? indexTransform('<h1>fake dsh web</h1>') : '<h1>fake dsh web</h1>')
     return
   }
   res.writeHead(200, { 'content-type': 'application/json' })
@@ -26,10 +28,19 @@ const upstream = http.createServer((req, res) => {
 })
 await new Promise((resolve) => upstream.listen(UPSTREAM_PORT, '127.0.0.1', resolve))
 
-// Mock Cordis ctx: enough of the surface apply() touches.
+// Mock Cordis ctx: enough of the surface apply() touches. `credentials`
+// mirrors the injected official service; returning undefined (no
+// browser-session record) exercises the verbatim-forwarding degrade path.
 const disposers = []
 const ctx = {
-  webServer: { host: '127.0.0.1', port: UPSTREAM_PORT },
+  webServer: {
+    host: '127.0.0.1',
+    port: UPSTREAM_PORT,
+    tapIndex: (fn) => { indexTransform = fn },
+  },
+  credentials: {
+    readRecord: async (key) => undefined,
+  },
   logger: {
     info: (...a) => console.log('[info]', ...a),
     warn: (...a) => console.log('[warn]', ...a),
@@ -50,7 +61,9 @@ await apply(ctx, {
 console.log(`gateway up on http://127.0.0.1:${LISTEN_PORT} -> http://127.0.0.1:${UPSTREAM_PORT}`)
 
 async function shutdown() {
-  for (const disposer of disposers.reverse()) await disposer()
+  for (const disposer of disposers.reverse()) {
+    if (typeof disposer === 'function') await disposer()
+  }
   await new Promise((resolve) => upstream.close(resolve))
   process.exit(0)
 }

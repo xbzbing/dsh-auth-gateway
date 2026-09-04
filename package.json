@@ -21,8 +21,8 @@
     "README.en.md"
   ],
   "bin": {
-    "dsh-auth-gateway-uninstall": "./scripts/uninstall.mjs",
-    "dsh-auth-gateway-reset": "./scripts/reset.mjs"
+    "dsh-auth-gateway-uninstall": "scripts/uninstall.mjs",
+    "dsh-auth-gateway-reset": "scripts/reset.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -132,6 +132,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - **@adra2n** — 实现 OTP 双因素认证（[PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)），并添加 OTP 密钥 AES-256-GCM 静态加密存储与解密路径错误分类（[PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6)）；
 - **@meowtech** — 报告并初步实现了 dsh 新版本（rc8+ 配置平面收归 loopback）下 LAN 浏览器设置不可用问题的修复（[PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)）；该实现（loader 包装 + provide 劫持）随后被证实会破坏共存插件，本仓库已改用最小介入方案重写。
+- **@LuckVd** — 修复 dsh ≥ 0.1.2 上游浏览器认证（BrowserAuth）导致的转发 401（[PR #12](https://github.com/xbzbing/dsh-auth-gateway/pull/12)）：经官方 `credentials` 通道读取密钥并为回环一跳铸造同构 cookie，经评审补齐官方通道读取、轮换即时重铸、部署清单与双语文档后合入。
 
 ## 验证概览
 

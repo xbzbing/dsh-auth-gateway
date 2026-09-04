@@ -134,6 +134,7 @@ All docs are bilingual (简体中文 / English).
 
 - **@adra2n** — implemented OTP two-factor authentication ([PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)) and added AES-256-GCM encryption at rest for the OTP secret with error classification ([PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6));
 - **@meowtech** — reported and initially implemented a fix for LAN browser settings becoming unavailable on newer dsh releases (rc8+ moved the configuration plane to loopback) ([PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)); that implementation (loader wrapping + provide hijacking) was later proven to break coexisting plugins, so this repository rewrote it with a minimal-intervention approach.
+- **@LuckVd** — fixed the forwarded-request 401s caused by dsh ≥ 0.1.2 upstream browser authentication (BrowserAuth) ([PR #12](https://github.com/xbzbing/dsh-auth-gateway/pull/12)): reading the secret through the official `credentials` channel and minting an identical cookie for the loopback hop; after review, merged with the official-channel read, immediate re-mint on rotation, the deploy manifest and bilingual docs in place.
 
 ## Verification overview
 

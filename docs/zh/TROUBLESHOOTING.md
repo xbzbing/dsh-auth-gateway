@@ -77,6 +77,7 @@ curl -skI https://<域名>/                    # 全链路(未登录应 302 → 
 |---|---|---|
 | 0.1.0-rc.7 / rc.8 | 平铺：`KEY: value` | 顶层键必须为非空字符串 |
 | 0.1.1-rc.1 / rc.2 | `version: 1` + `refs:`/`records:` | 启动时自动把平铺文件迁移为新格式（**单向**） |
+| 0.1.2-rc.1+ | 同 0.1.1 格式，新增 `client-connection/browser-session` record | 内部 webserver 新增浏览器认证（BrowserAuth）；本插件经官方 `credentials` 服务读取该 record 自动适配，无需手工操作 |
 
 **症状**：切换版本后 `dsh web` 启动即退出，报 `credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a string`；对外端口无人监听，浏览器表现为白屏或第 3 节的 loader 错误。
 

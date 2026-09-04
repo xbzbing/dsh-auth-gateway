@@ -15,20 +15,70 @@ import { Config } from './lib/config.js'
 import { AuditLogWriter } from './lib/audit-log.js'
 import { hasPassword, setPassword, generateInitialPassword } from './lib/store.js'
 import { buildLanTrustScript } from './lib/lan-trust-script.js'
+import { extractSessionSecret } from './lib/upstream-auth.js'
 
 export const name = 'dsh-auth-gateway'
 
 export { Config }
 
-/** The gateway needs the real web server running (its port is the upstream). */
-export const inject = ['webServer']
+/**
+ * The gateway needs the real web server running (its port is the upstream).
+ * `credentials` is the official record service: on dsh ≥ 0.1.2 the internal
+ * webserver enforces BrowserAuth, and its signing secret lives in the
+ * `client-connection/browser-session` record — the same record dsh's own
+ * BrowserAuth reads and writes through this service.
+ */
+export const inject = ['webServer', 'credentials']
+
+/** The credential record dsh persists its upstream browser-session secret in. */
+const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
+/** How often the record is re-read, so a dsh-side secret rotation is picked
+ *  up without a gateway restart. Requests only ever touch the cached value. */
+const UPSTREAM_SECRET_REFRESH_MS = 60 * 1000
+
+/**
+ * Build the synchronous secret source handed down to the forwarder: reads
+ * hit an in-process cache; the official async readRecord() refreshes it at
+ * most once per window (fire-and-forget — the sync fast path never waits).
+ * No record (dsh ≤ 0.1.1) → undefined → verbatim forwarding, byte-for-byte
+ * the pre-0.1.2 behavior. The key is the joined `scope/id` string form of
+ * CredentialKey (the brand is compile-time only) so lib/ stays free of dsh
+ * runtime imports.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ */
+function upstreamSecretReader(ctx) {
+  let cachedSecret
+  let readAt = 0
+  let inFlight = false
+  const refresh = () => {
+    if (inFlight) return
+    inFlight = true
+    ctx.credentials.readRecord(UPSTREAM_RECORD_KEY)
+      .then((record) => { cachedSecret = extractSessionSecret(record) })
+      .catch((err) => {
+        // Transient read failure: keep the last known secret so forwarding
+        // keeps working; a truly revoked secret surfaces as upstream 401s
+        // (visible) rather than a silent gateway-side refusal.
+        ctx.logger.warn('[dsh-auth-gateway] 读取 upstream browser-session 密钥失败: %s',
+          err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => { readAt = Date.now(); inFlight = false })
+  }
+  return () => {
+    if (typeof ctx.credentials?.readRecord !== 'function') return undefined
+    if (!inFlight && Date.now() - readAt > UPSTREAM_SECRET_REFRESH_MS) refresh()
+    return cachedSecret
+  }
+}
 
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {object} [config] - plugin config from the composition
  */
 export async function apply(ctx, config) {
-  const gateway = createGateway(config)
+  const reader = upstreamSecretReader(ctx)
+  reader() // warm the cache before the first forwarded request can need it
+  const gateway = createGateway(config, { upstreamSecretReader: reader })
 
   // Browser-side compatibility for authenticated pages. The randomUUID
   // polyfill can run at the start of <head>; it also publishes the gateway's

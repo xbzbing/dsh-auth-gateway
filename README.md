@@ -14,7 +14,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
-`dsh web` 本身没有任何认证层；配置平面（settings/credentials RPC）被 dsh 钉死在 loopback——官方注释写道"直到真实认证层存在"（until a real authentication layer exists），但从未实现或指定方案。本插件以进程内网关形态自行承担该角色补齐认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
+`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作，也没有针对反向代理/网关的处理」（*"There is no logout operation or reverse-proxy-specific handling"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
 本项目已支持最新的 dsh 0.1.2-rc.1 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。
 

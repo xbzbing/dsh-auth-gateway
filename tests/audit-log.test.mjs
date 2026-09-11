@@ -614,3 +614,93 @@ test('open() with no legacy files migrates nothing and keeps working', async () 
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('a migrated live file is archived under its mtime day at the next rotation', async () => {
+  const root = tempDir()
+  const dir = join(root, 'log')
+  try {
+    // A 0.5.0 install: the trail sits at the credential-dir root, last written
+    // on the 18th. onMigrate makes it the live file; the first write after the
+    // upgrade must not merge the 18th's lines into the 21st's file.
+    writeFileSync(join(root, AUDIT_LOG_NAME), '{"old":true}\n')
+    utimesSync(join(root, AUDIT_LOG_NAME), new Date(at(2025, 8, 18, 9)), new Date(at(2025, 8, 18, 9)))
+
+    const w = new AuditLogWriter({ dir, now: () => at(2025, 8, 21, 8) })
+    await w.open()
+    await w.append({ kind: 'login-success', ip: '10.0.0.9' })
+
+    assert.equal(readFileSync(join(dir, 'audit.log.2025-08-18'), 'utf8'), '{"old":true}\n',
+      'the migrated content is archived under the day it was written')
+    const live = readFileSync(join(dir, AUDIT_LOG_NAME), 'utf8')
+    assert.equal(live.includes('"old":true'), false, 'the days are not merged')
+    assert.equal(JSON.parse(live.trim()).kind, 'login-success', "today's event is in the live file")
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('legacyDir is explicit: the default parent is not scanned when it is overridden', async () => {
+  const root = tempDir()
+  const dir = join(root, 'log')
+  const elsewhere = join(root, 'decoy')
+  try {
+    mkdirSync(dir, { recursive: true })
+    mkdirSync(elsewhere, { recursive: true })
+    // A stray audit.log in dir's parent must be ignored when the caller names
+    // its own legacyDir — the migration must not guess at a tree it was not
+    // pointed at.
+    writeFileSync(join(root, AUDIT_LOG_NAME), '{"parent":true}\n')
+    writeFileSync(join(elsewhere, AUDIT_LOG_NAME), '{"elsewhere":true}\n')
+
+    const migrated = []
+    const w = new AuditLogWriter({
+      dir,
+      legacyDir: elsewhere,
+      now: () => at(2025, 8, 21, 8),
+      onMigrate: (line) => migrated.push(line),
+    })
+    await w.open()
+
+    assert.equal(migrated.length, 1, 'only the named legacy dir is folded')
+    assert.ok(existsSync(join(root, AUDIT_LOG_NAME)), "the parent's file is left alone")
+    assert.equal(readFileSync(join(dir, AUDIT_LOG_NAME), 'utf8'), '{"elsewhere":true}\n')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a migration failure is reported without faking a later "recovered"', async () => {
+  const root = tempDir()
+  const dir = join(root, 'log')
+  try {
+    writeFileSync(join(root, AUDIT_LOG_NAME), '{"old":true}\n')
+    const errors = []
+    const recovered = []
+    const w = new AuditLogWriter({
+      dir,
+      now: () => at(2025, 8, 21, 8),
+      onError: (e) => errors.push(e),
+      onRecover: () => recovered.push(1),
+      // Fail only the migration leg; the later append must still work.
+      link: async (from, to) => {
+        if (from === join(root, AUDIT_LOG_NAME)) {
+          const err = new Error('EPERM: not permitted')
+          err.code = 'EPERM'
+          throw err
+        }
+        await fsLink(from, to)
+      },
+    })
+    await w.open()
+
+    assert.equal(errors.length, 1, 'the migration problem is reported')
+    assert.equal(errors[0].migrationFailures, 1, 'with the number of files affected')
+    assert.ok(existsSync(join(root, AUDIT_LOG_NAME)), 'nothing was destroyed by the failure')
+
+    await w.append({ kind: 'login-success', ip: '10.0.0.9' })
+    assert.equal(recovered.length, 0,
+      'a successful append must not claim recovery from a migration failure')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

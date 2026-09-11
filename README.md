@@ -101,7 +101,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 |---|---|---|
 | `listenHost` / `listenPort` | `0.0.0.0` / `3080` | 网关对外监听地址与端口 |
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
-| `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
+| `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。字符集限 `A-Za-z0-9._~/-`，拒绝 `..`、`//`、引号、空白、尖括号（该值会内嵌进页面脚本与链接，故按白名单校验；不合规配置会在加载时被拒绝）。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |

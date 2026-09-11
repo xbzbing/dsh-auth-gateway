@@ -311,11 +311,12 @@ test('onboarding and change-password pages follow the same language resolution',
 })
 
 test('binding OTP mid-onboarding does not revoke the session; the password step finishes and revokes once', async () => {
-  // This test binds OTP on a fresh gateway with its own policy — stop the
-  // beforeEach gateway first, or the leaked listener keeps the test file's
-  // event loop busy and the file-level test never completes.
+  // This test binds OTP on a fresh gateway — stop the beforeEach gateway
+  // first, or the leaked listener keeps the test file's event loop busy and
+  // the file-level test never completes. startGateway takes the policy only
+  // (2FA is a user action since 0.3.0; no config switch).
   await stopGateway()
-  await startGateway({}, { otpEnabled: false })
+  await startGateway({})
   await setPassword('Init1al!pw', { initial: true })
   const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'Init1al!pw' } })
   const cookie = cookieValue(loginRes.headers)

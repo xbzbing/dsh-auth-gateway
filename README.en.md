@@ -101,7 +101,7 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 |---|---|---|
 | `listenHost` / `listenPort` | `0.0.0.0` / `3080` | Gateway external listen address and port |
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | Internal webserver address and port |
-| `basePath` | `/` | Reverse-proxy sub-path prefix (e.g. `/dsh`); **default `/` (root path)**. For sub-path deployment, set in the **deployer's profile patch**, not shipped with the plugin |
+| `basePath` | `/` | Reverse-proxy sub-path prefix (e.g. `/dsh`); **default `/` (root path)**. Charset is limited to `A-Za-z0-9._~/-`: `..`, `//`, quotes, whitespace and angle brackets are rejected (the value is embedded into page scripts and links, so it is allowlist-validated; a non-conforming value is refused at load). For sub-path deployment, set in the **deployer's profile patch**, not shipped with the plugin |
 | `minPasswordLength` | `8` | Minimum password length (4–128) |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | Password complexity: mixed case OR special character |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | Password-failure lockout threshold and duration |

@@ -124,3 +124,45 @@ test('auditLogDir resolves under the auth-gateway log subdirectory', async () =>
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('legacy login-plugin data (v0.1-v0.2 era) migrates to auth-gateway when it is the sole legacy dir', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-paths-login-plugin-'))
+  try {
+    const legacy = join(home, 'login-plugin')
+    mkdirSync(legacy, { mode: 0o700 })
+    writeFileSync(join(legacy, 'password.json'), '{"version":1,"salt":"ab","hash":"cd","updatedAt":1}', { mode: 0o600 })
+
+    const { credentialDir } = await freshPaths(home)
+    const dir = credentialDir()
+
+    assert.equal(dir, join(home, 'auth-gateway'))
+    assert.ok(existsSync(join(dir, 'password.json')), 'the oldest-era record rides along')
+    assert.ok(!existsSync(legacy), 'the login-plugin directory is gone (atomic rename)')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+    delete process.env.DSH_HOME
+  }
+})
+
+test('auth-gate wins over login-plugin when both legacy directories exist', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-paths-precedence-'))
+  try {
+    const newer = join(home, 'auth-gate')
+    const oldest = join(home, 'login-plugin')
+    mkdirSync(newer)
+    writeFileSync(join(newer, 'password.json'), '{"newer":true}\n')
+    mkdirSync(oldest)
+    writeFileSync(join(oldest, 'password.json'), '{"oldest":true}\n')
+
+    const { credentialDir } = await freshPaths(home)
+    const dir = credentialDir()
+
+    assert.equal(dir, join(home, 'auth-gateway'))
+    assert.equal(readFileSync(join(dir, 'password.json'), 'utf8'), '{"newer":true}\n',
+      'the newer auth-gate layout is the migration source')
+    assert.ok(existsSync(oldest), 'the oldest directory is left untouched')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+    delete process.env.DSH_HOME
+  }
+})

@@ -144,3 +144,21 @@ test('schema defaults match createGateway defaults (no silent divergence)', asyn
     assert.equal(schema[key], gw.otp[key], `otp default mismatch: ${key}`)
   }
 })
+
+test('basePath accepts normal sub-paths and rejects breakout characters', () => {
+  for (const good of ['/', '/dsh', '/dsh/v2', '/a-b_c.d~e', '/api/x']) {
+    const result = validate({ basePath: good })
+    assert.ok(result.value, `basePath ${good} must be accepted`)
+    assert.equal(result.value.basePath, good)
+  }
+  // Quotes/angle brackets could break out of embedded page scripts or hrefs;
+  // whitespace and `//` break routing or redirect targets.
+  for (const bad of ['/a<b>c', '/a"b', '/a\\b', '/a b', '//evil.com', '/dsh//x', '/../x', '/x/..']) {
+    const result = validate({ basePath: bad })
+    assert.ok(result.issues, `basePath ${JSON.stringify(bad)} must be rejected`)
+  }
+  for (const bad of ['dsh', '', 'http://x', 'x/']) {
+    const result = validate({ basePath: bad })
+    assert.ok(result.issues, `basePath ${JSON.stringify(bad)} must be rejected`)
+  }
+})

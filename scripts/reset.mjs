@@ -17,8 +17,9 @@
  * script does NOT remove the plugin or its directory — the composition stays
  * installed.
  *
- * Legacy deployments keep credentials under auth-gate/; both locations are
- * cleaned so a stale pre-rename record cannot resurrect after an upgrade.
+ * Legacy deployments keep credentials under auth-gate/ (v0.3–v0.4) and
+ * login-plugin/ (v0.1–v0.2); all three locations are cleaned so a stale
+ * pre-rename record cannot resurrect after an upgrade.
  */
 
 import { existsSync, rmSync } from 'node:fs'
@@ -26,7 +27,7 @@ import { join } from 'node:path'
 import os from 'node:os'
 
 const home = process.env.DSH_HOME || join(os.homedir(), '.dsh')
-const dirs = [join(home, 'auth-gateway'), join(home, 'auth-gate')]
+const dirs = [join(home, 'auth-gateway'), join(home, 'auth-gate'), join(home, 'login-plugin')]
 const files = dirs.map((dir) => join(dir, 'password.json')).filter(existsSync)
 
 const LINE = '═'.repeat(56)

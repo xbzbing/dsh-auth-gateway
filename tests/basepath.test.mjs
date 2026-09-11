@@ -21,9 +21,18 @@ let upstream, upstreamPort, seenRequests
 function startUpstream() {
   seenRequests = []
   upstream = http.createServer((req, res) => {
-    seenRequests.push({ url: req.url, method: req.method, headers: req.headers })
-    res.writeHead(200, { 'content-type': 'text/plain' })
-    res.end('ok')
+    const chunks = []
+    req.on('data', (c) => chunks.push(c))
+    req.on('end', () => {
+      seenRequests.push({
+        url: req.url,
+        method: req.method,
+        headers: req.headers,
+        body: Buffer.concat(chunks).toString('utf8'),
+      })
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      res.end('ok')
+    })
   })
   return new Promise((resolve) => {
     upstream.listen(0, '127.0.0.1', () => {
@@ -161,6 +170,41 @@ test('basePath forward: upstream receives path without basePath prefix', async (
   assert.ok(seenRequests.length > 0, 'upstream received a request')
   const req = seenRequests[seenRequests.length - 1]
   assert.equal(req.url, '/some/path', 'basePath stripped: got ' + req.url)
+})
+
+test('forwarded requests carry no content-length/transfer-encoding; bodies arrive intact', async () => {
+  // Regression guard for the CL.TE hardening: framing headers are stripped
+  // from the copy and Node recomputes them from the piped body, so a copied
+  // content-length can never disagree with the decoded stream (the CL.TE
+  // smuggling shape) and a copied transfer-encoding never double-frames it.
+  await setPassword('GoodPass1')
+  const authRes = await fetch(gw.address().port, '/dsh/login/auth', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'GoodPass1' }),
+  })
+  const sc = authRes.headers['set-cookie']
+  const cookie = Array.isArray(sc) ? sc[0] : sc
+
+  seenRequests.length = 0
+  const body = JSON.stringify({ a: 1, b: [2, 3] })
+  await fetch(gw.address().port, '/dsh/api/echo', {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body,
+  })
+  const posted = seenRequests[seenRequests.length - 1]
+  assert.equal(posted.url, '/api/echo')
+  assert.equal(posted.body, body, 'the body arrives byte-for-byte')
+  assert.ok(!('content-length' in posted.headers), 'no copied content-length')
+  assert.equal(posted.headers['transfer-encoding'], 'chunked',
+    'framing is recomputed by Node from the piped body, never copied from the client')
+
+  seenRequests.length = 0
+  await fetch(gw.address().port, '/dsh/plain', { headers: { cookie } })
+  const gotten = seenRequests[seenRequests.length - 1]
+  assert.equal(gotten.url, '/plain')
+  assert.ok(!('content-length' in gotten.headers), 'a bodiless GET carries no content-length either')
 })
 
 // ── data.next in OTP onboarding ─────────────────────────────────────────

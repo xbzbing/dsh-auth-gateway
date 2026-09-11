@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作，也没有针对反向代理/网关的处理」（*"There is no logout operation or reverse-proxy-specific handling"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-本项目已支持最新的 dsh 0.1.2-rc.1 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。
+本项目已支持最新的 dsh 0.1.5-rc.2 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。0.1.5 系列已验证兼容：网关所依赖的全部扩展点（`webServer.tapIndex`、`dsh.bundle` patch、`settings.section` slot、`credentials` record 与 BrowserAuth cookie 格式）在该版本均未变动，WS 无限重连与文件上传流式转发均可正常通过网关。
 
 ## 安装和卸载
 
@@ -45,6 +45,13 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），主体全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）；唯有一项记录在案的安全例外——LAN trust（为域名/反代访问下模型设置页可用而对 connection 注册做最小介入，见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)）。
+
+## 本插件不做的事情
+
+以下需求在"单实例"前提下**无法真正实现**——它们的前提是进程/OS 强制的执行与存储隔离（独立 OS 账号、容器或沙盒），而本插件只是运行在 dsh 进程内的认证网关，提供不了这层隔离。列出它们是为了明确预期、避免误导：
+
+- **多账号登录 / 多租户**：dsh 是单用户工具——一个 Home、一份模型凭据，全部会话与数据（`sessions/`、`workspace/`、`.credentials.yaml`）都以运行 dsh 的 OS 账号权限存放在本地。网关叠加"账号体系"只能区分**谁在登录**（访问控制 + 审计），无法隔离**谁能看到什么**：任何通过认证的用户都能经 dsh 的工具执行读取同一 Home 下的全部会话与凭据。**没有 OS/容器/沙盒隔离就没有真正的多租户**——本插件不做，也无法做到。
+- **角色权限限制（用户/管理员）**：同理，角色只能在网关自身的 HTTP 路由层生效（例如限制网关管理功能），挡不住 dsh 内部的能力面——普通用户一旦通过认证门，即拥有该实例的完整能力（工具执行、会话读写、配置与凭据访问）。需要"普通用户受限"的场景请用 OS 级隔离的多实例部署并自行管理账号。本插件的职责是：**认证门禁（谁能进入）+ 拦截与审计（谁做了什么），不承担、也无法承担授权与隔离模型**。
 
 ## 工作原理
 
@@ -108,13 +115,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 ## 安全模型
 
 认证状态变更（启用/禁用 OTP、修改密码）均要求完整验证：2FA 激活时禁用 OTP 需当前密码 + 验证码或备份代码；未完成 2FA 的会话不能访问敏感端点。OTP 验证防重放（记录已接受时间步）、防伪造（`x-forwarded-for` 不计入来源）。**OTP 密钥在落盘前以 AES-256-GCM 密封**，读取需主密钥——默认自动生成 `auth-gateway/otp-master.key`（0600），也可经环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64，32 字节）注入以隔离磁盘泄露。登录审计只记录事件种类、来源 IP 与失败原因，不落任何凭据。完整威胁模型、已知限制与恢复路径见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)。
-
-## 本插件不做的事情
-
-以下需求在"单实例"前提下**无法真正实现**——它们的前提是进程/OS 强制的执行与存储隔离（独立 OS 账号、容器或沙盒），而本插件只是运行在 dsh 进程内的认证网关，提供不了这层隔离。列出它们是为了明确预期、避免误导：
-
-- **多账号登录 / 多租户**：dsh 是单用户工具——一个 Home、一份模型凭据，全部会话与数据（`sessions/`、`workspace/`、`.credentials.yaml`）都以运行 dsh 的 OS 账号权限存放在本地。网关叠加"账号体系"只能区分**谁在登录**（访问控制 + 审计），无法隔离**谁能看到什么**：任何通过认证的用户都能经 dsh 的工具执行读取同一 Home 下的全部会话与凭据。**没有 OS/容器/沙盒隔离就没有真正的多租户**——本插件不做，也无法做到。
-- **角色权限限制（用户/管理员）**：同理，角色只能在网关自身的 HTTP 路由层生效（例如限制网关管理功能），挡不住 dsh 内部的能力面——普通用户一旦通过认证门，即拥有该实例的完整能力（工具执行、会话读写、配置与凭据访问）。需要"普通用户受限"的场景请用 OS 级隔离的多实例部署并自行管理账号。本插件的职责是：**认证门禁（谁能进入）+ 拦截与审计（谁做了什么），不承担、也无法承担授权与隔离模型**。
 
 ## 文档
 

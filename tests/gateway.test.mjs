@@ -311,6 +311,10 @@ test('onboarding and change-password pages follow the same language resolution',
 })
 
 test('binding OTP mid-onboarding does not revoke the session; the password step finishes and revokes once', async () => {
+  // This test binds OTP on a fresh gateway with its own policy — stop the
+  // beforeEach gateway first, or the leaked listener keeps the test file's
+  // event loop busy and the file-level test never completes.
+  await stopGateway()
   await startGateway({}, { otpEnabled: false })
   await setPassword('Init1al!pw', { initial: true })
   const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'Init1al!pw' } })

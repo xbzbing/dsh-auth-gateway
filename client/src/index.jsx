@@ -653,9 +653,9 @@ function apply(ctx) {
   // theoretical: agent-presets ships `order: 20` too, and a tie made this
   // section land before 「Agent 预设」 on one composition and after it on
   // another. dsh ships general 0, models 10, plugins 15, agent-presets 20, so a
-  // third-party section must sort strictly above all of them; 100 is dsh's own
-  // value for a contributed entry
-  // (packages/client/ui-settings/src/client/contract/slots.ts).
+  // third-party section must sort strictly above all of them; 100 is the value
+  // dsh's own contributed-entry examples use (docs/subsystems/slots.md and the
+  // generated slot catalog's examples in slot-catalog.ts).
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 100,
     label: () => t('nav'),

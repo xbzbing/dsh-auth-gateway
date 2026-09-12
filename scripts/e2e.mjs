@@ -8,6 +8,12 @@
  *   2. after auth: homepage UI loaded, zero JS errors
  *   3. logout -> login page -> wrong password rejected -> login -> homepage
  *   4. change password -> all sessions revoked -> re-login with new password
+ *   5. the Remote mux WebSocket completes its handshake — catches a reverse
+ *      proxy that does not forward Upgrade/Connection (TROUBLESHOOTING §7)
+ *
+ * Point BASE at the URL users actually use. When a reverse proxy fronts the
+ * gateway, testing the *proxied* origin is what exercises the proxy hop; run
+ * against the gateway port directly and there is no proxy in the path to catch.
  *
  * Usage (against a running `dsh web --port 8002`):
  *   PASSWORD=e2e-pass node scripts/e2e.mjs            (configured deploy)
@@ -51,6 +57,13 @@ try {
     if (m.type() !== 'error') return
     jsErrors.push(`console: ${m.text()} @ ${m.location().url}`)
   })
+
+  // Every WebSocket the page opens. Registered before the first navigation so
+  // the app's Remote mux socket is seen. This event fires on CREATION — i.e.
+  // even when the handshake then fails — so it evidences "attempted", not
+  // "connected"; the console-error assertion in step 5 proves success.
+  const webSockets = []
+  page.on('websocket', (ws) => webSockets.push(ws.url()))
 
   // ── 0. unauthenticated API gate (server-side, not UI) ─────────────────
   const unauth = await page.request.post(`${BASE}/api/session.list`, { data: {} })
@@ -104,6 +117,27 @@ try {
   assert.equal(jsErrors.length, 0,
     `homepage must load with zero JS errors, got: ${jsErrors.join(' | ')}`)
   ok('homepage UI loaded with zero JS errors (randomUUID polyfill works)')
+
+  // ── 2b. the Remote mux WebSocket must complete its handshake ──────────
+  // The dsh client keeps a WebSocket (the Remote stream mux) connected while
+  // idle. A reverse proxy that does not forward Upgrade/Connection for that
+  // path degrades the handshake to a plain GET, and the failure shows up ONLY
+  // as a browser console error — so that error, not the socket's existence, is
+  // the signal. Deliberately path-agnostic: dsh has renamed the endpoint
+  // before (/api/events.mux -> /api/remote.mux), and this must keep working.
+  const wsDeadline = Date.now() + 5000
+  while (webSockets.length === 0 && Date.now() < wsDeadline) await page.waitForTimeout(200)
+  const wsFailures = jsErrors.filter((e) => /WebSocket connection to .* failed/i.test(e))
+  assert.equal(wsFailures.length, 0,
+    'the Remote mux WebSocket must complete its handshake. If this deployment sits behind a '
+    + 'reverse proxy, it must forward Upgrade/Connection on the catch-all location (use '
+    + '`map $http_upgrade $connection_upgrade`) — see docs/*/NGINX-DEPLOYMENT.md and '
+    + `TROUBLESHOOTING §7. Got: ${wsFailures.join(' | ')}`)
+  assert.ok(webSockets.length > 0,
+    'expected the dsh client to open at least one WebSocket (the Remote mux), otherwise this '
+    + 'WebSocket check can never fire and is silently dead. If dsh changed its transport, update '
+    + `this step. BASE=${BASE} (point it at the proxied origin to exercise the proxy hop)`)
+  ok(`Remote mux WebSocket attempted (${webSockets.length}) with no failed handshake`)
 
   // ── 3. logout -> login page -> wrong password -> login ────────────────
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })

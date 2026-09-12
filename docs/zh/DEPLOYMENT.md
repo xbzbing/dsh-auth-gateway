@@ -2,6 +2,27 @@
 
 > 中文文档 | [English](../en/DEPLOYMENT.md)
 
+## dsh 版本兼容性
+
+**已实机验证：dsh `0.1.5-rc.2`（编写本文时最新版）。** 用 `dsh --version` 查看当前安装版本。
+
+本插件依赖的扩展点在该版本线上均未变动，因此 0.1.5 线可直接使用：
+
+| 依赖的官方扩展点 | 用途 |
+|---|---|
+| `webServer.tapIndex` | 注入 `randomUUID` polyfill 与 `basePath` 全局量（仅自包含全局量） |
+| `dsh.bundle` patch | 把内部 webserver 钉在 `127.0.0.1:<N+1>`（安全根基，见 [SECURITY.md](SECURITY.md)） |
+| `ctx.slots`（`settings.section`） | 客户端「认证设置」面板 |
+| `credentials` 服务 + `client-connection/browser-session` record | 读取上游 BrowserAuth 密钥，为回环一跳铸造同构 cookie |
+| BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`） | 与 dsh 自身的 token 交换同构，上游无法区分 |
+
+版本线行为：
+
+- **dsh ≥ 0.1.2**：内部 webserver 启用 BrowserAuth，网关自动铸 cookie 适配（机制见 [SECURITY.md](SECURITY.md)）；
+- **dsh ≤ 0.1.1**：无 BrowserAuth，record 不存在，网关静默退化为逐字转发，行为与旧版一致。
+
+> **升级 dsh 后请注意**：dsh 的 **WebSocket 端点路径会随版本变化**——旧版是 `/api/events.mux`、`/sidebar/ws/*`，当前（0.1.5）只有 `/api/remote.mux`。网关按路径透明转发、**不硬编码任何端点名**，所以插件侧无需改动；但**反向代理若为 WebSocket 维护了路径白名单，dsh 一换路径就会静默失效**（症状：HTTP 正常、登录正常、页面提示连接失败）。反代请把 `Upgrade`/`Connection` 转发放在**兜底 location** 上，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) 与 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
+
 ## 端口与监听地址
 
 ### 端口：直接用 `dsh web --port <N>`
@@ -52,7 +73,7 @@ dsh web                # 默认：对外 3080，内部 3081
 
 - **子域名部署（推荐）**：`dsh.example.com` 根路径部署，nginx 将 443 反代到网关端口，零冲突、零维护；
 - **子路径部署**：网关配置 `basePath: /dsh`（在部署方 profile patch 中覆盖，注意 `config:` 是整对象替换，须保留 bundle patch 全部字段），nginx 需额外转发 dsh 引用的根路径资源（`/assets/`、`/api/`、`/plugins/` 等）；
-- 反代时必须转发 `Upgrade` / `Connection` 头（WebSocket）并调大 `proxy_read_timeout` / `proxy_send_timeout`（SSE 长连接），否则事件流 60s 被掐断。
+- **反代转发 WebSocket**：`Upgrade` / `Connection` 必须转发，且**要放在兜底 location 上**——用 `map $http_upgrade $connection_upgrade`（放在 `http {}` 作用域）配合 `proxy_set_header`，不要写死 `"upgrade"`、也不要按路径挑白名单。dsh 的 WebSocket 路径随版本变过（旧版 `/api/events.mux`、当前 `/api/remote.mux`），白名单一旦漂移就是「HTTP 正常、登录正常、只有页面提示连接失败」的静默故障；同时调大 `proxy_read_timeout` / `proxy_send_timeout`，否则 SSE 事件流 60s 被掐断。完整配置见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)，判定方法见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
 
 ## 故障排查
 
@@ -62,6 +83,7 @@ dsh web                # 默认：对外 3080，内部 3081
 | 登录后大量 `/api/*` 403 | 内部 fence 拒绝外部 Host——确认 bundle patch 生效（webserver 应为 `127.0.0.1:<内部端口>`），网关已改写 Host/Origin |
 | 无法访问 `http://<LAN IP>:<port>` | 检查网关是否监听 `0.0.0.0`（`listenHost` 配置）、防火墙规则 |
 | 登录被 429 拒绝 | 触发全局速率限制或 OTP 限流——等待窗口重置（1 分钟/锁定 5 分钟） |
+| 登录成功但页面提示连接失败，console 报 `WebSocket connection to '.../api/remote.mux' failed` | 反代没有把 `Upgrade`/`Connection` 转发给该路径（常见于按路径写 WS 白名单、兜底 location 没带这两个头）——见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节；网关日志会有一条 `WebSocket 握手缺少 Upgrade 头` 告警 |
 | `--port 65535` 启动失败 | 内部端口 65536 非法——端口范围 1–65534 |
 | 重复安装（组合树出现两行 dsh-auth-gateway） | 第二个网关绑定同端口必然 EADDRINUSE 启动失败——删除重复行 |
 

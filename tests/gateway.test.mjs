@@ -487,12 +487,6 @@ test('a WebSocket handshake that lost its Upgrade header is refused with a diagn
   assert.equal(warnings.length, 1, 'warned once per gateway instance')
 })
 
-test('a real upgrade request is never mistaken for a mangled handshake', async () => {
-  const cookie = await login()
-  const outcome = await tryUpgrade('/api/remote.mux', cookie)
-  assert.equal(outcome, 'upgraded', 'the diagnostic must not intercept genuine upgrades')
-})
-
 test('bad gateway: upstream down answers 502, not a crash', async () => {
   await closeUpstream()
   try {

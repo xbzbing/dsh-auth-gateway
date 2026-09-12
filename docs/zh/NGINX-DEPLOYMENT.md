@@ -155,6 +155,13 @@ server {
 ### nginx 侧：按前缀分流
 
 ```nginx
+# 逐跳头透传：放在 http {} 作用域（conf.d/*.conf 即 http 作用域）。
+# 每个 nginx 实例只需定义一次。
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 # 其他 Web 应用（示例：博客站点）
 server {
     listen 443 ssl;
@@ -181,6 +188,8 @@ server {
     location /dsh/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # WebSocket 必需
+        proxy_set_header Connection $connection_upgrade;  # 见文件顶部的 map
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -199,6 +208,8 @@ server {
     location ~ ^/(api|plugins|sidebar|_dsh)(/|$) {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # WebSocket 必需：
+        proxy_set_header Connection $connection_upgrade;  # /api/remote.mux 走的就是根路径
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

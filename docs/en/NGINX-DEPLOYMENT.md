@@ -155,6 +155,13 @@ The plugin **defaults to `basePath: /` (root path)** and ships no sub-path confi
 ### nginx side: split traffic by prefix
 
 ```nginx
+# Hop-by-hop pass-through: lives in the http {} scope (conf.d/*.conf is http
+# scope). Define it once per nginx instance.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 # Other web apps (example: a blog site)
 server {
     listen 443 ssl;
@@ -181,6 +188,8 @@ server {
     location /dsh/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # required for WebSocket
+        proxy_set_header Connection $connection_upgrade;  # see the map at the top
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -201,6 +210,8 @@ server {
     location ~ ^/(api|plugins|sidebar|_dsh)(/|$) {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # required for WebSocket:
+        proxy_set_header Connection $connection_upgrade;  # /api/remote.mux is a root path
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -245,7 +256,7 @@ location = /api/remote.mux {
 }
 ```
 
-> Prefer not to allowlist WebSocket paths at all: forward `Upgrade`/`Connection` on the **catch-all location** (Topology B). A allowlist that misses one endpoint shows up as "the page loads and login succeeds, but a feature reports a connection failure", with the only clue being a 502/404 here or a line in the gateway log.
+> Prefer not to allowlist WebSocket paths at all: forward `Upgrade`/`Connection` on the **catch-all location** (Topology B). An allowlist that misses one endpoint shows up as "the page loads and login succeeds, but a feature reports a connection failure", with the only clue being a 502/404 here or a line in the gateway log.
 
 ---
 

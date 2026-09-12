@@ -29,6 +29,25 @@ async function withWriter(dir, options, run) {
   await run(writer)
 }
 
+test('bounds queued writes and live file size', async () => {
+  const dir = tempDir()
+  try {
+    const queueErrors = []
+    const queued = new AuditLogWriter({ dir, maxPendingWrites: 0, onError: (err) => queueErrors.push(err) })
+    await queued.append({ kind: 'login-success', ip: '10.0.0.1' })
+    assert.equal(existsSync(join(dir, AUDIT_LOG_NAME)), false)
+    assert.equal(queueErrors.length, 1)
+
+    const sizeErrors = []
+    const sized = new AuditLogWriter({ dir, maxLiveBytes: 8, onError: (err) => sizeErrors.push(err) })
+    await sized.append({ kind: 'login-success', ip: '10.0.0.1' })
+    assert.equal(existsSync(join(dir, AUDIT_LOG_NAME)), false)
+    assert.equal(sizeErrors.length, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('appends one JSONL line per event with ts/kind/ip and optional reason', async () => {
   const dir = tempDir()
   try {
@@ -516,6 +535,23 @@ test('sustained sink failures report once per interval; recovery reports once', 
 })
 
 // ── pre-0.5.1 legacy migration (root-level audit files) ────────────────
+
+test('open() tightens existing log directory and migrated archives to owner-only modes', async () => {
+  const root = tempDir()
+  const dir = join(root, 'log')
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o755 })
+    writeFileSync(join(root, 'audit.log.2025-08-10'), '{"old":true}\\n', { mode: 0o644 })
+    const w = new AuditLogWriter({ dir, now: () => at(2025, 8, 21, 8) })
+    await w.open()
+    const dirMode = statSync(dir).mode & 0o777
+    const archiveMode = statSync(join(dir, 'audit.log.2025-08-10')).mode & 0o777
+    assert.equal(dirMode, 0o700)
+    assert.equal(archiveMode, 0o600)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('open() folds a root-level audit.log into the log directory (becomes the live file)', async () => {
   const root = tempDir() // stands in for the credential-dir root

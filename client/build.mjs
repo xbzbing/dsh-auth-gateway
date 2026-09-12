@@ -38,7 +38,7 @@ const js = result.outputFiles.find((f) => f.path.endsWith('.js')).text
   .replace(/\/\/# sourceMappingURL=.*\n?$/, '') // we append our own pointer
 const map = result.outputFiles.find((f) => f.path.endsWith('.map')).text
 
-const indent = (s) => s.split('\n').map((line) => '\t\t' + line).join('\n')
+const indent = (s) => s.split('\n').map((line) => line === '' ? '' : '\t\t' + line).join('\n')
 const bundle = [
   'window.__ModuleLoader__.load({',
   '\tid: "dsh-auth-gateway",',

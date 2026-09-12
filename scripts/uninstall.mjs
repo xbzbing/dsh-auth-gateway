@@ -15,7 +15,7 @@
  * a recursive delete must never reach a tree we cannot identify.
  */
 
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import os from 'node:os'
 
@@ -27,9 +27,13 @@ const LEGACY_DIRS = [join(home, 'auth-gate'), join(home, 'login-plugin')]
 const OWNED_FILES = ['password.json', 'otp.json', 'otp-master.key', 'audit.log']
 /** 0.5.1+ audit layout — the `log/` subdirectory. A tree holding none of
  *  these is left in place (fail-safe: never delete what we cannot identify). */
-const hasOwnedContent = (dir) =>
-  OWNED_FILES.some((name) => existsSync(join(dir, name)))
-  || existsSync(join(dir, 'log'))
+const hasOwnedContent = (dir) => {
+  if (OWNED_FILES.some((name) => existsSync(join(dir, name)))) return true
+  const log = join(dir, 'log')
+  if (!existsSync(log)) return false
+  return readdirSync(log, { withFileTypes: true }).some((entry) =>
+    entry.isFile() && /^audit\.log(?:\.\d{4}-\d{2}-\d{2}(?:-\d+)?)?$/.test(entry.name))
+}
 
 const LINE = '═'.repeat(56)
 

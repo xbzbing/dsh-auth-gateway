@@ -646,8 +646,18 @@ function apply(ctx) {
     logout: async () => (await fetch(BASE + '/login/logout', { method: 'POST' })).json(),
   }
   const injected = () => ({ api })
+  // Nav position. SlotCore keeps a list slot's entries sorted by
+  // (priority, order) with a STABLE sort, and the settings shell re-sorts the
+  // same list by `order` alone — so an `order` that EQUALS a shipped entry's is
+  // resolved by plugin load order, not by "official first". That is not
+  // theoretical: agent-presets ships `order: 20` too, and a tie made this
+  // section land before 「Agent 预设」 on one composition and after it on
+  // another. dsh ships general 0, models 10, plugins 15, agent-presets 20, so a
+  // third-party section must sort strictly above all of them; 100 is the value
+  // dsh's own contributed-entry examples use (docs/subsystems/slots.md and the
+  // generated slot catalog's examples in slot-catalog.ts).
   ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section', id: 'user-settings', order: 20,
+    name: 'settings.section', id: 'user-settings', order: 100,
     label: () => t('nav'),
     locale: NS,
     inject: injected,

@@ -76,7 +76,7 @@ else
   fail=$((fail + 1)); printf 'FAIL authenticated /api (got %s)\n' "$api_code"
 fi
 
-# ── version API: gated, and answers with the running version ─────────────
+# ── version API: gated, default-off, and manually checkable ──────────────
 # Anonymous: no cookie jar here. The endpoint sits behind the same session
 # gate as /login-api/settings, so an unauthenticated caller must get 401.
 check 'unauthenticated /login-api/version -> 401' 401 "$(code "$BASE/login-api/version")"
@@ -86,21 +86,43 @@ if printf '%s' "$version_body" | node -e '
   process.stdin.on("data", (c) => { raw += c });
   process.stdin.on("end", () => {
     const body = JSON.parse(raw);
-    // The panel needs a version string and a possibly-empty http(s) repository;
-    // `update` is the registry verdict and may be null/disabled/an error code.
+    // The panel needs a version string and a possibly-empty http(s) repository.
     const okVersion = typeof body.version === "string" && body.version.length > 0;
     const okRepo = typeof body.repository === "string"
       && (body.repository === "" || body.repository.startsWith("https://"));
-    const okUpdate = body.update && typeof body.update === "object"
-      && (body.update.updateAvailable === true
-        || body.update.updateAvailable === false
-        || body.update.updateAvailable === null);
+    // A passive load must claim no verdict when automatic checks are off (the
+    // default): the shape is null-or-cached, never a fabricated "up to date".
+    const u = body.update;
+    const okUpdate = u && typeof u === "object"
+      && (u.updateAvailable === true || u.updateAvailable === false || u.updateAvailable === null)
+      && (u.checkedAt === null || typeof u.checkedAt === "string");
     process.exit(body.ok === true && okVersion && okRepo && okUpdate ? 0 : 1);
   });
 '; then
   pass=$((pass + 1)); printf 'ok   authenticated /login-api/version shape (%s)\n' "$version_body"
 else
   fail=$((fail + 1)); printf 'FAIL /login-api/version shape (%s)\n' "$version_body"
+fi
+
+# The explicit "check now" action: this is the one path that contacts the
+# registry with automatic checks off, so it must come back with a timestamp.
+refresh_body="$(curl -sS "$BASE/login-api/version?refresh=1" -b "$JAR")"
+if printf '%s' "$refresh_body" | node -e '
+  let raw = "";
+  process.stdin.on("data", (c) => { raw += c });
+  process.stdin.on("end", () => {
+    const u = JSON.parse(raw).update || {};
+    // Either a real verdict, or an error code — but always a completion time;
+    // a manual check that silently did nothing would leave checkedAt null.
+    const done = typeof u.checkedAt === "string" && u.checkedAt.length > 0;
+    const reported = u.updateAvailable === true || u.updateAvailable === false
+      || (typeof u.error === "string" && u.error.length > 0);
+    process.exit(done && reported ? 0 : 1);
+  });
+'; then
+  pass=$((pass + 1)); printf 'ok   manual ?refresh=1 completes a check (%s)\n' "$refresh_body"
+else
+  fail=$((fail + 1)); printf 'FAIL manual ?refresh=1 (%s)\n' "$refresh_body"
 fi
 
 # ── websocket gate (unauthenticated upgrade must be refused) ─────────────

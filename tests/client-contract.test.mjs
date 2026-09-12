@@ -196,7 +196,7 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   assert.equal(typeof registered.inject, 'function', 'inject face must be a function')
   const props = registered.inject()
   assert.ok(props.api, 'component props must include the api object')
-  for (const method of ['getSettings', 'getVersion', 'enableOtp', 'verifyOtpSetup', 'disableOtp', 'changePassword', 'logout']) {
+  for (const method of ['getSettings', 'getVersion', 'checkForUpdates', 'enableOtp', 'verifyOtpSetup', 'disableOtp', 'changePassword', 'logout']) {
     assert.equal(typeof props.api[method], 'function', `api.${method} must be a function`)
   }
   assert.equal(typeof registeredComponent, 'function', 'register must receive the component')

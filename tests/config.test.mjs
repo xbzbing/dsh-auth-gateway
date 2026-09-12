@@ -21,7 +21,7 @@ test('undefined/null config gets defaults', () => {
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
-      updateCheck: true,
+      updateCheck: false,
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -35,14 +35,17 @@ test('partial config keeps defaults for omitted fields', () => {
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
-      updateCheck: true,
+      updateCheck: false,
     },
   })
 })
 
-test('updateCheck must be a boolean', () => {
+test('updateCheck must be a boolean and is OFF by default', () => {
+  assert.equal(validate({ updateCheck: true }).value.updateCheck, true)
   assert.equal(validate({ updateCheck: false }).value.updateCheck, false)
-  assert.equal(validate({}).value.updateCheck, true, 'the new-version notice is on by default')
+  // Default off is the privacy contract: a fresh install makes no outbound
+  // request until someone asks for one (the panel's button, or this switch).
+  assert.equal(validate({}).value.updateCheck, false, 'the automatic check is off by default')
   for (const bad of ['true', 0, 1, null]) {
     const result = validate({ updateCheck: bad })
     assert.ok(result.issues, `updateCheck ${String(bad)} must be rejected`)

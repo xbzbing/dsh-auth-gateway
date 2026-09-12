@@ -129,6 +129,7 @@ window.__ModuleLoader__.load({
 		  "about.repository": "\u4ED3\u5E93",
 		  "about.repositoryLink": "GitHub",
 		  "about.checking": "\u6B63\u5728\u68C0\u67E5\u66F4\u65B0...",
+		  "about.check": "\u68C0\u67E5\u66F4\u65B0",
 		  "about.upToDate": "\u5DF2\u662F\u6700\u65B0\u7248\u672C",
 		  "about.updateAvailable": "\u53D1\u73B0\u65B0\u7248\u672C v{version}",
 		  "about.releaseNotes": "\u67E5\u770B\u66F4\u65B0",
@@ -193,6 +194,7 @@ window.__ModuleLoader__.load({
 		  "about.repository": "Repository",
 		  "about.repositoryLink": "GitHub",
 		  "about.checking": "Checking for updates...",
+		  "about.check": "Check for updates",
 		  "about.upToDate": "Up to date",
 		  "about.updateAvailable": "New version v{version} available",
 		  "about.releaseNotes": "View release",
@@ -304,27 +306,43 @@ window.__ModuleLoader__.load({
 		  const [disableOtpCode, setDisableOtpCode] = (0, import_react.useState)("");
 		  const [disablingOtp, setDisablingOtp] = (0, import_react.useState)(false);
 		  const [versionInfo, setVersionInfo] = (0, import_react.useState)(null);
+		  const [checkingUpdate, setCheckingUpdate] = (0, import_react.useState)(false);
 		  (0, import_react.useEffect)(() => {
 		    loadSettings();
 		    loadVersion();
 		  }, []);
+		  function readVersion(data) {
+		    return {
+		      version: typeof data?.version === "string" ? data.version : "",
+		      // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+		      // normalizeRepository), and the panel refuses anything else rather
+		      // than rendering an unexpected scheme into an href.
+		      repository: /^https?:\/\//.test(data?.repository) ? data.repository : "",
+		      update: data?.update || {}
+		    };
+		  }
 		  async function loadVersion() {
 		    try {
 		      const data = await api.getVersion();
-		      if (data.ok) {
-		        setVersionInfo({
-		          version: typeof data.version === "string" ? data.version : "",
-		          // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
-		          // normalizeRepository), and the panel refuses anything else rather
-		          // than rendering an unexpected scheme into an href.
-		          repository: /^https?:\/\//.test(data.repository) ? data.repository : "",
-		          update: data.update || {}
-		        });
-		      } else {
-		        setVersionInfo({ version: "", repository: "", update: {} });
-		      }
+		      setVersionInfo(readVersion(data?.ok ? data : null));
 		    } catch {
-		      setVersionInfo({ version: "", repository: "", update: {} });
+		      setVersionInfo(readVersion(null));
+		    }
+		  }
+		  async function checkForUpdates() {
+		    setCheckingUpdate(true);
+		    try {
+		      const data = await api.checkForUpdates();
+		      const next = readVersion(data?.ok ? data : null);
+		      if (!data?.ok) next.update = { latest: null, updateAvailable: null, checkedAt: null, error: "unauthenticated" };
+		      setVersionInfo(next);
+		    } catch (err) {
+		      setVersionInfo((prev) => ({
+		        ...prev || readVersion(null),
+		        update: { latest: null, updateAvailable: null, checkedAt: null, error: err?.message || "network" }
+		      }));
+		    } finally {
+		      setCheckingUpdate(false);
 		    }
 		  }
 		  async function loadSettings() {
@@ -610,7 +628,8 @@ window.__ModuleLoader__.load({
 		              )
 		            ] })
 		          ] }),
-		          versionInfo.update?.updateAvailable === true && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "12px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }) }),
+		          !checkingUpdate && versionInfo.update?.updateAvailable === true && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		            marginTop: "12px",
 		            padding: "10px 14px",
 		            borderRadius: "10px",
@@ -634,8 +653,8 @@ window.__ModuleLoader__.load({
 		              )
 		            ] })
 		          ] }),
-		          versionInfo.update?.updateAvailable === false && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.upToDate") }),
-		          versionInfo.update?.updateAvailable == null && versionInfo.update?.enabled === true && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.checkFailed") })
+		          !checkingUpdate && versionInfo.update?.updateAvailable === false && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.upToDate") }),
+		          !checkingUpdate && versionInfo.update?.updateAvailable == null && versionInfo.update?.checkedAt != null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.checkFailed") })
 		        ] })
 		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
@@ -785,6 +804,9 @@ window.__ModuleLoader__.load({
 		  const api = {
 		    getSettings: async () => (await fetch(BASE + "/login-api/settings")).json(),
 		    getVersion: async () => (await fetch(BASE + "/login-api/version")).json(),
+		    // Explicit on-demand check: the only path that makes the gateway contact
+		    // the registry when automatic checks are off (the default).
+		    checkForUpdates: async () => (await fetch(BASE + "/login-api/version?refresh=1")).json(),
 		    enableOtp: async () => (await fetch(BASE + "/otp/enable", { method: "POST" })).json(),
 		    verifyOtpSetup: async (otp) => (await fetch(BASE + "/otp/verify-setup", {
 		      method: "POST",

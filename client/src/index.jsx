@@ -103,6 +103,7 @@ const zh = {
   'about.repository': '仓库',
   'about.repositoryLink': 'GitHub',
   'about.checking': '正在检查更新...',
+  'about.check': '检查更新',
   'about.upToDate': '已是最新版本',
   'about.updateAvailable': '发现新版本 v{version}',
   'about.releaseNotes': '查看更新',
@@ -169,6 +170,7 @@ const en = {
   'about.repository': 'Repository',
   'about.repositoryLink': 'GitHub',
   'about.checking': 'Checking for updates...',
+  'about.check': 'Check for updates',
   'about.upToDate': 'Up to date',
   'about.updateAvailable': 'New version v{version} available',
   'about.releaseNotes': 'View release',
@@ -272,30 +274,59 @@ function UserSettingsPanel({ api, t }) {
   const [disableOtpCode, setDisableOtpCode] = useState('')
   const [disablingOtp, setDisablingOtp] = useState(false)
 
-  // Version / update notice (GET /login-api/version). Loaded separately from
+  // Version / update state (GET /login-api/version). Loaded separately from
   // the settings call so a slow or unreachable registry never delays the
-  // panel's own data; `null` means "not answered yet" (checking).
+  // panel's own data; `null` means "not answered yet". Automatic checks are
+  // off by default, so this first load normally reports no verdict — the
+  // "check for updates" button below is what makes the outbound request.
   const [versionInfo, setVersionInfo] = useState(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   useEffect(() => { loadSettings(); loadVersion() }, [])
+
+  /** Shape one gateway version response into panel state. */
+  function readVersion(data) {
+    return {
+      version: typeof data?.version === 'string' ? data.version : '',
+      // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+      // normalizeRepository), and the panel refuses anything else rather
+      // than rendering an unexpected scheme into an href.
+      repository: /^https?:\/\//.test(data?.repository) ? data.repository : '',
+      update: data?.update || {},
+    }
+  }
 
   async function loadVersion() {
     try {
       const data = await api.getVersion()
-      if (data.ok) {
-        setVersionInfo({
-          version: typeof data.version === 'string' ? data.version : '',
-          // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
-          // normalizeRepository), and the panel refuses anything else rather
-          // than rendering an unexpected scheme into an href.
-          repository: /^https?:\/\//.test(data.repository) ? data.repository : '',
-          update: data.update || {},
-        })
-      } else {
-        setVersionInfo({ version: '', repository: '', update: {} })
-      }
+      setVersionInfo(readVersion(data?.ok ? data : null))
     } catch {
-      setVersionInfo({ version: '', repository: '', update: {} })
+      setVersionInfo(readVersion(null))
+    }
+  }
+
+  /**
+   * The explicit "check now" action (`?refresh=1`). Works whether or not the
+   * deployment enabled automatic checks — a click is the user's own consent
+   * for the one outbound request. The button is disabled while in flight, so
+   * a double-click cannot stack requests.
+   */
+  async function checkForUpdates() {
+    setCheckingUpdate(true)
+    try {
+      const data = await api.checkForUpdates()
+      const next = readVersion(data?.ok ? data : null)
+      // A failed round trip must not look like "never checked": surface it as
+      // an error state so the card can say the check did not go through.
+      if (!data?.ok) next.update = { latest: null, updateAvailable: null, checkedAt: null, error: 'unauthenticated' }
+      setVersionInfo(next)
+    } catch (err) {
+      setVersionInfo((prev) => ({
+        ...(prev || readVersion(null)),
+        update: { latest: null, updateAvailable: null, checkedAt: null, error: err?.message || 'network' },
+      }))
+    } finally {
+      setCheckingUpdate(false)
     }
   }
 
@@ -528,10 +559,19 @@ function UserSettingsPanel({ api, t }) {
                   </span>
                 )}
               </div>
-              {/* Update notice. `updateAvailable` is true / false / null, and
-                  null (registry unreachable, check disabled, or an unparsable
-                  version) must not be dressed up as "up to date". */}
-              {versionInfo.update?.updateAvailable === true && (
+              {/* Explicit check. Automatic checks are off by default, so this
+                  button is the normal way a user learns about a new release;
+                  it is also the only thing that makes the outbound request. */}
+              <div style={{ marginTop: '12px' }}>
+                <Button variant="outline" onClick={checkForUpdates} disabled={checkingUpdate}>
+                  {checkingUpdate ? t('about.checking') : t('about.check')}
+                </Button>
+              </div>
+              {/* Result line. `updateAvailable` is true / false / null, and a
+                  null (registry unreachable, never checked) must not be
+                  dressed up as "up to date"; `checkedAt: null` means no result
+                  is known, so nothing is claimed at all. */}
+              {!checkingUpdate && versionInfo.update?.updateAvailable === true && (
                 <div style={{
                   marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
                   fontSize: '13px', lineHeight: '20px',
@@ -551,10 +591,11 @@ function UserSettingsPanel({ api, t }) {
                   )}
                 </div>
               )}
-              {versionInfo.update?.updateAvailable === false && (
+              {!checkingUpdate && versionInfo.update?.updateAvailable === false && (
                 <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.upToDate')}</p>
               )}
-              {versionInfo.update?.updateAvailable == null && versionInfo.update?.enabled === true && (
+              {!checkingUpdate && versionInfo.update?.updateAvailable == null
+                && versionInfo.update?.checkedAt != null && (
                 <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.checkFailed')}</p>
               )}
             </>
@@ -739,6 +780,9 @@ function apply(ctx) {
   const api = {
     getSettings: async () => (await fetch(BASE + '/login-api/settings')).json(),
     getVersion: async () => (await fetch(BASE + '/login-api/version')).json(),
+    // Explicit on-demand check: the only path that makes the gateway contact
+    // the registry when automatic checks are off (the default).
+    checkForUpdates: async () => (await fetch(BASE + '/login-api/version?refresh=1')).json(),
     enableOtp: async () => (await fetch(BASE + '/otp/enable', { method: 'POST' })).json(),
     verifyOtpSetup: async (otp) => (await fetch(BASE + '/otp/verify-setup', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -762,9 +806,12 @@ function apply(ctx) {
   // theoretical: agent-presets ships `order: 20` too, and a tie made this
   // section land before 「Agent 预设」 on one composition and after it on
   // another. dsh ships general 0, models 10, plugins 15, agent-presets 20, so a
-  // third-party section must sort strictly above all of them; 100 is the value
-  // dsh's own contributed-entry examples use (docs/subsystems/slots.md and the
-  // generated slot catalog's examples in slot-catalog.ts).
+  // third-party section must sort strictly above all of them. 100 is the value
+  // dsh's own contributed-entry example uses — see `order: 100` in
+  // @deepseek-ai/dsh-cordis-client-runner/lib/client.js, and the
+  // `settings.section` declaration in
+  // @deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts;
+  // both ship inside the installed dsh, so a reader can actually check them.
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 100,
     label: () => t('nav'),

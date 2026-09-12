@@ -24,6 +24,8 @@ JS_FILES=(
   lib/otp-page.js
   lib/paths.js
   lib/upstream-auth.js
+  lib/update-check.js
+  lib/version.js
 )
 
 ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml)

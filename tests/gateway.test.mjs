@@ -19,6 +19,7 @@ import { LoginGateway } from '../lib/gateway.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
 import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
 import { generateTOTP } from '../lib/totp.js'
+import { createUpdateChecker } from '../lib/update-check.js'
 
 // ── fake upstream ───────────────────────────────────────────────────────
 
@@ -351,6 +352,51 @@ test('binding OTP mid-onboarding does not revoke the session; the password step 
   assert.equal(change.status, 200)
   const after = await request('/login-api/settings', { cookie })
   assert.equal(after.status, 401, 'session revoked after the password step')
+})
+
+test('version API: session-gated, reports identity and the update verdict', async () => {
+  // Unauthenticated callers learn nothing — same gate as /login-api/settings.
+  const anonymous = await request('/login-api/version')
+  assert.equal(anonymous.status, 401)
+  assert.equal(JSON.parse(anonymous.body).error, 'unauthenticated')
+
+  const cookie = await login()
+
+  // The harness gateway is built without versionInfo/updateChecker: it must
+  // still answer with a well-formed body, and must claim nothing.
+  const bare = await request('/login-api/version', { cookie })
+  assert.equal(bare.status, 200)
+  const bareBody = JSON.parse(bare.body)
+  assert.equal(bareBody.ok, true)
+  assert.equal(bareBody.version, 'unknown')
+  assert.deepEqual(bareBody.update, {
+    enabled: false, latest: null, updateAvailable: null, checkedAt: null, error: null,
+  })
+
+  // Wire identity and a checker into the SAME instance (a second gateway
+  // would carry its own SessionStore and reject this cookie): the panel gets
+  // version, repository and the registry verdict in one response.
+  gateway.versionInfo = { version: '0.6.0', repository: 'https://github.com/xbzbing/dsh-auth-gateway' }
+  gateway.updateChecker = createUpdateChecker({
+    current: '0.6.0',
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ version: '0.7.0' }) }),
+  })
+  const res = await request('/login-api/version', { cookie })
+  assert.equal(res.status, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.version, '0.6.0')
+  assert.equal(body.repository, 'https://github.com/xbzbing/dsh-auth-gateway')
+  assert.equal(body.update.updateAvailable, true)
+  assert.equal(body.update.latest, '0.7.0')
+  assert.equal(body.update.error, null)
+
+  // A checker that throws must not take the endpoint down with it.
+  gateway.updateChecker = { status: async () => { throw new Error('registry exploded') } }
+  const resilient = await request('/login-api/version', { cookie })
+  assert.equal(resilient.status, 200)
+  const resilientBody = JSON.parse(resilient.body)
+  assert.equal(resilientBody.version, '0.6.0')
+  assert.equal(resilientBody.update.updateAvailable, null, 'a failed check claims nothing')
 })
 
 test('the legacy /login/setup endpoint is gone', async () => {

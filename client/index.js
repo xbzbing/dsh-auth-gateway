@@ -123,6 +123,16 @@ window.__ModuleLoader__.load({
 		  "session.loggedIn": "\u5DF2\u767B\u5F55",
 		  "session.desc": "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002",
 		  "session.logout": "\u9000\u51FA\u767B\u5F55",
+		  "about.title": "\u5173\u4E8E",
+		  "about.version": "\u5F53\u524D\u7248\u672C",
+		  "about.unknown": "\u672A\u77E5",
+		  "about.repository": "\u4ED3\u5E93",
+		  "about.repositoryLink": "GitHub",
+		  "about.checking": "\u6B63\u5728\u68C0\u67E5\u66F4\u65B0...",
+		  "about.upToDate": "\u5DF2\u662F\u6700\u65B0\u7248\u672C",
+		  "about.updateAvailable": "\u53D1\u73B0\u65B0\u7248\u672C v{version}",
+		  "about.releaseNotes": "\u67E5\u770B\u66F4\u65B0",
+		  "about.checkFailed": "\u6682\u65F6\u65E0\u6CD5\u68C0\u67E5\u66F4\u65B0",
 		  "dialog.title": "\u8BBE\u7F6E OTP \u9A8C\u8BC1\u5668",
 		  "dialog.desc": "\u4F7F\u7528 Google Authenticator\u3001Authy \u6216\u5176\u4ED6 TOTP \u5E94\u7528\u626B\u63CF\u4EE5\u4E0B\u4E8C\u7EF4\u7801\uFF1A",
 		  "dialog.secret": "\u5BC6\u94A5\uFF08\u624B\u52A8\u8F93\u5165\u7528\uFF09",
@@ -177,6 +187,16 @@ window.__ModuleLoader__.load({
 		  "session.loggedIn": "Signed in",
 		  "session.desc": "Sessions last 30 days; a dsh restart signs everyone out.",
 		  "session.logout": "Sign out",
+		  "about.title": "About",
+		  "about.version": "Current version",
+		  "about.unknown": "unknown",
+		  "about.repository": "Repository",
+		  "about.repositoryLink": "GitHub",
+		  "about.checking": "Checking for updates...",
+		  "about.upToDate": "Up to date",
+		  "about.updateAvailable": "New version v{version} available",
+		  "about.releaseNotes": "View release",
+		  "about.checkFailed": "Update check unavailable",
 		  "dialog.title": "Set up OTP authenticator",
 		  "dialog.desc": "Scan the QR code with Google Authenticator, Authy or another TOTP app:",
 		  "dialog.secret": "Secret key (for manual entry)",
@@ -283,9 +303,30 @@ window.__ModuleLoader__.load({
 		  const [showDisableOtp, setShowDisableOtp] = (0, import_react.useState)(false);
 		  const [disableOtpCode, setDisableOtpCode] = (0, import_react.useState)("");
 		  const [disablingOtp, setDisablingOtp] = (0, import_react.useState)(false);
+		  const [versionInfo, setVersionInfo] = (0, import_react.useState)(null);
 		  (0, import_react.useEffect)(() => {
 		    loadSettings();
+		    loadVersion();
 		  }, []);
+		  async function loadVersion() {
+		    try {
+		      const data = await api.getVersion();
+		      if (data.ok) {
+		        setVersionInfo({
+		          version: typeof data.version === "string" ? data.version : "",
+		          // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+		          // normalizeRepository), and the panel refuses anything else rather
+		          // than rendering an unexpected scheme into an href.
+		          repository: /^https?:\/\//.test(data.repository) ? data.repository : "",
+		          update: data.update || {}
+		        });
+		      } else {
+		        setVersionInfo({ version: "", repository: "", update: {} });
+		      }
+		    } catch {
+		      setVersionInfo({ version: "", repository: "", update: {} });
+		    }
+		  }
 		  async function loadSettings() {
 		    try {
 		      const data = await api.getSettings();
@@ -542,6 +583,61 @@ window.__ModuleLoader__.load({
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("session.desc") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") })
 		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		          "\u2139\uFE0F ",
+		          t("about.title")
+		        ] }) }),
+		        versionInfo === null ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: t("about.checking") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: "13px", lineHeight: "20px" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { color: T.textSecondary }, children: [
+		              t("about.version"),
+		              " ",
+		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { color: T.textPrimary, fontFamily: T.fontCode }, children: versionInfo.version === "" ? t("about.unknown") : "v" + versionInfo.version })
+		            ] }),
+		            versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { color: T.textSecondary }, children: [
+		              t("about.repository"),
+		              " ",
+		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		                "a",
+		                {
+		                  href: versionInfo.repository,
+		                  target: "_blank",
+		                  rel: "noopener noreferrer",
+		                  style: { color: T.brand, textDecoration: "none" },
+		                  children: t("about.repositoryLink")
+		                }
+		              )
+		            ] })
+		          ] }),
+		          versionInfo.update?.updateAvailable === true && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		            marginTop: "12px",
+		            padding: "10px 14px",
+		            borderRadius: "10px",
+		            fontSize: "13px",
+		            lineHeight: "20px",
+		            background: T.successBg,
+		            color: T.success
+		          }, children: [
+		            t("about.updateAvailable", { version: versionInfo.update.latest || "" }),
+		            versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		              " ",
+		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		                "a",
+		                {
+		                  href: versionInfo.repository + "/releases",
+		                  target: "_blank",
+		                  rel: "noopener noreferrer",
+		                  style: { color: T.success, textDecoration: "underline" },
+		                  children: t("about.releaseNotes")
+		                }
+		              )
+		            ] })
+		          ] }),
+		          versionInfo.update?.updateAvailable === false && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.upToDate") }),
+		          versionInfo.update?.updateAvailable == null && versionInfo.update?.enabled === true && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.checkFailed") })
+		        ] })
+		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
 		        marginTop: "12px",
 		        padding: "10px 14px",
@@ -688,6 +784,7 @@ window.__ModuleLoader__.load({
 		  const t = ctx.locale.bind(NS);
 		  const api = {
 		    getSettings: async () => (await fetch(BASE + "/login-api/settings")).json(),
+		    getVersion: async () => (await fetch(BASE + "/login-api/version")).json(),
 		    enableOtp: async () => (await fetch(BASE + "/otp/enable", { method: "POST" })).json(),
 		    verifyOtpSetup: async (otp) => (await fetch(BASE + "/otp/verify-setup", {
 		      method: "POST",

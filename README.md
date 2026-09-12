@@ -44,6 +44,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **登录审计**：登录成功 / 失败 / 登出 / 改密与暴力破解告警（锁定/限流）均输出审计日志（`ctx.logger.info`/`warn`，含来源 IP 与失败原因，不记录任何凭据），并**持久化落盘** `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天），形成完整可审计闭环；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
+- **关于卡片**：设置面板显示当前版本号与仓库链接（读取本机 `package.json`，离线可用），并提示新版本——网关向公共 npm registry 查询 `latest` 标签，这是本插件唯一的对外请求（可用 `updateCheck: false` 关闭，见 [安全模型](docs/zh/SECURITY.md)）；registry 不可达时显示「暂时无法检查更新」，绝不干扰认证与转发；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），主体全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）；唯有一项记录在案的安全例外——LAN trust（为域名/反代访问下模型设置页可用而对 connection 注册做最小介入，见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)）。
 
 ## 本插件不做的事情
@@ -111,6 +112,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 | `otpRequired` | `false` | 2FA 激活后强制每次登录验证（无需任何配置） |
 | `otpIssuer` / `otpPeriod` / `otpDigits` / `otpWindow` | `dsh-auth-gateway` / `30` / `6` / `1` | TOTP 参数（显示名、周期、位数、窗口） |
 | `backupCodeCount` / `backupCodeLength` | `10` / `8` | 备份代码数量与长度 |
+| `updateCheck` | `true` | 「认证设置 → 关于」中的新版本提示：网关向公共 npm registry 查询 `latest`（本插件唯一的对外请求，成功缓存 6h / 失败 15min，超时 3s，不含任何凭据）。置 `false` 可完全离线——面板仍显示当前版本与仓库链接 |
 
 ## 安全模型
 

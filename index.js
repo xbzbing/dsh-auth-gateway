@@ -17,6 +17,8 @@ import { hasPassword, setPassword, generateInitialPassword } from './lib/store.j
 import { hasOTP, getOTPStatus } from './lib/otp-store.js'
 import { buildLanTrustScript } from './lib/lan-trust-script.js'
 import { createCachedSecretReader } from './lib/upstream-auth.js'
+import { readPackageMeta } from './lib/version.js'
+import { createUpdateChecker } from './lib/update-check.js'
 
 export const name = 'dsh-auth-gateway'
 
@@ -67,12 +69,32 @@ function upstreamSecretReader(ctx) {
  */
 export async function apply(ctx, config) {
   const upstream = upstreamSecretReader(ctx)
+  // Running version + repository, read from the package.json shipped beside
+  // this module: the settings panel displays them and the update check
+  // compares against them. Read once per apply — a deploy replaces both the
+  // code and its metadata together.
+  const packageMeta = readPackageMeta()
   // Populate the upstream browser-auth secret cache BEFORE the gateway
   // listens: the first forwarded request must never race ahead of the read
   // (fire-and-forget warm-up could cost one visible upstream 401). A failed
   // or absent read still resolves — no secret means verbatim forwarding.
   await upstream.warm()
-  const gateway = createGateway(config, { upstreamSecretReader: upstream.secret })
+  const gateway = createGateway(config, {
+    upstreamSecretReader: upstream.secret,
+    versionInfo: packageMeta,
+    updateChecker: createUpdateChecker({
+      current: packageMeta.version,
+      enabled: config?.updateCheck ?? true,
+      // Surface a found release in the console once per successful check:
+      // a headless deployment has no panel open to notice it otherwise.
+      onResult: (snapshot) => {
+        if (snapshot.updateAvailable === true) {
+          ctx.logger.info('[dsh-auth-gateway] 发现新版本 %s（当前 %s），详见 %s',
+            snapshot.latest, packageMeta.version, packageMeta.repository + '/releases')
+        }
+      },
+    }),
+  })
 
   // Browser-side compatibility for authenticated pages. The randomUUID
   // polyfill can run at the start of <head>; it also publishes the gateway's

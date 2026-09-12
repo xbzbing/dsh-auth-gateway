@@ -25,6 +25,8 @@ host（零构建，node:crypto / node:http）
 ├── lib/login-page.js # 登录/设置/改密页面
 ├── lib/onboarding-page.js # 引导页（设置个人密码 + 可选 OTP 绑定）
 ├── lib/policy.js     # 密码强度策略
+├── lib/version.js    # 自身版本/仓库读取（package.json）+ SemVer 子集比较
+├── lib/update-check.js # 新版本检查（唯一的对外请求，TTL 缓存 + 绝不抛错）
 └── lib/config.js     # Standard Schema 配置校验（含 basePath 子路径前缀）
 
 client（可选，源码构建）
@@ -49,6 +51,7 @@ scripts / tests
 - **basePath 子路径部署**：网关路由先剥离 `basePath` 前缀（带边界检查，`/dsh2/foo` 不会被误当作 `/dsh` 前缀），302 跳转统一拼接前缀，转发上游时再剥离；PWA 元数据（`manifest.webmanifest` / `favicon.svg`）与静态资产（`/assets/*`）免认证放行（浏览器子资源请求，无敏感信息）；
 - **客户端 trust 时序**：client 插件经 inject 声明依赖 `connection`，在 apply 时对 LAN hostname 把 `handle.isLoopback` 改写为恒真 getter——早于任何消费者的持久化决策生效。全程只用官方扩展点，不触碰 DSH 模块加载器；
 - **设置面板导航顺序**：注册 `settings.section` 时 `order` 必须**严格大于官方全部 section 的最大值**（dsh 现为 `general` 0 / `models` 10 / `plugins` 15 / `agent-presets` 20，本插件取 100，即 dsh 文档给贡献项示例的取值）。slot 列表按 `order` 稳定排序，取值与官方相等时位置退化为插件加载顺序，会随组合在「Agent 预设」前后漂移；`tests/client-contract.test.mjs` 已断言该不变量；
+- **唯一的对外请求**：`lib/update-check.js` 向公共 npm registry 查询 `latest` 标签，用于面板的「新版本」提示（版本号与仓库链接本身来自本机 `package.json`，离线可见）。约束是硬性的：**不在认证或面板的关键路径上**、结果与失败都进内存缓存（成功 6h / 失败 15min，避免打爆一个不可达的 registry）、绝不抛错（失败一律降级为「无法检查」而非「已是最新」）、可经 `updateCheck: false` 完全关闭。详见 SECURITY.md；
 - **页面双语**：`lib/locale.js` 解析渲染语言（`$DSH_HOME/settings.yaml` 的 `locale.preference` > 请求 `Accept-Language` > zh），页面文案按语言选取；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
 - **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gateway/otp-master.key`，见 SECURITY.md）。

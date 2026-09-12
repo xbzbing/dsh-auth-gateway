@@ -44,6 +44,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **Login audit**: login success / failure / logout / password change and brute-force alerts (lockouts / rate limits) are logged via `ctx.logger.info`/`warn` (with source IP and failure reason — never any credentials) and **persisted** to `$DSH_HOME/auth-gateway/log/audit.log` (JSONL, rotated daily, 90-day retention), forming a complete audit trail;
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
+- **About card**: the settings panel shows the running version and a repository link (read from the local `package.json`, works offline) plus a new-version notice — the gateway queries the public npm registry for the `latest` tag, the plugin's only outbound request (turn it off with `updateCheck: false`, see the [security model](docs/en/SECURITY.md)); an unreachable registry shows "update check unavailable" and never disturbs auth or forwarding;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built); the bulk goes through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`) — with one recorded security exception: LAN trust (minimal interception of the connection registration so the Models settings page works on domain/reverse-proxy access; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md)).
 
 ## What this plugin does not do
@@ -111,6 +112,7 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 | `otpRequired` | `false` | Require verification at every login once 2FA is active (no config needed) |
 | `otpIssuer` / `otpPeriod` / `otpDigits` / `otpWindow` | `dsh-auth-gateway` / `30` / `6` / `1` | TOTP parameters (display name, period, digits, window) |
 | `backupCodeCount` / `backupCodeLength` | `10` / `8` | Backup-code count and length |
+| `updateCheck` | `true` | The new-version notice in Auth Settings → About: the gateway queries the public npm registry for `latest` (the plugin's only outbound request — 6h success / 15min failure cache, 3s timeout, no credentials). Set `false` for a fully offline install; the panel still shows the running version and the repository link |
 
 ## Security model
 

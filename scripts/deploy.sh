@@ -24,9 +24,26 @@ JS_FILES=(
   lib/otp-page.js
   lib/paths.js
   lib/upstream-auth.js
+  lib/update-check.js
+  lib/version.js
 )
 
-ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml)
+# package.json rides along: lib/version.js reads the INSTALLED copy's
+# version/repository (lib/../package.json) for the panel and the update
+# check — a deploy that leaves a stale metadata file behind would show an
+# old version and misjudge updates against it.
+#
+# The client bundle is the panel half (dsh serves it via exports["./client"]).
+# A `file:` install is a snapshot copy — the profile's pnpm-workspace.yaml sets
+# `nodeLinker: hoisted`, so node_modules/dsh-auth-gateway is real files, not a
+# symlink into this checkout — which means a rebuilt bundle reaches an
+# installed copy ONLY through this script. Without these two entries a deploy
+# shipped the new server routes with the OLD panel.
+CLIENT_FILES=(
+  client/index.js
+  client/index.js.map
+)
+ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" cordis.patch.yml package.json)
 
 errors=0
 
@@ -68,7 +85,7 @@ for f in "${ALL_FILES[@]}"; do
   echo "  ✓ $f"
 done
 
-# ── 3. Post-deploy 验证（installed 版本语法） ────────────────────────────
+# ── 3. Post-deploy 验证（installed 版本语法 + 元数据） ────────────────────
 echo
 echo "▸ 验证 installed 版本"
 for f in "${JS_FILES[@]}"; do
@@ -80,6 +97,43 @@ for f in "${JS_FILES[@]}"; do
     ((errors++))
   fi
 done
+
+# The client bundle is generated and would otherwise never be verified:
+# a truncated or half-written copy would fail in the browser, not here.
+for f in "${CLIENT_FILES[@]}"; do
+  if [[ "$f" == *.js ]] && node --check "$DST/$f" 2>/dev/null; then
+    echo "  ✓ $f"
+  elif [[ "$f" == *.js ]]; then
+    echo "  ✗ $f  ← installed 客户端产物语法错误！" >&2
+    node --check "$DST/$f" 2>&1 | sed 's/^/    /' >&2
+    ((errors++))
+  elif [[ -s "$DST/$f" ]]; then
+    echo "  ✓ $f"
+  else
+    echo "  ✗ $f  ← installed 客户端产物缺失或为空！" >&2
+    ((errors++))
+  fi
+done
+
+# package.json cannot go through `node --check` (it is JSON, not JS), so the
+# loop above skips it — verify the two properties lib/version.js actually
+# reads instead: it must parse, and name+version must equal the workspace's.
+# Without this the copy in step 2 is the one thing nothing checks, and a
+# stale metadata file would show the wrong version in the panel and compare
+# the update check against that wrong number.
+read_meta() { node -e 'const p = require(process.argv[1]); process.stdout.write(`${p.name} ${p.version}`)' "$1" 2>/dev/null; }
+if ! src_meta="$(read_meta "$SRC/package.json")" || [[ -z "$src_meta" ]]; then
+  echo "  ✗ workspace package.json 无法解析或缺少 name/version" >&2
+  ((errors++))
+elif ! dst_meta="$(read_meta "$DST/package.json")" || [[ -z "$dst_meta" ]]; then
+  echo "  ✗ installed package.json 无法解析或缺少 name/version" >&2
+  ((errors++))
+elif [[ "$src_meta" != "$dst_meta" ]]; then
+  echo "  ✗ package.json 元数据未同步：installed=[$dst_meta] workspace=[$src_meta]" >&2
+  ((errors++))
+else
+  echo "  ✓ package.json ($dst_meta)"
+fi
 
 echo
 if ((errors > 0)); then

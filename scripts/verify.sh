@@ -76,6 +76,33 @@ else
   fail=$((fail + 1)); printf 'FAIL authenticated /api (got %s)\n' "$api_code"
 fi
 
+# ── version API: gated, and answers with the running version ─────────────
+# Anonymous: no cookie jar here. The endpoint sits behind the same session
+# gate as /login-api/settings, so an unauthenticated caller must get 401.
+check 'unauthenticated /login-api/version -> 401' 401 "$(code "$BASE/login-api/version")"
+version_body="$(curl -sS "$BASE/login-api/version" -b "$JAR")"
+if printf '%s' "$version_body" | node -e '
+  let raw = "";
+  process.stdin.on("data", (c) => { raw += c });
+  process.stdin.on("end", () => {
+    const body = JSON.parse(raw);
+    // The panel needs a version string and a possibly-empty http(s) repository;
+    // `update` is the registry verdict and may be null/disabled/an error code.
+    const okVersion = typeof body.version === "string" && body.version.length > 0;
+    const okRepo = typeof body.repository === "string"
+      && (body.repository === "" || body.repository.startsWith("https://"));
+    const okUpdate = body.update && typeof body.update === "object"
+      && (body.update.updateAvailable === true
+        || body.update.updateAvailable === false
+        || body.update.updateAvailable === null);
+    process.exit(body.ok === true && okVersion && okRepo && okUpdate ? 0 : 1);
+  });
+'; then
+  pass=$((pass + 1)); printf 'ok   authenticated /login-api/version shape (%s)\n' "$version_body"
+else
+  fail=$((fail + 1)); printf 'FAIL /login-api/version shape (%s)\n' "$version_body"
+fi
+
 # ── websocket gate (unauthenticated upgrade must be refused) ─────────────
 ws_out="$(node -e '
   const http = require("node:http");

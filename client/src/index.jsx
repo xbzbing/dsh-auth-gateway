@@ -97,6 +97,16 @@ const zh = {
   'session.loggedIn': '已登录',
   'session.desc': '会话有效期 30 天；dsh 重启后需重新登录。',
   'session.logout': '退出登录',
+  'about.title': '关于',
+  'about.version': '当前版本',
+  'about.unknown': '未知',
+  'about.repository': '仓库',
+  'about.repositoryLink': 'GitHub',
+  'about.checking': '正在检查更新...',
+  'about.upToDate': '已是最新版本',
+  'about.updateAvailable': '发现新版本 v{version}',
+  'about.releaseNotes': '查看更新',
+  'about.checkFailed': '暂时无法检查更新',
   'dialog.title': '设置 OTP 验证器',
   'dialog.desc': '使用 Google Authenticator、Authy 或其他 TOTP 应用扫描以下二维码：',
   'dialog.secret': '密钥（手动输入用）',
@@ -153,6 +163,16 @@ const en = {
   'session.loggedIn': 'Signed in',
   'session.desc': 'Sessions last 30 days; a dsh restart signs everyone out.',
   'session.logout': 'Sign out',
+  'about.title': 'About',
+  'about.version': 'Current version',
+  'about.unknown': 'unknown',
+  'about.repository': 'Repository',
+  'about.repositoryLink': 'GitHub',
+  'about.checking': 'Checking for updates...',
+  'about.upToDate': 'Up to date',
+  'about.updateAvailable': 'New version v{version} available',
+  'about.releaseNotes': 'View release',
+  'about.checkFailed': 'Update check unavailable',
   'dialog.title': 'Set up OTP authenticator',
   'dialog.desc': 'Scan the QR code with Google Authenticator, Authy or another TOTP app:',
   'dialog.secret': 'Secret key (for manual entry)',
@@ -252,7 +272,32 @@ function UserSettingsPanel({ api, t }) {
   const [disableOtpCode, setDisableOtpCode] = useState('')
   const [disablingOtp, setDisablingOtp] = useState(false)
 
-  useEffect(() => { loadSettings() }, [])
+  // Version / update notice (GET /login-api/version). Loaded separately from
+  // the settings call so a slow or unreachable registry never delays the
+  // panel's own data; `null` means "not answered yet" (checking).
+  const [versionInfo, setVersionInfo] = useState(null)
+
+  useEffect(() => { loadSettings(); loadVersion() }, [])
+
+  async function loadVersion() {
+    try {
+      const data = await api.getVersion()
+      if (data.ok) {
+        setVersionInfo({
+          version: typeof data.version === 'string' ? data.version : '',
+          // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+          // normalizeRepository), and the panel refuses anything else rather
+          // than rendering an unexpected scheme into an href.
+          repository: /^https?:\/\//.test(data.repository) ? data.repository : '',
+          update: data.update || {},
+        })
+      } else {
+        setVersionInfo({ version: '', repository: '', update: {} })
+      }
+    } catch {
+      setVersionInfo({ version: '', repository: '', update: {} })
+    }
+  }
 
   async function loadSettings() {
     try {
@@ -453,6 +498,69 @@ function UserSettingsPanel({ api, t }) {
           <Button variant="dangerOutline" onClick={logout}>{t('session.logout')}</Button>
         </div>
 
+        {/* About: running version, repository link, new-version notice */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={CARD_TITLE}>ℹ️ {t('about.title')}</span>
+          </div>
+          {versionInfo === null ? (
+            <p style={{ ...DESC, margin: 0 }}>{t('about.checking')}</p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: '13px', lineHeight: '20px' }}>
+                <span style={{ color: T.textSecondary }}>
+                  {t('about.version')}
+                  {' '}
+                  <span style={{ color: T.textPrimary, fontFamily: T.fontCode }}>
+                    {versionInfo.version === '' ? t('about.unknown') : 'v' + versionInfo.version}
+                  </span>
+                </span>
+                {versionInfo.repository !== '' && (
+                  <span style={{ color: T.textSecondary }}>
+                    {t('about.repository')}
+                    {' '}
+                    <a
+                      href={versionInfo.repository}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: T.brand, textDecoration: 'none' }}
+                    >{t('about.repositoryLink')}</a>
+                  </span>
+                )}
+              </div>
+              {/* Update notice. `updateAvailable` is true / false / null, and
+                  null (registry unreachable, check disabled, or an unparsable
+                  version) must not be dressed up as "up to date". */}
+              {versionInfo.update?.updateAvailable === true && (
+                <div style={{
+                  marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
+                  fontSize: '13px', lineHeight: '20px',
+                  background: T.successBg, color: T.success,
+                }}>
+                  {t('about.updateAvailable', { version: versionInfo.update.latest || '' })}
+                  {versionInfo.repository !== '' && (
+                    <>
+                      {' '}
+                      <a
+                        href={versionInfo.repository + '/releases'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: T.success, textDecoration: 'underline' }}
+                      >{t('about.releaseNotes')}</a>
+                    </>
+                  )}
+                </div>
+              )}
+              {versionInfo.update?.updateAvailable === false && (
+                <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.upToDate')}</p>
+              )}
+              {versionInfo.update?.updateAvailable == null && versionInfo.update?.enabled === true && (
+                <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.checkFailed')}</p>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Status */}
         {status && (
           <div style={{
@@ -630,6 +738,7 @@ function apply(ctx) {
   // api object through the slot's inject face (no direct fetch in props).
   const api = {
     getSettings: async () => (await fetch(BASE + '/login-api/settings')).json(),
+    getVersion: async () => (await fetch(BASE + '/login-api/version')).json(),
     enableOtp: async () => (await fetch(BASE + '/otp/enable', { method: 'POST' })).json(),
     verifyOtpSetup: async (otp) => (await fetch(BASE + '/otp/verify-setup', {
       method: 'POST', headers: { 'content-type': 'application/json' },

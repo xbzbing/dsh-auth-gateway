@@ -22,6 +22,8 @@ lib/
   *-page.js     自包含 HTML 页面（login / onboarding / otp），共享脚手架在 page-shell.js
   policy.js     密码强度策略（服务端权威，客户端仅提前反馈）
   config.js     Standard Schema v1 配置校验
+  version.js    自身版本/仓库读取（package.json）+ SemVer 子集比较
+  update-check.js 新版本检查：唯一的对外请求（npm registry latest），带 TTL 缓存、绝不抛错
 client/         设置面板（slot settings.section）；src/index.jsx 源码，index.js+.map 为入库构建产物
 scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；smoke.mjs 冒烟；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图

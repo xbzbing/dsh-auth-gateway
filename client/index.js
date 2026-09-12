@@ -710,7 +710,7 @@ window.__ModuleLoader__.load({
 		  ctx.slots.inject("settings.section", () => ctx.slots.register({
 		    name: "settings.section",
 		    id: "user-settings",
-		    order: 20,
+		    order: 100,
 		    label: () => t("nav"),
 		    locale: NS,
 		    inject: injected

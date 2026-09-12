@@ -74,7 +74,7 @@ for f in "${ALL_FILES[@]}"; do
   echo "  ✓ $f"
 done
 
-# ── 3. Post-deploy 验证（installed 版本语法） ────────────────────────────
+# ── 3. Post-deploy 验证（installed 版本语法 + 元数据） ────────────────────
 echo
 echo "▸ 验证 installed 版本"
 for f in "${JS_FILES[@]}"; do
@@ -86,6 +86,26 @@ for f in "${JS_FILES[@]}"; do
     ((errors++))
   fi
 done
+
+# package.json cannot go through `node --check` (it is JSON, not JS), so the
+# loop above skips it — verify the two properties lib/version.js actually
+# reads instead: it must parse, and name+version must equal the workspace's.
+# Without this the copy in step 2 is the one thing nothing checks, and a
+# stale metadata file would show the wrong version in the panel and compare
+# the update check against that wrong number.
+read_meta() { node -e 'const p = require(process.argv[1]); process.stdout.write(`${p.name} ${p.version}`)' "$1" 2>/dev/null; }
+if ! src_meta="$(read_meta "$SRC/package.json")" || [[ -z "$src_meta" ]]; then
+  echo "  ✗ workspace package.json 无法解析或缺少 name/version" >&2
+  ((errors++))
+elif ! dst_meta="$(read_meta "$DST/package.json")" || [[ -z "$dst_meta" ]]; then
+  echo "  ✗ installed package.json 无法解析或缺少 name/version" >&2
+  ((errors++))
+elif [[ "$src_meta" != "$dst_meta" ]]; then
+  echo "  ✗ package.json 元数据未同步：installed=[$dst_meta] workspace=[$src_meta]" >&2
+  ((errors++))
+else
+  echo "  ✓ package.json ($dst_meta)"
+fi
 
 echo
 if ((errors > 0)); then

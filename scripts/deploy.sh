@@ -15,6 +15,7 @@ JS_FILES=(
   lib/audit-log.js
   lib/config.js
   lib/lan-trust-script.js
+  lib/rate-limit.js
   lib/forward.js
   lib/gateway.js
   lib/gateway-otp.js

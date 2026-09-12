@@ -28,7 +28,11 @@ JS_FILES=(
   lib/version.js
 )
 
-ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml)
+# package.json rides along: lib/version.js reads the INSTALLED copy's
+# version/repository (lib/../package.json) for the panel and the update
+# check — a deploy that leaves a stale metadata file behind would show an
+# old version and misjudge updates against it.
+ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml package.json)
 
 errors=0
 

@@ -32,7 +32,18 @@ JS_FILES=(
 # version/repository (lib/../package.json) for the panel and the update
 # check — a deploy that leaves a stale metadata file behind would show an
 # old version and misjudge updates against it.
-ALL_FILES=("${JS_FILES[@]}" cordis.patch.yml package.json)
+#
+# The client bundle is the panel half (dsh serves it via exports["./client"]).
+# A `file:` install is a snapshot copy — the profile's pnpm-workspace.yaml sets
+# `nodeLinker: hoisted`, so node_modules/dsh-auth-gateway is real files, not a
+# symlink into this checkout — which means a rebuilt bundle reaches an
+# installed copy ONLY through this script. Without these two entries a deploy
+# shipped the new server routes with the OLD panel.
+CLIENT_FILES=(
+  client/index.js
+  client/index.js.map
+)
+ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" cordis.patch.yml package.json)
 
 errors=0
 
@@ -83,6 +94,23 @@ for f in "${JS_FILES[@]}"; do
   else
     echo "  ✗ $f  ← installed 版本语法错误！" >&2
     node --check "$DST/$f" 2>&1 | sed 's/^/    /' >&2
+    ((errors++))
+  fi
+done
+
+# The client bundle is generated and would otherwise never be verified:
+# a truncated or half-written copy would fail in the browser, not here.
+for f in "${CLIENT_FILES[@]}"; do
+  if [[ "$f" == *.js ]] && node --check "$DST/$f" 2>/dev/null; then
+    echo "  ✓ $f"
+  elif [[ "$f" == *.js ]]; then
+    echo "  ✗ $f  ← installed 客户端产物语法错误！" >&2
+    node --check "$DST/$f" 2>&1 | sed 's/^/    /' >&2
+    ((errors++))
+  elif [[ -s "$DST/$f" ]]; then
+    echo "  ✓ $f"
+  else
+    echo "  ✗ $f  ← installed 客户端产物缺失或为空！" >&2
     ((errors++))
   fi
 done

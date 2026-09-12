@@ -354,6 +354,27 @@ test('binding OTP mid-onboarding does not revoke the session; the password step 
   assert.equal(after.status, 401, 'session revoked after the password step')
 })
 
+test('change-password attempts consume the global auth budget across source addresses', async () => {
+  await gateway.close()
+  delete process.env.DSH_HOME
+  rmSync(home, { recursive: true, force: true })
+  await startGateway({ maxGlobalAuthAttemptsPerMinute: 2, maxLoginFailures: 100 })
+  await setPassword('GoodPass1')
+  const cookie = await login()
+
+  const first = await request('/login/change', {
+    method: 'POST', cookie,
+    body: { oldPassword: 'wrong', newPassword: 'NewPass123!' },
+  })
+  const second = await request('/login/change', {
+    method: 'POST', cookie,
+    body: { oldPassword: 'wrong', newPassword: 'NewPass123!' },
+  })
+  assert.equal(first.status, 401)
+  assert.equal(second.status, 429)
+  assert.equal(JSON.parse(second.body).error, 'rate-limited')
+})
+
 test('version API: session-gated, reports identity and the update verdict', async () => {
   // Unauthenticated callers learn nothing — same gate as /login-api/settings.
   const anonymous = await request('/login-api/version')

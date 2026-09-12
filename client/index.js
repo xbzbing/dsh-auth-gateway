@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
 		  return to;
 		};
 		var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-		
+
 		// client/src/index.jsx
 		var index_exports = {};
 		__export(index_exports, {
@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
 		module.exports = __toCommonJS(index_exports);
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
-		
+
 		// client/src/update-notice.js
 		function readVersion(data) {
 		  return {
@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
 		  }
 		  return null;
 		}
-		
+
 		// client/src/index.jsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var T = {
@@ -856,7 +856,7 @@ window.__ModuleLoader__.load({
 		    inject: injected
 		  }, UserSettingsPanel));
 		}
-		
+
 		return module.exports;
 	}
 });

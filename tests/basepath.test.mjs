@@ -293,6 +293,16 @@ test('auth audit: login success/failure, logout and password change emit events'
   const sc = auth.headers['set-cookie']
   const cookie = Array.isArray(sc) ? sc[0] : sc
 
+  // Anonymous logout must not create an unbounded audit stream.
+  events.length = 0
+  const anonymousLogout = await fetch(gw.address().port, '/dsh/login/logout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  })
+  assert.equal(anonymousLogout.status, 200)
+  assert.equal(events.some((e) => e.kind === 'logout'), false)
+
   // Logout
   events.length = 0
   await fetch(gw.address().port, '/dsh/login/logout', {

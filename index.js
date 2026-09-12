@@ -14,6 +14,7 @@ import { createGateway, lanAddresses } from './lib/gateway.js'
 import { Config } from './lib/config.js'
 import { AuditLogWriter } from './lib/audit-log.js'
 import { hasPassword, setPassword, generateInitialPassword } from './lib/store.js'
+import { hasOTP, getOTPStatus } from './lib/otp-store.js'
 import { buildLanTrustScript } from './lib/lan-trust-script.js'
 import { createCachedSecretReader } from './lib/upstream-auth.js'
 
@@ -140,6 +141,11 @@ export async function apply(ctx, config) {
     onRecover: () => {
       ctx.logger.info('[dsh-auth-gateway] 审计日志写入已恢复')
     },
+    onMigrate: (line) => {
+      // Pre-0.5.1 audit files found at the credential-dir root were folded
+      // into log/ so the trail stays continuous across upgrades.
+      ctx.logger.info('[dsh-auth-gateway] 审计日志迁移: %s', line)
+    },
   })
   auditLog.open()
 
@@ -233,9 +239,18 @@ export async function apply(ctx, config) {
   ctx.logger.info('[dsh-auth-gateway] gateway listening on http://%s:%s -> http://%s:%s',
     gateway.listenHost, gateway.listenPort, gateway.upstreamHost, gateway.upstreamPort)
 
-  // Log OTP configuration
-  if (config?.otpEnabled) {
-    ctx.logger.info('[dsh-auth-gateway] OTP enabled (required: %s)', config.otpRequired ? 'yes' : 'no')
+  // Log the ACTUAL OTP state (binding is a user action since 0.3.0; the
+  // deprecated otpEnabled/otpRequired config fields no longer drive it, so
+  // logging them would misreport deployments that bound 2FA from the panel).
+  try {
+    if (hasOTP() && getOTPStatus().enabled) {
+      ctx.logger.info('[dsh-auth-gateway] OTP 已激活，登录需密码 + 验证码')
+    }
+  } catch (err) {
+    // A corrupt OTP record fails loud at request time (mapped to a JSON
+    // error); it must not take the whole plugin down over a log line.
+    ctx.logger.warn('[dsh-auth-gateway] 读取 OTP 状态失败: %s',
+      err instanceof Error ? err.message : String(err))
   }
 }
 

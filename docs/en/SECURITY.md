@@ -85,8 +85,7 @@ The gateway's client plugin (client/src/index.jsx) declares a `connection` depen
 - **Plaintext HTTP**: passwords and cookies travel in cleartext on the network. For LAN deployments, keep it on a trusted network or put a TLS reverse proxy in front (see DEPLOYMENT.md);
 - **OTP-enable permission (DoS surface)**: `/otp/enable` and `/otp/verify-setup` only require any valid session — enabling 2FA is a user action (no deployment switch). If a password leaks, an attacker could log in with it and bind their own authenticator, locking out the real user. This is not credential theft; it is mainly a DoS surface. Mitigation: enabling OTP **revokes all sessions** (including the enabler's own, forcing re-login under the 2FA policy); a future direction is requiring password re-verification when enabling;
 - **In-memory sessions**: everyone is logged out on dsh restart (must log in again; with OTP enabled, 2FA must be redone);
-- **No distributed protection**: the global rate limit counts per process; multi-instance deployments or distributed attackers can spread requests;
-- **Slight modulo bias in backup-code generation** (`bytes % 34`), no practical security impact (the space is still 34^8).
+- **No distributed protection**: the global rate limit counts per process; multi-instance deployments or distributed attackers can spread requests.
 
 ## Recovery paths
 

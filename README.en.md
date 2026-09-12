@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), yet its design note states explicitly *"There is no logout operation or reverse-proxy-specific handling"* and the CLI still rejects `--host 0.0.0.0` — **dsh never envisioned or supports remote access, and reserved no integration channel for putting another gateway in front of it**. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports the latest dsh 0.1.2-rc.1 release. Starting with dsh 0.1.2, the internal webserver enforces built-in browser authentication (BrowserAuth): the gateway reads the upstream session secret through the official `credentials` service and automatically mints an upstream cookie for loopback forwarding — transparent to the browser and to your deployment (see [docs/en/SECURITY.md](docs/en/SECURITY.md) for the mechanism).
+This project supports the latest dsh 0.1.5-rc.2 release. Starting with dsh 0.1.2, the internal webserver enforces built-in browser authentication (BrowserAuth): the gateway reads the upstream session secret through the official `credentials` service and automatically mints an upstream cookie for loopback forwarding — transparent to the browser and to your deployment (see [docs/en/SECURITY.md](docs/en/SECURITY.md) for the mechanism). The 0.1.5 line is verified compatible: every extension point this plugin relies on (`webServer.tapIndex`, the `dsh.bundle` patch, the `settings.section` slot, the `credentials` record and the BrowserAuth cookie format) is unchanged there, and both the endless WebSocket reconnects and streaming file uploads forward correctly through the gateway.
 
 ## Installation and Uninstallation
 
@@ -45,6 +45,13 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built); the bulk goes through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`) — with one recorded security exception: LAN trust (minimal interception of the connection registration so the Models settings page works on domain/reverse-proxy access; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md)).
+
+## What this plugin does not do
+
+The following requirements **cannot truly be delivered on a single instance** — they presuppose process/OS-enforced execution and storage isolation (separate OS accounts, containers, or a sandbox), and this plugin, an authentication gateway running inside the dsh process, cannot provide that layer. They are listed here so expectations stay honest:
+
+- **Multi-account login / multi-tenancy**: dsh is a single-user tool — one Home, one set of model credentials, and every session and data file (`sessions/`, `workspace/`, `.credentials.yaml`) lives on local disk under the authority of the OS account running dsh. An account layer on top of the gateway can only distinguish *who is logging in* (access control + audit); it cannot isolate *who can see what*: any authenticated user can read every session and credential of the same Home through dsh's tool execution. **Without OS/container/sandbox isolation there is no real multi-tenancy** — this plugin does not and cannot do it.
+- **Role-based permission limits (user/admin)**: likewise, roles can only take effect at the gateway's own HTTP routing layer (e.g. restricting gateway-admin features); they cannot constrain dsh's internal capability surface — once a normal user passes the authentication gate, they hold the full power of that instance (tool execution, session read/write, configuration and credential access). For scenarios that need "restricted users", deploy OS-isolated instances and manage accounts yourself. This plugin's job is: **the authentication gate (who may enter) + interception and audit (who did what) — it does not and cannot implement authorization or isolation models**.
 
 ## How it works
 
@@ -94,7 +101,7 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 |---|---|---|
 | `listenHost` / `listenPort` | `0.0.0.0` / `3080` | Gateway external listen address and port |
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | Internal webserver address and port |
-| `basePath` | `/` | Reverse-proxy sub-path prefix (e.g. `/dsh`); **default `/` (root path)**. For sub-path deployment, set in the **deployer's profile patch**, not shipped with the plugin |
+| `basePath` | `/` | Reverse-proxy sub-path prefix (e.g. `/dsh`); **default `/` (root path)**. Charset is limited to `A-Za-z0-9._~/-`: `..`, `//`, quotes, whitespace and angle brackets are rejected (the value is embedded into page scripts and links, so it is allowlist-validated; a non-conforming value is refused at load). For sub-path deployment, set in the **deployer's profile patch**, not shipped with the plugin |
 | `minPasswordLength` | `8` | Minimum password length (4–128) |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | Password complexity: mixed case OR special character |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | Password-failure lockout threshold and duration |
@@ -108,13 +115,6 @@ The fields below are the `config` of the `dsh-auth-gateway` row in the bundle pa
 ## Security model
 
 Authentication-state changes (enable/disable OTP, change password) always require a fully verified session: disabling OTP while 2FA is active additionally requires the current password plus a verification code or an unused backup code; sessions that have not completed 2FA cannot reach sensitive endpoints. OTP verification is replay-protected (accepted time-steps are recorded) and spoof-resistant (`x-forwarded-for` never counts toward the source). **The OTP secret is sealed with AES-256-GCM before it is written to disk** and can only be read with the master key — by default an auto-generated `auth-gateway/otp-master.key` (0600), or injected via `DSH_AUTH_GATEWAY_MASTER_KEY` (hex/base64, 32 bytes) to isolate disk disclosure. Login audit records only event kind, source IP and failure reason — never any credentials. The full threat model, known limitations and recovery paths are in [docs/en/SECURITY.md](docs/en/SECURITY.md).
-
-## What this plugin does not do
-
-The following requirements **cannot truly be delivered on a single instance** — they presuppose process/OS-enforced execution and storage isolation (separate OS accounts, containers, or a sandbox), and this plugin, an authentication gateway running inside the dsh process, cannot provide that layer. They are listed here so expectations stay honest:
-
-- **Multi-account login / multi-tenancy**: dsh is a single-user tool — one Home, one set of model credentials, and every session and data file (`sessions/`, `workspace/`, `.credentials.yaml`) lives on local disk under the authority of the OS account running dsh. An account layer on top of the gateway can only distinguish *who is logging in* (access control + audit); it cannot isolate *who can see what*: any authenticated user can read every session and credential of the same Home through dsh's tool execution. **Without OS/container/sandbox isolation there is no real multi-tenancy** — this plugin does not and cannot do it.
-- **Role-based permission limits (user/admin)**: likewise, roles can only take effect at the gateway's own HTTP routing layer (e.g. restricting gateway-admin features); they cannot constrain dsh's internal capability surface — once a normal user passes the authentication gate, they hold the full power of that instance (tool execution, session read/write, configuration and credential access). For scenarios that need "restricted users", deploy OS-isolated instances and manage accounts yourself. This plugin's job is: **the authentication gate (who may enter) + interception and audit (who did what) — it does not and cannot implement authorization or isolation models**.
 
 ## Documentation
 

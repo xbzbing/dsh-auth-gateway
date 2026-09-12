@@ -115,3 +115,56 @@ gzip_min_length 1024;
 | Fresh deployment / post-revocation restart window (the record is created by dsh's Connection on activation, possibly after the gateway warmed) | Brief 401s right after boot, then self-recovery | Upgrade to a build with fast retry (2s) + background probing (since `eca3b0b`) |
 
 **Triage**: confirm the plugin version and that `node_modules/dsh-auth-gateway/lib/upstream-auth.js` exists; check the startup log for the `读取 upstream browser-session 密钥失败` warning (persistent 401 + warning = a secret-read problem, not a version problem).
+
+## 7. Login succeeds but the page reports a connection failure (`WebSocket connection to '.../api/remote.mux' failed`)
+
+**Symptom**: the page loads and password (+ OTP) login succeeds, then the page reports a connection failure; the browser console shows only `WebSocket connection to 'wss://<domain>/api/remote.mux' failed:` — every HTTP request works, only the WebSocket does not.
+
+**Root cause**: `/api/remote.mux` is the Remote-stream multiplexer WebSocket owned by the dsh API Gateway. nginx treats `Upgrade`/`Connection` as **hop-by-hop** headers: they are forwarded **only** by a location that explicitly sets `proxy_set_header Upgrade`. If the reverse-proxy config writes separate locations for "the known WebSocket paths" (e.g. copying the older docs' `/api/events.mux`, `/sidebar/ws/*`) while the catch-all `location /` lacks those headers, `/api/remote.mux` falls into the catch-all:
+
+```
+browser --Upgrade--> nginx --(Upgrade dropped, degrades to a plain GET)--> gateway
+                                                                          ↓
+                     Node never fires 'upgrade' -> proxied as ordinary HTTP
+                                                                          ↓
+                                upstream answers the plain GET -> 404
+                                                                          ↓
+                          the browser only sees "WebSocket connection failed"
+```
+
+**Quick check** (run on the deployment host, bypassing nginx, straight at the gateway port):
+
+```bash
+# replace 8080 with the gateway listenPort. 101 = gateway side is fine, the
+# problem is the nginx config
+curl -i -s -N -o /dev/null -w '%{http_code}\n' \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' \
+  http://127.0.0.1:8080/api/remote.mux
+```
+
+- `101` or `401` (without a session cookie the gateway refuses the handshake first) → the gateway is fine, the nginx config is the problem: apply the fix below;
+- a `WebSocket 握手缺少 Upgrade 头` line in the gateway log → confirms the proxy dropped `Upgrade`; apply the fix below (the warning is emitted once per instance, so client retries cannot flood the log).
+
+**Fix**: put `Upgrade`/`Connection` on the **catch-all location** and use a `map` so ordinary requests keep keep-alive (do not hardcode `"upgrade"`, and do not allowlist paths):
+
+```nginx
+# inside the http {} block, sibling of server
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    # ...
+    location / {                        # the catch-all must carry these two
+        proxy_pass http://127.0.0.1:8080;   # inside a container: host.docker.internal
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # ... plus Host / X-Real-IP / X-Forwarded-* / read_timeout etc.
+    }
+}
+```
+
+> **Do not** maintain a path allowlist for WebSockets. dsh's WebSocket path has changed (the older `/api/events.mux` and `/sidebar/ws/*` no longer exist in current dsh), and a drifting allowlist fails silently: HTTP works, login works, only one feature reports a connection failure. Forwarding on the catch-all location is the only form that cannot go stale with a dsh version — see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md).

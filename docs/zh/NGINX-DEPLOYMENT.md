@@ -80,6 +80,14 @@ http://203.0.113.10:8080
 网关配置：`basePath` 保持默认 `/`。nginx server 块：
 
 ```nginx
+# 关键：WebSocket 握手透传，同时普通请求保持 keep-alive。
+# 必须放在 http {} 块里（和 server 同级，不能写在 server 内）。
+# 不要用固定的 Connection "upgrade"——那会给每个普通请求都贴上 upgrade。
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 443 ssl;
     server_name dsh.example.com;
@@ -87,6 +95,7 @@ server {
     ssl_certificate     /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
+    # 通配 location：所有路径（含 WebSocket）都从这里代理。
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -95,7 +104,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -111,7 +120,7 @@ server {
 
 要点：
 
-- `Upgrade` / `Connection` 头必须转发——DSH 的 WebSocket 端点（`/api/events.mux`、`/sidebar/ws/*` 等）依赖握手；
+- **`Upgrade` / `Connection` 必须在「兜底 location」上转发，不要按路径挑**。DSH 的 WebSocket 端点是 `/api/remote.mux`（API Gateway 独占的 Remote 流多路复用通道）；路径名随 dsh 版本变动过（旧版曾叫 `/api/events.mux`、`/sidebar/ws/*`，这些在当前 dsh 里**已不存在**）。如果只为某些路径设置 Upgrade 头、其余落到没有该头的 `location /`，那个 WebSocket 会握手失败——nginx 会把 `Upgrade` 当逐跳头丢掉，握手被降级成普通 GET，浏览器只报 `WebSocket connection to 'wss://.../api/remote.mux' failed`，网关日志才有明确提示；
 - `proxy_read_timeout` / `proxy_send_timeout` 设长——SSE 事件流（`/plugins/events`）是长连接，默认 60s 会被掐断；
 - 网关默认没有 HTTPS（`Secure` Cookie 未启用），由 nginx 终结 TLS 即可。
 
@@ -218,20 +227,23 @@ server {
 
 ### WebSocket 与 SSE 子路径
 
-若同一 nginx 上还有其他应用占用 `/api/` 等路径，可将 dsh 的 WebSocket / SSE 端点显式分流：
+若同一 nginx 上还有其他应用占用 `/api/` 等路径，可将 dsh 的 WebSocket 端点显式分流——但**必须覆盖 dsh 实际使用的全部 WebSocket 路径**，当前是 `/api/remote.mux`（不要把旧的 `/api/events.mux`、`/sidebar/ws/*` 当成白名单，它们已不存在）：
 
 ```nginx
-# dsh WebSocket 事件流
-location ~ ^/dsh/events/ {
+# 需要 http {} 块里的 map（见拓扑 B）
+# dsh Remote 流多路复用 WebSocket
+location = /api/remote.mux {
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
 }
 ```
+
+> 更稳的做法：不要把 WebSocket 路径写进白名单，而是让**兜底 location 统一转发** `Upgrade`/`Connection`（拓扑 B 的写法）。白名单一旦漏掉某个端点，症状是「页面能打开、登录成功，但功能提示连接失败」，且只在这里的 502/404 或网关日志里能看出原因。
 
 ---
 
@@ -263,6 +275,12 @@ services:
 ```nginx
 # 容器内 nginx，访问宿主机网关用 host.docker.internal
 # 子域名 dsh.example.com 根路径部署，与主站零冲突
+# map 放在 http {} 块里（和 server 同级）
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 443 ssl;
     server_name dsh.example.com;
@@ -278,12 +296,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
 }
 ```
+
+> **⚠️ 最常见的坑**：不要为「已知的 WebSocket 路径」单独写 `location` 白名单，而把兜底 `location /` 留成不带 `Upgrade` 的样子。一旦 dsh 换了 WebSocket 路径（`/api/remote.mux` 之前的名字就变过），握手就会静默失败：HTTP 全部正常、登录也正常，只有页面提示连接失败。**把 `Upgrade`/`Connection` 放在兜底 location 上，是唯一不会随版本漂移的写法。**
 
 子路径部署（`/dsh/`）时，把拓扑 C 的 location 写法搬过来，`proxy_pass` 目标换成 `http://host.docker.internal:8080`（或 `/` 形式去前缀）即可——但**强烈建议用子域名替代子路径**，避免根路径资源冲突。
 
@@ -317,7 +337,7 @@ location / {
 
 1. **对外只暴露必要的端口**：理想情况下公网只开 443（nginx），网关端口（8080）仅允许 nginx / 内网访问；
 2. **TLS 由 nginx 终结**：网关保持明文 HTTP 即可，不要在网关端口上重复加 TLS；
-3. **WebSocket/SSE 长连接**：`Upgrade`/`Connection` 头与 `proxy_read_timeout`/`proxy_send_timeout` 三件套必须配齐，否则事件流 / 终端会被 60s 掐断（浏览器表现为 `ERR_INCOMPLETE_CHUNKED_ENCODING` 或 WS failed）；
+3. **WebSocket/SSE 长连接**：`Upgrade`/`Connection` 头与 `proxy_read_timeout`/`proxy_send_timeout` 三件套必须配齐，且 `Upgrade`/`Connection` 要设在**兜底 location** 上（用 `map $http_upgrade $connection_upgrade`，不要写死 `"upgrade"`、也不要按路径挑白名单），否则事件流 / 终端会被 60s 掐断，或 WebSocket 握手直接降级失败（浏览器表现为 `ERR_INCOMPLETE_CHUNKED_ENCODING` 或 `WebSocket connection to '.../api/remote.mux' failed`）；
 4. **直连与代理不要混用**：浏览器端要么全部走域名 + 代理，要么全部直连网关端口。混用时（如页面从 `https://dsh.example.com` 打开、却直连 `http://203.0.113.10:8080`）会因跨 scheme / 跨端口被 dsh 插件的同源校验拒绝（403 `origin-rejected`）——这是预期保护，不是故障。
 
 ---

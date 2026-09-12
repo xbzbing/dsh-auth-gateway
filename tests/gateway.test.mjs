@@ -428,14 +428,14 @@ test('session expiry: token older than the TTL is refused', async () => {
 })
 
 test('websocket: unauthenticated upgrade rejected, authenticated forwarded', async () => {
-  const outcome = await tryUpgrade('/api/events.mux')
+  const outcome = await tryUpgrade('/api/remote.mux')
   assert.equal(outcome, 'rejected')
   assert.equal(upgradedSockets.length, 0)
 
   const cookie = await login()
-  const outcome2 = await tryUpgrade('/api/events.mux', cookie)
+  const outcome2 = await tryUpgrade('/api/remote.mux', cookie)
   assert.equal(outcome2, 'upgraded')
-  assert.deepEqual(upgradedSockets, [{ url: '/api/events.mux', host: `127.0.0.1:${upstreamPort}`, origin: undefined }])
+  assert.deepEqual(upgradedSockets, [{ url: '/api/remote.mux', host: `127.0.0.1:${upstreamPort}`, origin: undefined }])
 })
 
 test('websocket: a session owing onboarding is rejected even with a valid cookie', async () => {
@@ -448,9 +448,49 @@ test('websocket: a session owing onboarding is rejected even with a valid cookie
   const cookie = cookieValue(loginRes.headers)
   assert.ok(cookie)
   const before = upgradedSockets.length
-  const outcome = await tryUpgrade('/api/events.mux', cookie)
+  const outcome = await tryUpgrade('/api/remote.mux', cookie)
   assert.equal(outcome, 'rejected')
   assert.equal(upgradedSockets.length, before, 'onboarding session must never reach the upstream socket')
+})
+
+test('a WebSocket handshake that lost its Upgrade header is refused with a diagnosis', async () => {
+  // Root cause of the "登录成功但页面提示连接失败" outage: an edge proxy that
+  // does not forward Upgrade/Connection turns the handshake into a plain GET.
+  // Node then never fires the server's 'upgrade' event, and without this guard
+  // the request would be proxied upstream as an ordinary GET and answered 404,
+  // leaving the browser with an opaque "WebSocket connection failed".
+  const cookie = await login()
+  const warnings = []
+  gateway.onError = (err) => warnings.push(err)
+  const mangled = {
+    // What survives a stripping proxy: the key/version, but no Upgrade.
+    'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+    'sec-websocket-version': '13',
+    connection: 'close',
+  }
+
+  const before = seenRequests.length
+  const upgradesBefore = upgradedSockets.length
+  const res = await request('/api/remote.mux', { cookie, headers: mangled })
+  assert.equal(res.status, 426)
+  assert.match(res.body, /Upgrade/)
+  assert.equal(seenRequests.length, before, 'the mangled handshake must not be proxied upstream')
+  assert.equal(upgradedSockets.length, upgradesBefore, 'and it must never become an upgrade')
+  assert.equal(warnings.length, 1, 'the operator gets one actionable warning')
+  assert.match(warnings[0].message, /Upgrade\/Connection/)
+
+  // The mux client backs off and retries: the warning must not repeat per
+  // attempt (dsh's ring-buffer log keeps only the last 1000 records), but the
+  // request is still refused.
+  const again = await request('/api/remote.mux', { cookie, headers: mangled })
+  assert.equal(again.status, 426)
+  assert.equal(warnings.length, 1, 'warned once per gateway instance')
+})
+
+test('a real upgrade request is never mistaken for a mangled handshake', async () => {
+  const cookie = await login()
+  const outcome = await tryUpgrade('/api/remote.mux', cookie)
+  assert.equal(outcome, 'upgraded', 'the diagnostic must not intercept genuine upgrades')
 })
 
 test('bad gateway: upstream down answers 502, not a crash', async () => {

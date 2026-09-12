@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 // Side-effect import: guarantees the dsh slots module is materialized by the
 // client loader before this plugin's apply() runs (declared in dsh.client.inject).
 import '@deepseek-ai/dsh-client-ui-slots'
+import { afterCheckAttempt, readVersion, updateNotice } from './update-notice.js'
 
 // dsh web design tokens (--dsw-alias-*). They are defined globally by the
 // dsh web client and switch automatically with the light/dark theme, so the
@@ -279,22 +280,12 @@ function UserSettingsPanel({ api, t }) {
   // panel's own data; `null` means "not answered yet". Automatic checks are
   // off by default, so this first load normally reports no verdict — the
   // "check for updates" button below is what makes the outbound request.
+  // The state derivation itself lives in client/src/update-notice.js, where it
+  // is unit-tested (this component has no test runtime available).
   const [versionInfo, setVersionInfo] = useState(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   useEffect(() => { loadSettings(); loadVersion() }, [])
-
-  /** Shape one gateway version response into panel state. */
-  function readVersion(data) {
-    return {
-      version: typeof data?.version === 'string' ? data.version : '',
-      // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
-      // normalizeRepository), and the panel refuses anything else rather
-      // than rendering an unexpected scheme into an href.
-      repository: /^https?:\/\//.test(data?.repository) ? data.repository : '',
-      update: data?.update || {},
-    }
-  }
 
   async function loadVersion() {
     try {
@@ -315,16 +306,9 @@ function UserSettingsPanel({ api, t }) {
     setCheckingUpdate(true)
     try {
       const data = await api.checkForUpdates()
-      const next = readVersion(data?.ok ? data : null)
-      // A failed round trip must not look like "never checked": surface it as
-      // an error state so the card can say the check did not go through.
-      if (!data?.ok) next.update = { latest: null, updateAvailable: null, checkedAt: null, error: 'unauthenticated' }
-      setVersionInfo(next)
+      setVersionInfo((prev) => afterCheckAttempt(prev, data?.ok ? { data } : { error: 'unauthenticated' }))
     } catch (err) {
-      setVersionInfo((prev) => ({
-        ...(prev || readVersion(null)),
-        update: { latest: null, updateAvailable: null, checkedAt: null, error: err?.message || 'network' },
-      }))
+      setVersionInfo((prev) => afterCheckAttempt(prev, { error: err?.message || 'network' }))
     } finally {
       setCheckingUpdate(false)
     }
@@ -442,6 +426,9 @@ function UserSettingsPanel({ api, t }) {
   if (loading) {
     return <div style={{ padding: '24px 0', fontSize: '13px', lineHeight: '20px', color: T.textSecondary }}>{t('loading')}</div>
   }
+
+  // The single notice the About card shows (null when nothing is known).
+  const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? '')
 
   return (
     <>
@@ -567,36 +554,33 @@ function UserSettingsPanel({ api, t }) {
                   {checkingUpdate ? t('about.checking') : t('about.check')}
                 </Button>
               </div>
-              {/* Result line. `updateAvailable` is true / false / null, and a
-                  null (registry unreachable, never checked) must not be
-                  dressed up as "up to date"; `checkedAt: null` means no result
-                  is known, so nothing is claimed at all. */}
-              {!checkingUpdate && versionInfo.update?.updateAvailable === true && (
-                <div style={{
-                  marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
-                  fontSize: '13px', lineHeight: '20px',
-                  background: T.successBg, color: T.success,
-                }}>
-                  {t('about.updateAvailable', { version: versionInfo.update.latest || '' })}
-                  {versionInfo.repository !== '' && (
-                    <>
-                      {' '}
-                      <a
-                        href={versionInfo.repository + '/releases'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: T.success, textDecoration: 'underline' }}
-                      >{t('about.releaseNotes')}</a>
-                    </>
-                  )}
-                </div>
-              )}
-              {!checkingUpdate && versionInfo.update?.updateAvailable === false && (
-                <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.upToDate')}</p>
-              )}
-              {!checkingUpdate && versionInfo.update?.updateAvailable == null
-                && versionInfo.update?.checkedAt != null && (
-                <p style={{ ...DESC, margin: '10px 0 0' }}>{t('about.checkFailed')}</p>
+              {/* Result line — one derived notice for all four states
+                  (client/src/update-notice.js), so "never checked", "failed"
+                  and the two verdicts cannot drift apart. `null` means nothing
+                  is known, and the card then claims nothing. */}
+              {!checkingUpdate && notice !== null && (
+                notice.tone === 'banner' ? (
+                  <div style={{
+                    marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
+                    fontSize: '13px', lineHeight: '20px',
+                    background: T.successBg, color: T.success,
+                  }}>
+                    {notice.text}
+                    {notice.href !== '' && (
+                      <>
+                        {' '}
+                        <a
+                          href={notice.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: T.success, textDecoration: 'underline' }}
+                        >{t('about.releaseNotes')}</a>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ ...DESC, margin: '10px 0 0' }}>{notice.text}</p>
+                )
               )}
             </>
           )}

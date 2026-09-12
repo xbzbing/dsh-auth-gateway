@@ -31,6 +31,43 @@ window.__ModuleLoader__.load({
 		module.exports = __toCommonJS(index_exports);
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
+		
+		// client/src/update-notice.js
+		function readVersion(data) {
+		  return {
+		    version: typeof data?.version === "string" ? data.version : "",
+		    // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+		    // normalizeRepository), and anything else is dropped rather than rendered
+		    // into an href.
+		    repository: /^https?:\/\//.test(data?.repository) ? data.repository : "",
+		    update: data?.update || {}
+		  };
+		}
+		function failedUpdate(reason) {
+		  return { latest: null, updateAvailable: null, checkedAt: null, error: reason };
+		}
+		function afterCheckAttempt(previous, { data, error } = {}) {
+		  if (data?.ok === true) return readVersion(data);
+		  return { ...previous || readVersion(null), update: failedUpdate(error ?? "unauthenticated") };
+		}
+		function updateNotice(update, t, repository) {
+		  if (update?.updateAvailable === true) {
+		    return {
+		      tone: "banner",
+		      text: t("about.updateAvailable", { version: update.latest || "" }),
+		      href: repository ? repository + "/releases" : ""
+		    };
+		  }
+		  if (update?.updateAvailable === false) {
+		    return { tone: "muted", text: t("about.upToDate"), href: "" };
+		  }
+		  if (typeof update?.error === "string" && update.error !== "") {
+		    return { tone: "muted", text: t("about.checkFailed"), href: "" };
+		  }
+		  return null;
+		}
+		
+		// client/src/index.jsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var T = {
 		  bg1: "var(--dsw-alias-bg-layer-1)",
@@ -311,16 +348,6 @@ window.__ModuleLoader__.load({
 		    loadSettings();
 		    loadVersion();
 		  }, []);
-		  function readVersion(data) {
-		    return {
-		      version: typeof data?.version === "string" ? data.version : "",
-		      // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
-		      // normalizeRepository), and the panel refuses anything else rather
-		      // than rendering an unexpected scheme into an href.
-		      repository: /^https?:\/\//.test(data?.repository) ? data.repository : "",
-		      update: data?.update || {}
-		    };
-		  }
 		  async function loadVersion() {
 		    try {
 		      const data = await api.getVersion();
@@ -333,14 +360,9 @@ window.__ModuleLoader__.load({
 		    setCheckingUpdate(true);
 		    try {
 		      const data = await api.checkForUpdates();
-		      const next = readVersion(data?.ok ? data : null);
-		      if (!data?.ok) next.update = { latest: null, updateAvailable: null, checkedAt: null, error: "unauthenticated" };
-		      setVersionInfo(next);
+		      setVersionInfo((prev) => afterCheckAttempt(prev, data?.ok ? { data } : { error: "unauthenticated" }));
 		    } catch (err) {
-		      setVersionInfo((prev) => ({
-		        ...prev || readVersion(null),
-		        update: { latest: null, updateAvailable: null, checkedAt: null, error: err?.message || "network" }
-		      }));
+		      setVersionInfo((prev) => afterCheckAttempt(prev, { error: err?.message || "network" }));
 		    } finally {
 		      setCheckingUpdate(false);
 		    }
@@ -472,6 +494,7 @@ window.__ModuleLoader__.load({
 		  if (loading) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
 		  }
+		  const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? "");
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: {
@@ -629,7 +652,7 @@ window.__ModuleLoader__.load({
 		            ] })
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "12px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }) }),
-		          !checkingUpdate && versionInfo.update?.updateAvailable === true && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		            marginTop: "12px",
 		            padding: "10px 14px",
 		            borderRadius: "10px",
@@ -638,13 +661,13 @@ window.__ModuleLoader__.load({
 		            background: T.successBg,
 		            color: T.success
 		          }, children: [
-		            t("about.updateAvailable", { version: versionInfo.update.latest || "" }),
-		            versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		            notice.text,
+		            notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		              " ",
 		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		                "a",
 		                {
-		                  href: versionInfo.repository + "/releases",
+		                  href: notice.href,
 		                  target: "_blank",
 		                  rel: "noopener noreferrer",
 		                  style: { color: T.success, textDecoration: "underline" },
@@ -652,9 +675,7 @@ window.__ModuleLoader__.load({
 		                }
 		              )
 		            ] })
-		          ] }),
-		          !checkingUpdate && versionInfo.update?.updateAvailable === false && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.upToDate") }),
-		          !checkingUpdate && versionInfo.update?.updateAvailable == null && versionInfo.update?.checkedAt != null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.checkFailed") })
+		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: notice.text }))
 		        ] })
 		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {

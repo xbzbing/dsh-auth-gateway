@@ -31,6 +31,43 @@ window.__ModuleLoader__.load({
 		module.exports = __toCommonJS(index_exports);
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
+		
+		// client/src/update-notice.js
+		function readVersion(data) {
+		  return {
+		    version: typeof data?.version === "string" ? data.version : "",
+		    // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
+		    // normalizeRepository), and anything else is dropped rather than rendered
+		    // into an href.
+		    repository: /^https?:\/\//.test(data?.repository) ? data.repository : "",
+		    update: data?.update || {}
+		  };
+		}
+		function failedUpdate(reason) {
+		  return { latest: null, updateAvailable: null, checkedAt: null, error: reason };
+		}
+		function afterCheckAttempt(previous, { data, error } = {}) {
+		  if (data?.ok === true) return readVersion(data);
+		  return { ...previous || readVersion(null), update: failedUpdate(error ?? "unauthenticated") };
+		}
+		function updateNotice(update, t, repository) {
+		  if (update?.updateAvailable === true) {
+		    return {
+		      tone: "banner",
+		      text: t("about.updateAvailable", { version: update.latest || "" }),
+		      href: repository ? repository + "/releases" : ""
+		    };
+		  }
+		  if (update?.updateAvailable === false) {
+		    return { tone: "muted", text: t("about.upToDate"), href: "" };
+		  }
+		  if (typeof update?.error === "string" && update.error !== "") {
+		    return { tone: "muted", text: t("about.checkFailed"), href: "" };
+		  }
+		  return null;
+		}
+		
+		// client/src/index.jsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var T = {
 		  bg1: "var(--dsw-alias-bg-layer-1)",
@@ -129,6 +166,7 @@ window.__ModuleLoader__.load({
 		  "about.repository": "\u4ED3\u5E93",
 		  "about.repositoryLink": "GitHub",
 		  "about.checking": "\u6B63\u5728\u68C0\u67E5\u66F4\u65B0...",
+		  "about.check": "\u68C0\u67E5\u66F4\u65B0",
 		  "about.upToDate": "\u5DF2\u662F\u6700\u65B0\u7248\u672C",
 		  "about.updateAvailable": "\u53D1\u73B0\u65B0\u7248\u672C v{version}",
 		  "about.releaseNotes": "\u67E5\u770B\u66F4\u65B0",
@@ -193,6 +231,7 @@ window.__ModuleLoader__.load({
 		  "about.repository": "Repository",
 		  "about.repositoryLink": "GitHub",
 		  "about.checking": "Checking for updates...",
+		  "about.check": "Check for updates",
 		  "about.upToDate": "Up to date",
 		  "about.updateAvailable": "New version v{version} available",
 		  "about.releaseNotes": "View release",
@@ -304,6 +343,7 @@ window.__ModuleLoader__.load({
 		  const [disableOtpCode, setDisableOtpCode] = (0, import_react.useState)("");
 		  const [disablingOtp, setDisablingOtp] = (0, import_react.useState)(false);
 		  const [versionInfo, setVersionInfo] = (0, import_react.useState)(null);
+		  const [checkingUpdate, setCheckingUpdate] = (0, import_react.useState)(false);
 		  (0, import_react.useEffect)(() => {
 		    loadSettings();
 		    loadVersion();
@@ -311,20 +351,20 @@ window.__ModuleLoader__.load({
 		  async function loadVersion() {
 		    try {
 		      const data = await api.getVersion();
-		      if (data.ok) {
-		        setVersionInfo({
-		          version: typeof data.version === "string" ? data.version : "",
-		          // Only ever an http(s) URL: the gateway normalizes it (lib/version.js
-		          // normalizeRepository), and the panel refuses anything else rather
-		          // than rendering an unexpected scheme into an href.
-		          repository: /^https?:\/\//.test(data.repository) ? data.repository : "",
-		          update: data.update || {}
-		        });
-		      } else {
-		        setVersionInfo({ version: "", repository: "", update: {} });
-		      }
+		      setVersionInfo(readVersion(data?.ok ? data : null));
 		    } catch {
-		      setVersionInfo({ version: "", repository: "", update: {} });
+		      setVersionInfo(readVersion(null));
+		    }
+		  }
+		  async function checkForUpdates() {
+		    setCheckingUpdate(true);
+		    try {
+		      const data = await api.checkForUpdates();
+		      setVersionInfo((prev) => afterCheckAttempt(prev, data?.ok ? { data } : { error: "unauthenticated" }));
+		    } catch (err) {
+		      setVersionInfo((prev) => afterCheckAttempt(prev, { error: err?.message || "network" }));
+		    } finally {
+		      setCheckingUpdate(false);
 		    }
 		  }
 		  async function loadSettings() {
@@ -454,6 +494,7 @@ window.__ModuleLoader__.load({
 		  if (loading) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
 		  }
+		  const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? "");
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: {
@@ -610,7 +651,8 @@ window.__ModuleLoader__.load({
 		              )
 		            ] })
 		          ] }),
-		          versionInfo.update?.updateAvailable === true && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "12px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }) }),
+		          !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		            marginTop: "12px",
 		            padding: "10px 14px",
 		            borderRadius: "10px",
@@ -619,13 +661,13 @@ window.__ModuleLoader__.load({
 		            background: T.successBg,
 		            color: T.success
 		          }, children: [
-		            t("about.updateAvailable", { version: versionInfo.update.latest || "" }),
-		            versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		            notice.text,
+		            notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		              " ",
 		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		                "a",
 		                {
-		                  href: versionInfo.repository + "/releases",
+		                  href: notice.href,
 		                  target: "_blank",
 		                  rel: "noopener noreferrer",
 		                  style: { color: T.success, textDecoration: "underline" },
@@ -633,9 +675,7 @@ window.__ModuleLoader__.load({
 		                }
 		              )
 		            ] })
-		          ] }),
-		          versionInfo.update?.updateAvailable === false && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.upToDate") }),
-		          versionInfo.update?.updateAvailable == null && versionInfo.update?.enabled === true && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: t("about.checkFailed") })
+		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: notice.text }))
 		        ] })
 		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
@@ -785,6 +825,9 @@ window.__ModuleLoader__.load({
 		  const api = {
 		    getSettings: async () => (await fetch(BASE + "/login-api/settings")).json(),
 		    getVersion: async () => (await fetch(BASE + "/login-api/version")).json(),
+		    // Explicit on-demand check: the only path that makes the gateway contact
+		    // the registry when automatic checks are off (the default).
+		    checkForUpdates: async () => (await fetch(BASE + "/login-api/version?refresh=1")).json(),
 		    enableOtp: async () => (await fetch(BASE + "/otp/enable", { method: "POST" })).json(),
 		    verifyOtpSetup: async (otp) => (await fetch(BASE + "/otp/verify-setup", {
 		      method: "POST",

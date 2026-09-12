@@ -370,29 +370,59 @@ test('version API: session-gated, reports identity and the update verdict', asyn
   assert.equal(bareBody.ok, true)
   assert.equal(bareBody.version, 'unknown')
   assert.deepEqual(bareBody.update, {
-    enabled: false, latest: null, updateAvailable: null, checkedAt: null, error: null,
+    latest: null, updateAvailable: null, checkedAt: null, error: null,
   })
 
   // Wire identity and a checker into the SAME instance (a second gateway
-  // would carry its own SessionStore and reject this cookie): the panel gets
-  // version, repository and the registry verdict in one response.
+  // would carry its own SessionStore and reject this cookie).
+  let fetches = 0
+  const countingFetch = async () => {
+    fetches++
+    return { ok: true, status: 200, json: async () => ({ version: '0.7.0' }) }
+  }
   gateway.versionInfo = { version: '0.6.0', repository: 'https://github.com/xbzbing/dsh-auth-gateway' }
-  gateway.updateChecker = createUpdateChecker({
-    current: '0.6.0',
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ version: '0.7.0' }) }),
+  gateway.updateChecker = createUpdateChecker({ current: '0.6.0', fetchImpl: countingFetch })
+
+  // DEFAULT-OFF is the contract: with updateCheckAuto unset, opening the panel
+  // must NOT reach the registry — it reports only what is already known, and
+  // here nothing is known yet.
+  assert.equal(gateway.updateCheckAuto, false)
+  const passive = await request('/login-api/version', { cookie })
+  assert.equal(passive.status, 200)
+  const passiveBody = JSON.parse(passive.body)
+  assert.equal(passiveBody.version, '0.6.0')
+  assert.equal(passiveBody.repository, 'https://github.com/xbzbing/dsh-auth-gateway')
+  assert.deepEqual(passiveBody.update, {
+    latest: null, updateAvailable: null, checkedAt: null, error: null,
   })
-  const res = await request('/login-api/version', { cookie })
-  assert.equal(res.status, 200)
-  const body = JSON.parse(res.body)
-  assert.equal(body.version, '0.6.0')
-  assert.equal(body.repository, 'https://github.com/xbzbing/dsh-auth-gateway')
-  assert.equal(body.update.updateAvailable, true)
-  assert.equal(body.update.latest, '0.7.0')
-  assert.equal(body.update.error, null)
+  assert.equal(fetches, 0, 'a panel load must not contact the registry by default')
+
+  // ?refresh=1 is the panel's explicit button: that click is what makes the
+  // request, and it works even though automatic checks are off.
+  const refreshed = await request('/login-api/version?refresh=1', { cookie })
+  assert.equal(refreshed.status, 200)
+  const refreshedBody = JSON.parse(refreshed.body)
+  assert.equal(fetches, 1, 'the explicit action performs exactly one request')
+  assert.equal(refreshedBody.update.updateAvailable, true)
+  assert.equal(refreshedBody.update.latest, '0.7.0')
+  assert.equal(refreshedBody.update.error, null)
+
+  // The verdict is now cached, so a later passive load reports it for free.
+  const cached = await request('/login-api/version', { cookie })
+  assert.equal(JSON.parse(cached.body).update.updateAvailable, true)
+  assert.equal(fetches, 1, 'a cached verdict needs no new request')
+
+  // With automatic checks enabled, a plain load may check on its own.
+  gateway.updateCheckAuto = true
+  gateway.updateChecker = createUpdateChecker({ current: '0.6.0', fetchImpl: countingFetch })
+  const auto = await request('/login-api/version', { cookie })
+  assert.equal(auto.status, 200)
+  assert.equal(JSON.parse(auto.body).update.updateAvailable, true)
+  assert.equal(fetches, 2, 'the automatic check reaches the registry when enabled')
 
   // A checker that throws must not take the endpoint down with it.
-  gateway.updateChecker = { status: async () => { throw new Error('registry exploded') } }
-  const resilient = await request('/login-api/version', { cookie })
+  gateway.updateChecker = { check: async () => { throw new Error('registry exploded') } }
+  const resilient = await request('/login-api/version?refresh=1', { cookie })
   assert.equal(resilient.status, 200)
   const resilientBody = JSON.parse(resilient.body)
   assert.equal(resilientBody.version, '0.6.0')

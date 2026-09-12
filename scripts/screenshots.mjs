@@ -1,15 +1,25 @@
 /**
  * Capture UI screenshots for the README (docs/assets/*.png).
  *
- * Usage: node scripts/screenshots.mjs
- * Requires a running instance with OTP enabled in the composition:
- *   dsh --profile web --patch /tmp/demo-otp.yml --port 8002
- * (demo-otp.yml sets otpEnabled: true so the OTP pages are reachable.)
+ * Usage: BASE=http://127.0.0.1:8002 INITIAL_PASSWORD=... node scripts/screenshots.mjs
+ *
+ * Requires a running instance with OTP enabled in the composition. The overlay
+ * that does that ships with this script (it restates every bundle-patch field,
+ * because `config:` is a whole-object replacement):
+ *
+ *   DSH_HOME=/tmp/shots-home dsh --profile shots --patch scripts/screenshots.patch.yml --port 8002
+ *
+ * Use a throwaway DSH_HOME: INITIAL_PASSWORD only exists on a fresh deployment,
+ * and the script really does change the password and enable OTP — running it
+ * against a live install would overwrite that install's credentials.
  *
  * Fresh deployments mint an initial password printed to the dsh console;
  * pass it via INITIAL_PASSWORD. The script walks onboarding (set a personal
  * password), then captures: onboarding, settings menu, authentication panel,
  * OTP setup page, login page (with OTP field), 2FA login success.
+ *
+ * CHROMIUM_PATH overrides browser discovery (the built-in probe only knows
+ * Linux layouts, so macOS needs it explicitly).
  */
 
 import { chromium } from 'playwright'
@@ -67,6 +77,34 @@ function done(name, file) {
   console.log(`ok ${step}  ${name} -> docs/assets/${file}`)
 }
 
+/**
+ * Dismiss dsh's first-run dialogs so the README screenshots show the normal UI.
+ *
+ * A fresh profile opens the "add an API key" prompt, whose primary action
+ * (保存并继续) is DISABLED until a key is typed — so a locator that merely
+ * matches "继续" resolves to a button that can never be clicked and the script
+ * waits until it times out. Try an explicit skip first, and require the
+ * candidate to be enabled before clicking it.
+ */
+async function dismissFirstRunDialogs(page, rounds = 3) {
+  const skipLabels = ['稍后配置', '稍后再说', '跳过', '知道了', '继续']
+  for (let round = 0; round < rounds; round++) {
+    const dialog = page.locator('[role="dialog"]').first()
+    if (await dialog.count() === 0) return
+    let clicked = false
+    for (const label of skipLabels) {
+      const button = dialog.locator(`button:has-text("${label}")`).first()
+      if (await button.count() === 0) continue
+      if (!(await button.isEnabled().catch(() => false))) continue
+      await button.click({ force: true })
+      clicked = true
+      break
+    }
+    if (!clicked) return
+    await page.waitForTimeout(600)
+  }
+}
+
 try {
   // ── 1. onboarding step 1 (optional OTP binding) after initial login ──
   assertInitial()
@@ -96,12 +134,12 @@ try {
   await page.waitForURL(`${BASE}/`, { timeout: 15000 })
   await page.waitForSelector('text=新会话', { timeout: 30000 })
   await page.waitForTimeout(2500)
-  // Dismiss the first-open notice modal if present.
-  const notice = page.locator('[role="dialog"] button:has-text("继续")')
-  if (await notice.count() > 0) {
-    await notice.click()
-    await page.waitForTimeout(500)
-  }
+  // Clear any first-run dialog. On a fresh profile dsh opens an "add an API
+  // key" prompt whose primary button (保存并继续) stays DISABLED until a key is
+  // typed — the previous `button:has-text("继续")` locator matched exactly that
+  // disabled button and hung until timeout. Prefer an explicit skip
+  // affordance, and never click something that cannot be clicked.
+  await dismissFirstRunDialogs(page);
 
   // ── 3. settings menu with the 认证设置 entry ─────────────────────────
   await page.click('button:has-text("设置")', { force: true })
@@ -157,6 +195,11 @@ try {
   await page.waitForURL(`${BASE}/`, { timeout: 15000 })
   await page.waitForSelector('text=新会话', { timeout: 30000 })
   await page.waitForTimeout(1200)
+  // The first-run API-key prompt is not persisted per profile: it shows again
+  // on this fresh page load, so clear it here too or the "homepage" screenshot
+  // is really a screenshot of that modal.
+  await dismissFirstRunDialogs(page);
+  await page.waitForTimeout(500)
   await page.screenshot({ path: path.join(OUT, 'login-success.png') })
   done('2FA login success (homepage)', 'login-success.png')
 } finally {

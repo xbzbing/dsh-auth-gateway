@@ -82,9 +82,12 @@ export async function apply(ctx, config) {
   const gateway = createGateway(config, {
     upstreamSecretReader: upstream.secret,
     versionInfo: packageMeta,
+    // Automatic checks are opt-IN (default off), so a fresh install makes no
+    // outbound request. The panel's "check for updates" button drives an
+    // explicit on-demand check whatever this is set to.
+    updateCheckAuto: config?.updateCheck ?? false,
     updateChecker: createUpdateChecker({
       current: packageMeta.version,
-      enabled: config?.updateCheck ?? true,
       // Surface a found release in the console once per successful check:
       // a headless deployment has no panel open to notice it otherwise.
       onResult: (snapshot) => {

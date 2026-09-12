@@ -80,8 +80,8 @@ fi
 ws_out="$(node -e '
   const http = require("node:http");
   const url = new URL(process.argv[1]);
-  const req = http.request({ host: url.hostname, port: url.port, path: "/api/events.mux", method: "GET",
-    headers: { connection: "Upgrade", upgrade: "websocket" } });
+  const req = http.request({ host: url.hostname, port: url.port, path: "/api/remote.mux", method: "GET",
+    headers: { connection: "Upgrade", upgrade: "websocket", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==", "sec-websocket-version": "13" } });
   req.on("upgrade", () => process.exit(1));   // 101 accepted: leak -> fail
   req.on("response", () => process.exit(0));  // HTTP answer (401/302): rejected -> pass
   req.on("error", () => process.exit(0));     // connection refused: pass

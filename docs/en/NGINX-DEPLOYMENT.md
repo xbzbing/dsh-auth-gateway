@@ -80,6 +80,14 @@ browser ──> nginx (443, TLS termination) ──> http://127.0.0.1:8080 ─�
 Gateway config: `basePath` stays at the default `/`. nginx server block:
 
 ```nginx
+# Key: pass the WebSocket handshake through while ordinary requests keep
+# keep-alive. Must live in the http {} block (sibling of server, not inside it).
+# Do NOT hardcode Connection "upgrade" — that tags every plain request too.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 443 ssl;
     server_name dsh.example.com;
@@ -87,6 +95,7 @@ server {
     ssl_certificate     /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
+    # Catch-all location: every path (WebSocket included) is proxied here.
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -95,7 +104,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -111,7 +120,7 @@ server {
 
 Key points:
 
-- The `Upgrade` / `Connection` headers must be forwarded — DSH's WebSocket endpoints (`/api/events.mux`, `/sidebar/ws/*`, etc.) depend on the handshake;
+- **Forward `Upgrade` / `Connection` on the catch-all location — never on a per-path allowlist.** DSH's WebSocket endpoint is `/api/remote.mux` (the API Gateway's Remote-stream multiplexer). The path has changed across dsh versions (older releases used `/api/events.mux`, `/sidebar/ws/*`, which **no longer exist**). If you set the upgrade headers only for some paths and let the rest fall into a `location /` without them, nginx drops `Upgrade` as a hop-by-hop header, the handshake degrades to a plain GET, and the browser only reports `WebSocket connection to 'wss://.../api/remote.mux' failed` — the gateway log is where the real diagnosis appears;
 - Set `proxy_read_timeout` / `proxy_send_timeout` long — the SSE event stream (`/plugins/events`) is a long-lived connection and the default 60s will cut it off;
 - The gateway has no HTTPS by default (`Secure` cookie not enabled) — let nginx terminate TLS.
 
@@ -146,6 +155,13 @@ The plugin **defaults to `basePath: /` (root path)** and ships no sub-path confi
 ### nginx side: split traffic by prefix
 
 ```nginx
+# Hop-by-hop pass-through: lives in the http {} scope (conf.d/*.conf is http
+# scope). Define it once per nginx instance.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 # Other web apps (example: a blog site)
 server {
     listen 443 ssl;
@@ -172,6 +188,8 @@ server {
     location /dsh/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # required for WebSocket
+        proxy_set_header Connection $connection_upgrade;  # see the map at the top
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -192,6 +210,8 @@ server {
     location ~ ^/(api|plugins|sidebar|_dsh)(/|$) {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;           # required for WebSocket:
+        proxy_set_header Connection $connection_upgrade;  # /api/remote.mux is a root path
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -220,20 +240,23 @@ server {
 
 ### WebSocket and SSE sub-paths
 
-If other apps on the same nginx occupy paths like `/api/`, you can route dsh's WebSocket / SSE endpoints explicitly:
+If other apps on the same nginx occupy paths like `/api/`, you can route dsh's WebSocket endpoint explicitly — but you **must cover every WebSocket path dsh actually uses**, currently `/api/remote.mux` (do not treat the old `/api/events.mux` / `/sidebar/ws/*` as the allowlist; they no longer exist):
 
 ```nginx
-# dsh WebSocket event stream
-location ~ ^/dsh/events/ {
+# requires the http {}-level map shown in Topology B
+# dsh Remote-stream multiplexer WebSocket
+location = /api/remote.mux {
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
 }
 ```
+
+> Prefer not to allowlist WebSocket paths at all: forward `Upgrade`/`Connection` on the **catch-all location** (Topology B). An allowlist that misses one endpoint shows up as "the page loads and login succeeds, but a feature reports a connection failure", with the only clue being a 502/404 here or a line in the gateway log.
 
 ---
 
@@ -265,6 +288,12 @@ services:
 ```nginx
 # nginx inside the container; reach the host gateway via host.docker.internal
 # Subdomain dsh.example.com root-path deployment, zero conflicts with the main site
+# map goes in the http {} block (sibling of server)
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 443 ssl;
     server_name dsh.example.com;
@@ -280,12 +309,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
 }
 ```
+
+> **⚠️ The most common trap**: do not write a `location` allowlist for "the known WebSocket paths" while leaving the catch-all `location /` without `Upgrade`. The moment dsh changes its WebSocket path (it already has), the handshake fails silently: every HTTP request works, login works, and only the page reports a connection failure. **Putting `Upgrade`/`Connection` on the catch-all location is the only form that cannot drift with the version.**
 
 For sub-path deployment (`/dsh/`), port the topology C location blocks over and change the `proxy_pass` target to `http://host.docker.internal:8080` (or the `/` form for prefix stripping) — but **strongly prefer a subdomain over a sub-path** to avoid root-path resource conflicts.
 
@@ -319,7 +350,7 @@ location / {
 
 1. **Expose only the necessary ports externally**: ideally only 443 (nginx) is public; the gateway port (8080) should only be reachable by nginx / the intranet;
 2. **Terminate TLS at nginx**: keep the gateway on plain HTTP; do not add TLS on the gateway port;
-3. **WebSocket/SSE long connections**: the `Upgrade`/`Connection` headers plus `proxy_read_timeout`/`proxy_send_timeout` trio must all be in place, otherwise event streams / terminals get cut at 60s (browsers show `ERR_INCOMPLETE_CHUNKED_ENCODING` or a WS failure);
+3. **WebSocket/SSE long connections**: the `Upgrade`/`Connection` headers plus `proxy_read_timeout`/`proxy_send_timeout` trio must all be in place, and `Upgrade`/`Connection` belong on the **catch-all location** (use `map $http_upgrade $connection_upgrade`; do not hardcode `"upgrade"` and do not allowlist paths), otherwise event streams / terminals get cut at 60s, or the WebSocket handshake degrades and fails outright (browsers show `ERR_INCOMPLETE_CHUNKED_ENCODING` or `WebSocket connection to '.../api/remote.mux' failed`);
 4. **Do not mix direct and proxied access**: the browser should go entirely through the domain + proxy, or entirely direct to the gateway port. Mixing (e.g. page opened from `https://dsh.example.com` but resources fetched direct from `http://203.0.113.10:8080`) gets rejected by the dsh plugin's same-origin check (403 `origin-rejected`) due to the cross-scheme / cross-port mismatch — that is expected protection, not a fault.
 
 ---

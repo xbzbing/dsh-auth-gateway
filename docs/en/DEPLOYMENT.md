@@ -2,6 +2,27 @@
 
 > [简体中文](../zh/DEPLOYMENT.md) | English
 
+## dsh version compatibility
+
+**Verified against dsh `0.1.5-rc.2` (the latest release at the time of writing).** Run `dsh --version` to see what you have installed.
+
+Every extension point this plugin relies on is unchanged on that line, so the 0.1.5 series works as-is:
+
+| Official extension point used | Purpose |
+|---|---|
+| `webServer.tapIndex` | Inject the `randomUUID` polyfill and the `basePath` global (self-contained globals only) |
+| `dsh.bundle` patch | Pin the internal webserver to `127.0.0.1:<N+1>` (the security foundation — see [SECURITY.md](SECURITY.md)) |
+| `ctx.slots` (`settings.section`) | The client "authentication settings" panel |
+| `credentials` service + the `client-connection/browser-session` record | Read the upstream BrowserAuth secret and mint an identical cookie for the loopback hop |
+| BrowserAuth cookie shape (`dsh-auth-<sha256(authority)>`, `v1.<payload>.<hmac>`) | Indistinguishable from dsh's own token exchange as far as the upstream is concerned |
+
+Version-line behavior:
+
+- **dsh ≥ 0.1.2**: the internal webserver enforces BrowserAuth; the gateway adapts by minting the cookie automatically (see [SECURITY.md](SECURITY.md));
+- **dsh ≤ 0.1.1**: no BrowserAuth and no such record; the gateway silently degrades to verbatim forwarding, matching the old behavior.
+
+> **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while current releases (0.1.5) only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
+
 ## Ports and listening addresses
 
 ### Port: use `dsh web --port <N>` directly
@@ -46,13 +67,13 @@ Override both the `webserver` and `dsh-auth-gateway` rows in the profile's own `
 
 The gateway can serve directly or sit behind nginx (or any reverse proxy). Full topologies with complete config examples (bare-metal direct connection, subdomain deployment, sub-path deployment, Docker nginx container) are in:
 
-- [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)（简体中文）｜ [简体中文](../zh/NGINX-DEPLOYMENT.md) (English)
+- [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) (English) ｜ [简体中文](../zh/NGINX-DEPLOYMENT.md)
 
 Quick summary:
 
 - **Subdomain deployment (recommended)**: root-path deployment on `dsh.example.com`, nginx reverse-proxies 443 to the gateway port — zero conflicts, zero maintenance;
 - **Sub-path deployment**: configure `basePath: /dsh` on the gateway (override it in the deployer's profile patch — note that `config:` is a whole-object replacement, so all bundle-patch fields must be kept); nginx must additionally proxy the root-path resources dsh references (`/assets/`, `/api/`, `/plugins/`, etc.);
-- Behind a reverse proxy you must forward the `Upgrade` / `Connection` headers (WebSocket) and raise `proxy_read_timeout` / `proxy_send_timeout` (SSE long connections), otherwise event streams get cut off at 60s.
+- **Proxying WebSockets**: `Upgrade` / `Connection` must be forwarded, and they belong on the **catch-all location** — use `map $http_upgrade $connection_upgrade` (in the `http {}` scope) with `proxy_set_header`; do not hardcode `"upgrade"` and do not allowlist paths. dsh's WebSocket path has changed across versions (older `/api/events.mux`, current `/api/remote.mux`), and a drifting allowlist fails silently: HTTP works, login works, only the page reports a connection failure. Also raise `proxy_read_timeout` / `proxy_send_timeout`, or the SSE event stream is cut at 60s. Full configs are in [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md); how to confirm the diagnosis is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
 
 ## Troubleshooting
 
@@ -62,6 +83,7 @@ Quick summary:
 | Many `/api/*` 403 after login | The internal fence rejects external Host — confirm the bundle patch is in effect (webserver should be `127.0.0.1:<internal port>`) and the gateway rewrites Host/Origin |
 | Cannot reach `http://<LAN IP>:<port>` | Check whether the gateway listens on `0.0.0.0` (`listenHost` config) and the firewall rules |
 | Login rejected with 429 | Global rate limit or OTP throttle triggered — wait for the window to reset (1 minute / 5-minute lockout) |
+| Login succeeds but the page reports a connection failure, console shows `WebSocket connection to '.../api/remote.mux' failed` | The reverse proxy did not forward `Upgrade`/`Connection` for that path (typically a per-path WS allowlist with a catch-all location lacking those headers) — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7; the gateway log carries a `WebSocket 握手缺少 Upgrade 头` warning |
 | `--port 65535` fails to start | Internal port 65536 is invalid — port range is 1–65534 |
 | Duplicate installation (two dsh-auth-gateway rows in the composition tree) | The second gateway must fail with EADDRINUSE on the same port — remove the duplicate row |
 

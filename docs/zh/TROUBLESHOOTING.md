@@ -115,3 +115,55 @@ gzip_min_length 1024;
 | 全新部署/撤销后重启的启动窗口（record 由 dsh 的 Connection 激活时创建，可能晚于网关启动） | 启动初期短暂 401，随后自行恢复 | 升级到含快速重试（2s）+ 后台轮询的版本（`eca3b0b` 起） |
 
 **排查**：确认插件版本与 `node_modules/dsh-auth-gateway/lib/upstream-auth.js` 存在；查看启动日志有无 `读取 upstream browser-session 密钥失败` 告警（持续 401 + 告警 = 密钥读取问题，而非版本问题）。
+
+## 7. 登录成功但页面提示连接失败（`WebSocket connection to '.../api/remote.mux' failed`）
+
+**症状**：页面能打开、密码（+ OTP）登录成功，随后页面提示「连接失败」；浏览器 console 只有一句 `WebSocket connection to 'wss://<域名>/api/remote.mux' failed:`——HTTP 请求全部正常，只有 WebSocket 不通。
+
+**根因**：`/api/remote.mux` 是 dsh API Gateway 独占的 Remote 流多路复用 WebSocket。nginx 把 `Upgrade`/`Connection` 当作**逐跳头**处理：**只有显式 `proxy_set_header Upgrade` 的 location 才会转发它们**。若反代配置里为「已知的 WebSocket 路径」单独写了 location（例如照抄旧文档的 `/api/events.mux`、`/sidebar/ws/*`），而兜底 `location /` 没有这两个头，那么 `/api/remote.mux` 会落到兜底 location：
+
+```
+浏览器 --Upgrade--> nginx --(Upgrade 被丢弃，降级为普通 GET)--> 网关
+                                                              ↓
+                              Node 不触发 'upgrade' 事件 → 按普通 HTTP 转发
+                                                              ↓
+                                          upstream 按普通 GET 处理 → 404
+                                                              ↓
+                                      浏览器只看到 "WebSocket connection failed"
+```
+
+**快速判定**（在部署机上执行，绕过 nginx 直连网关端口）：
+
+```bash
+# 把 8080 换成网关 listenPort。101 = 网关侧正常，问题在 nginx 配置
+curl -i -s -N -o /dev/null -w '%{http_code}\n' \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' \
+  http://127.0.0.1:8080/api/remote.mux
+```
+
+- 返回 `101` 或 `401`（未带会话 cookie 时网关会先拒绝握手）→ 网关正常，问题在 nginx，按下表修；
+- 网关日志出现 `WebSocket 握手缺少 Upgrade 头` → 确认是反代丢了 `Upgrade`，同样按下表修（该告警每个实例只打一次，客户端重试不会刷屏）。
+
+**修复**：把 `Upgrade`/`Connection` 放到**兜底 location** 上，用 `map` 让普通请求保持 keep-alive（不要写死 `"upgrade"`，也不要按路径挑白名单）：
+
+```nginx
+# http {} 块内，与 server 同级
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    # ...
+    location / {                        # 兜底 location 必须带这两个头
+        proxy_pass http://127.0.0.1:8080;   # 容器内 nginx 用 host.docker.internal
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # ... 其余 Host / X-Real-IP / X-Forwarded-* / read_timeout 等
+    }
+}
+```
+
+> **不要**为 WebSocket 维护路径白名单。dsh 的 WebSocket 路径变过（旧版 `/api/events.mux`、`/sidebar/ws/*` 在当前 dsh 里已不存在），白名单一旦漂移就是「HTTP 正常、登录正常、只有某个功能提示连接失败」的静默故障。兜底 location 转发是唯一不会随 dsh 版本失效的写法，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)。

@@ -39,12 +39,19 @@ test('stripResponseHopByHop: removes the canonical hop-by-hop set and Connection
   }
   stripResponseHopByHop(headers)
   assert.deepEqual(headers, {
+    'content-length': '42',
     'content-type': 'application/json',
     'content-encoding': 'gzip',
     vary: 'Accept-Encoding',
     'x-end-to-end': 'kept',
     date: 'Sat, 01 Jan 2026 00:00:00 GMT',
   })
+})
+
+test('stripResponseHopByHop: preserves Content-Length representation metadata for HEAD and 304 responses', () => {
+  const headers = { connection: 'keep-alive', 'content-length': '1234' }
+  stripResponseHopByHop(headers)
+  assert.equal(headers['content-length'], '1234')
 })
 
 test('stripResponseHopByHop: tolerates missing, empty, non-string or mixed-case connection values', () => {
@@ -66,6 +73,7 @@ test('forward: relays the upstream response with hop-by-hop headers stripped (re
     res.writeHead(200, {
       'content-type': 'application/json',
       'content-encoding': 'gzip',
+      'content-length': '11',
       connection: 'keep-alive, x-hop-one',
       'keep-alive': 'timeout=5',
       'x-hop-one': 'must-not-leak',
@@ -111,12 +119,12 @@ test('forward: relays the upstream response with hop-by-hop headers stripped (re
   // connection semantics solely from the client's own `Connection: close`
   // and answers "close" — never the upstream's leaked keep-alive.
   assert.equal(res.headers.connection, 'close')
-  for (const name of ['keep-alive', 'te', 'upgrade', 'x-hop-one', 'trailer', 'content-length']) {
+  for (const name of ['keep-alive', 'te', 'upgrade', 'x-hop-one', 'trailer', 'transfer-encoding']) {
     assert.equal(res.headers[name], undefined, `${name} must not be relayed to the client`)
   }
-  // Node re-frames the body for this hop (chunked) instead of copying the
-  // upstream's framing.
-  assert.equal(res.headers['transfer-encoding'], 'chunked')
+  // Content-Length is end-to-end representation metadata and survives the
+  // relay, while the upstream's hop-by-hop transfer encoding does not.
+  assert.equal(res.headers['content-length'], '11')
   // End-to-end headers survive.
   assert.equal(res.headers['content-type'], 'application/json')
   assert.equal(res.headers['content-encoding'], 'gzip')

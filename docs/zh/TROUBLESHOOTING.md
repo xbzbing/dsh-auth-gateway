@@ -187,7 +187,8 @@ server {
 # 直连网关端口：恒为正常（200/302）
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/favicon.svg
 # 经反代并发轰同一路径：反复出现 400 即命中本问题
-for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}\n' https://dsh.example.com/favicon.svg; done | sort | uniq -c
+seq 30 | xargs -P 30 -n1 curl -s -o /dev/null -w '%{http_code}\n' \
+  https://dsh.example.com/favicon.svg | sort | uniq -c
 ```
 
 **修复**（两层，建议都做）：

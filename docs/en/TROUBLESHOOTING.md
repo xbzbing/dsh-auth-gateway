@@ -188,7 +188,8 @@ server {
 # direct to the gateway port: always normal (200/302)
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/favicon.svg
 # concurrent blasts through the proxy: repeated 400s confirm this issue
-for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}\n' https://dsh.example.com/favicon.svg; done | sort | uniq -c
+seq 30 | xargs -P 30 -n1 curl -s -o /dev/null -w '%{http_code}\n' \
+  https://dsh.example.com/favicon.svg | sort | uniq -c
 ```
 
 **Fix** (both layers recommended):

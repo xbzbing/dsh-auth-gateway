@@ -85,7 +85,7 @@ http://203.0.113.10:8080
 # 不要用固定的 Connection "upgrade"——那会给每个普通请求都贴上 upgrade。
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # 普通请求保持 keep-alive（close 会触发间歇性空 400，见 TROUBLESHOOTING.md 第 8 节）
 }
 
 server {
@@ -121,6 +121,7 @@ server {
 要点：
 
 - **`Upgrade` / `Connection` 必须在「兜底 location」上转发，不要按路径挑**。DSH 的 WebSocket 端点是 `/api/remote.mux`（API Gateway 独占的 Remote 流多路复用通道）；路径名随 dsh 版本变动过（旧版曾叫 `/api/events.mux`、`/sidebar/ws/*`，这些在当前 dsh 里**已不存在**）。如果只为某些路径设置 Upgrade 头、其余落到没有该头的 `location /`，那个 WebSocket 会握手失败——nginx 会把 `Upgrade` 当逐跳头丢掉，握手被降级成普通 GET，浏览器只报 `WebSocket connection to 'wss://.../api/remote.mux' failed`，网关日志才有明确提示；
+- **map 的普通请求分支必须取 `keep-alive`，不要用 `close`**：网关转发响应时会剥离上游逐跳头（`connection`/`keep-alive` 等），连接语义只由客户端自己的 `Connection` 头决定。若反代给普通请求注入 `close`，与上游响应的 keep-alive 语义互相矛盾，高并发（页面首屏几十个并行请求）下会产生间歇性空 `400 Bad Request`（详见 [TROUBLESHOOTING.md 第 8 节](TROUBLESHOOTING.md)）；
 - `proxy_read_timeout` / `proxy_send_timeout` 设长——SSE 事件流（`/plugins/events`）是长连接，默认 60s 会被掐断；
 - 网关默认没有 HTTPS（`Secure` Cookie 未启用），由 nginx 终结 TLS 即可。
 
@@ -159,7 +160,7 @@ server {
 # 每个 nginx 实例只需定义一次。
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # 普通请求保持 keep-alive（close 会触发间歇性空 400，见 TROUBLESHOOTING.md 第 8 节）
 }
 
 # 其他 Web 应用（示例：博客站点）
@@ -289,7 +290,7 @@ services:
 # map 放在 http {} 块里（和 server 同级）
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # 普通请求保持 keep-alive（close 会触发间歇性空 400，见 TROUBLESHOOTING.md 第 8 节）
 }
 
 server {
@@ -348,7 +349,7 @@ location / {
 
 1. **对外只暴露必要的端口**：理想情况下公网只开 443（nginx），网关端口（8080）仅允许 nginx / 内网访问；
 2. **TLS 由 nginx 终结**：网关保持明文 HTTP 即可，不要在网关端口上重复加 TLS；
-3. **WebSocket/SSE 长连接**：`Upgrade`/`Connection` 头与 `proxy_read_timeout`/`proxy_send_timeout` 三件套必须配齐，且 `Upgrade`/`Connection` 要设在**兜底 location** 上（用 `map $http_upgrade $connection_upgrade`，不要写死 `"upgrade"`、也不要按路径挑白名单），否则事件流 / 终端会被 60s 掐断，或 WebSocket 握手直接降级失败（浏览器表现为 `ERR_INCOMPLETE_CHUNKED_ENCODING` 或 `WebSocket connection to '.../api/remote.mux' failed`）；
+3. **WebSocket/SSE 长连接**：`Upgrade`/`Connection` 头与 `proxy_read_timeout`/`proxy_send_timeout` 三件套必须配齐，且 `Upgrade`/`Connection` 要设在**兜底 location** 上（用 `map $http_upgrade $connection_upgrade`，不要写死 `"upgrade"`、也不要按路径挑白名单），否则事件流 / 终端会被 60s 掐断，或 WebSocket 握手直接降级失败（浏览器表现为 `ERR_INCOMPLETE_CHUNKED_ENCODING` 或 `WebSocket connection to '.../api/remote.mux' failed`）；map 的普通请求分支必须取 `keep-alive`（`close` 会引发间歇性空 400，见 [TROUBLESHOOTING.md 第 8 节](TROUBLESHOOTING.md)）；
 4. **直连与代理不要混用**：浏览器端要么全部走域名 + 代理，要么全部直连网关端口。混用时（如页面从 `https://dsh.example.com` 打开、却直连 `http://203.0.113.10:8080`）会因跨 scheme / 跨端口被 dsh 插件的同源校验拒绝（403 `origin-rejected`）——这是预期保护，不是故障。
 
 ---

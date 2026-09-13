@@ -151,7 +151,7 @@ curl -i -s -N -o /dev/null -w '%{http_code}\n' \
 # http {} 块内，与 server 同级
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # 普通请求保持 keep-alive（close 会触发间歇性空 400，见第 8 节）
 }
 
 server {
@@ -167,3 +167,41 @@ server {
 ```
 
 > **不要**为 WebSocket 维护路径白名单。dsh 的 WebSocket 路径变过（旧版 `/api/events.mux`、`/sidebar/ws/*` 在当前 dsh 里已不存在），白名单一旦漂移就是「HTTP 正常、登录正常、只有某个功能提示连接失败」的静默故障。兜底 location 转发是唯一不会随 dsh 版本失效的写法，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md)。
+
+---
+
+## 8. 经 nginx 反代后间歇性 `400 Bad Request`（空响应体）
+
+**症状**：直连网关端口（如 `http://<IP>:8080`）一切正常；经 nginx（`https://<域名>/`）访问时随机请求返回 `400 Bad Request`——响应体为空、与业务内容无关，静态资源（`/assets/*`、`/favicon.svg`、`/manifest.webmanifest`）、页面、`/api/*` RPC 都可能中招。并发越高（页面首屏十几~几十个并行请求、批量 RPC 重试）越频繁，典型约 1/3 的突发请求命中；浏览器表现为局部资源加载失败、个别 RPC 报错重试。
+
+**根因**：请求与响应的连接语义互相矛盾（RFC 9110「逐跳头」泄漏）：
+
+1. 反代配置用 `map $http_upgrade $connection_upgrade { '' close; }` 给**每个普通请求**注入 `Connection: close`（本仓库旧文档示例也这么写）；
+2. 网关转发上游响应时逐字回放响应头，而上游 dsh 是 Node 服务器，**每个响应都自带 `connection: keep-alive`**——于是「请求说 close、响应说 keep-alive」；
+3. nginx 看到响应可 keep-alive，**在同一 TCP 连接上复用发下一个请求**（抓包可证：同一连接上连续出现 请求 → 200 → 请求 → 400）；
+4. 网关的 Node HTTP 解析器已按请求的 `Connection: close` 将该连接终态化，同一连接上再到的请求被判为非法——`HPE_CLOSED_CONNECTION: Parse Error: Data after 'Connection: close'`——直接回裸 `400 Bad Request`（空 body），nginx 原样中继给浏览器。
+
+**快速判定**（部署机上执行，以直连为对照）：
+
+```bash
+# 直连网关端口：恒为正常（200/302）
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/favicon.svg
+# 经反代并发轰同一路径：反复出现 400 即命中本问题
+seq 30 | xargs -P 30 -n1 curl -s -o /dev/null -w '%{http_code}\n' \
+  https://dsh.example.com/favicon.svg | sort | uniq -c
+```
+
+**修复**（两层，建议都做）：
+
+1. **nginx（即时生效）**：map 的普通请求分支从 `close` 改为 `keep-alive`（WebSocket 分支 `upgrade` 不变），改完 `nginx -s reload`，无需重启 dsh：
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      keep-alive;   # 不要用 close——会与网关转发的上游 keep-alive 响应头矛盾
+}
+```
+
+2. **网关（可选加固，随版本发布）**：`lib/forward.js` 转发响应时剥离上游逐跳头（`connection`/`keep-alive`/`te`/`trailer`/`upgrade` 及 `Connection` 头列出的字段，见 `stripResponseHopByHop`），由 Node 依据**客户端自己的** `Connection` 头决定连接语义——无论反代怎么配，请求/响应语义都不会再矛盾。
+
+> 本案例于 0.7.0 实机部署中发现（2026-09）。修复后同一并发轰炸 0 个 400；直连 8080 全程无此问题（浏览器直连为正常 keep-alive，不存在 close/keep-alive 矛盾）。

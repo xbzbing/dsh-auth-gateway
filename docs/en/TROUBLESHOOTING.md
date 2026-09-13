@@ -152,7 +152,7 @@ curl -i -s -N -o /dev/null -w '%{http_code}\n' \
 # inside the http {} block, sibling of server
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # ordinary requests keep keep-alive (close triggers intermittent empty 400s, see §8)
 }
 
 server {
@@ -168,3 +168,40 @@ server {
 ```
 
 > **Do not** maintain a path allowlist for WebSockets. dsh's WebSocket path has changed (the older `/api/events.mux` and `/sidebar/ws/*` no longer exist in current dsh), and a drifting allowlist fails silently: HTTP works, login works, only one feature reports a connection failure. Forwarding on the catch-all location is the only form that cannot go stale with a dsh version — see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md).
+
+---
+
+## 8. Intermittent `400 Bad Request` (empty body) behind an nginx reverse proxy
+
+**Symptom**: direct access to the gateway port (e.g. `http://<IP>:8080`) works perfectly; through nginx (`https://<domain>/`) random requests fail with `400 Bad Request` and an **empty body** — static assets (`/assets/*`, `/favicon.svg`, `/manifest.webmanifest`), pages and `/api/*` RPCs are all affected. The more parallel requests (the initial page view fires dozens, RPC retries burst), the more frequent the failures — typically about 1/3 of a burst. Browsers show partial resource-load failures and retried RPC errors.
+
+**Root cause**: the connection semantics of the request and the response contradict each other (an RFC 9110 hop-by-hop header leak):
+
+1. The reverse proxy injects `Connection: close` on **every ordinary request** via `map $http_upgrade $connection_upgrade { '' close; }` (the old doc examples in this repository did exactly this);
+2. The gateway relays upstream response headers verbatim, and the upstream dsh webserver is Node, so **every response carries `connection: keep-alive`** — the request says "close", the response says "keep-alive";
+3. nginx sees a reusable connection and **sends the next request on the same TCP connection** (captured on the wire: request → 200 → request → 400 on one connection);
+4. The gateway's Node HTTP parser had already finalized the close-marked connection, so the next request on it is rejected — `HPE_CLOSED_CONNECTION: Parse Error: Data after 'Connection: close'` — and the client receives a bare `400 Bad Request` (empty body) relayed by nginx.
+
+**Quick check** (on the deployment host, compared against direct access):
+
+```bash
+# direct to the gateway port: always normal (200/302)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/favicon.svg
+# concurrent blasts through the proxy: repeated 400s confirm this issue
+for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}\n' https://dsh.example.com/favicon.svg; done | sort | uniq -c
+```
+
+**Fix** (both layers recommended):
+
+1. **nginx (immediate)**: change the ordinary-request branch of the map from `close` to `keep-alive` (the WebSocket branch `upgrade` stays), then `nginx -s reload` — no dsh restart needed:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      keep-alive;   # never close — it contradicts the upstream keep-alive responses
+}
+```
+
+2. **Gateway (optional hardening, ships with a release)**: `lib/forward.js` strips upstream hop-by-hop headers (`connection`/`keep-alive`/`te`/`trailer`/`upgrade` plus tokens named by `Connection`, see `stripResponseHopByHop`) before relaying, so Node derives connection semantics solely from the **client's own** `Connection` header — the contradiction cannot occur regardless of how the proxy is configured.
+
+> Found on a production 0.7.0 deployment (2026-09). After the fix the same concurrent blast produced 0 400s; direct access to 8080 never showed the issue (browsers use normal keep-alive, so no close/keep-alive contradiction exists).

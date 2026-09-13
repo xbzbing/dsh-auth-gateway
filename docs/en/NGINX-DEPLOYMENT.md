@@ -85,7 +85,7 @@ Gateway config: `basePath` stays at the default `/`. nginx server block:
 # Do NOT hardcode Connection "upgrade" — that tags every plain request too.
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # ordinary requests keep keep-alive (close triggers intermittent empty 400s, see TROUBLESHOOTING.md §8)
 }
 
 server {
@@ -121,6 +121,7 @@ server {
 Key points:
 
 - **Forward `Upgrade` / `Connection` on the catch-all location — never on a per-path allowlist.** DSH's WebSocket endpoint is `/api/remote.mux` (the API Gateway's Remote-stream multiplexer). The path has changed across dsh versions (older releases used `/api/events.mux`, `/sidebar/ws/*`, which **no longer exist**). If you set the upgrade headers only for some paths and let the rest fall into a `location /` without them, nginx drops `Upgrade` as a hop-by-hop header, the handshake degrades to a plain GET, and the browser only reports `WebSocket connection to 'wss://.../api/remote.mux' failed` — the gateway log is where the real diagnosis appears;
+- **The ordinary-request branch of the map must be `keep-alive`, never `close`**: the gateway strips hop-by-hop headers (including `connection`/`keep-alive`) from relayed responses and derives connection semantics solely from the client's own `Connection` header. Injecting `Connection: close` on ordinary requests contradicts the upstream's keep-alive responses, and under load (the initial page view fires dozens of parallel requests) produces intermittent empty `400 Bad Request` responses (see [TROUBLESHOOTING.md §8](TROUBLESHOOTING.md));
 - Set `proxy_read_timeout` / `proxy_send_timeout` long — the SSE event stream (`/plugins/events`) is a long-lived connection and the default 60s will cut it off;
 - The gateway has no HTTPS by default (`Secure` cookie not enabled) — let nginx terminate TLS.
 
@@ -159,7 +160,7 @@ The plugin **defaults to `basePath: /` (root path)** and ships no sub-path confi
 # scope). Define it once per nginx instance.
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # ordinary requests keep keep-alive (close triggers intermittent empty 400s, see TROUBLESHOOTING.md §8)
 }
 
 # Other web apps (example: a blog site)
@@ -291,7 +292,7 @@ services:
 # map goes in the http {} block (sibling of server)
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      keep-alive;   # ordinary requests keep keep-alive (close triggers intermittent empty 400s, see TROUBLESHOOTING.md §8)
 }
 
 server {
@@ -350,7 +351,7 @@ location / {
 
 1. **Expose only the necessary ports externally**: ideally only 443 (nginx) is public; the gateway port (8080) should only be reachable by nginx / the intranet;
 2. **Terminate TLS at nginx**: keep the gateway on plain HTTP; do not add TLS on the gateway port;
-3. **WebSocket/SSE long connections**: the `Upgrade`/`Connection` headers plus `proxy_read_timeout`/`proxy_send_timeout` trio must all be in place, and `Upgrade`/`Connection` belong on the **catch-all location** (use `map $http_upgrade $connection_upgrade`; do not hardcode `"upgrade"` and do not allowlist paths), otherwise event streams / terminals get cut at 60s, or the WebSocket handshake degrades and fails outright (browsers show `ERR_INCOMPLETE_CHUNKED_ENCODING` or `WebSocket connection to '.../api/remote.mux' failed`);
+3. **WebSocket/SSE long connections**: the `Upgrade`/`Connection` headers plus `proxy_read_timeout`/`proxy_send_timeout` trio must all be in place, and `Upgrade`/`Connection` belong on the **catch-all location** (use `map $http_upgrade $connection_upgrade`; do not hardcode `"upgrade"` and do not allowlist paths), otherwise event streams / terminals get cut at 60s, or the WebSocket handshake degrades and fails outright (browsers show `ERR_INCOMPLETE_CHUNKED_ENCODING` or `WebSocket connection to '.../api/remote.mux' failed`); the map's ordinary-request branch must be `keep-alive` (`close` causes intermittent empty 400s, see [TROUBLESHOOTING.md §8](TROUBLESHOOTING.md));
 4. **Do not mix direct and proxied access**: the browser should go entirely through the domain + proxy, or entirely direct to the gateway port. Mixing (e.g. page opened from `https://dsh.example.com` but resources fetched direct from `http://203.0.113.10:8080`) gets rejected by the dsh plugin's same-origin check (403 `origin-rejected`) due to the cross-scheme / cross-port mismatch — that is expected protection, not a fault.
 
 ---

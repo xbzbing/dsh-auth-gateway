@@ -66,10 +66,11 @@ test('macOS layout is discovered (Google Chrome for Testing app bundle)', () => 
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-test('headless-shell directories are scanned as a fallback', () => {
+test('headless-shell directories are scanned as a fallback (64-bit layout)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'chromium-resolve-'))
   const cache = join(dir, 'cache')
-  const shell = join(cache, 'chromium_headless_shell-1243', 'chrome-linux', 'headless_shell')
+  // Recent playwright installs use the 64-bit directory (chrome-linux64).
+  const shell = join(cache, 'chromium_headless_shell-1243', 'chrome-linux64', 'headless_shell')
   mkdirSync(join(shell, '..'), { recursive: true })
   writeFileSync(shell, '')
   try {
@@ -78,10 +79,25 @@ test('headless-shell directories are scanned as a fallback', () => {
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-test('no candidate anywhere resolves to undefined', () => {
+test('headless shell on win32 resolves the 64-bit layout only on that platform', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'chromium-resolve-'))
+  const cache = join(dir, 'cache')
+  const shell = join(cache, 'chromium_headless_shell-1243', 'chrome-win64', 'headless_shell.exe')
+  mkdirSync(join(shell, '..'), { recursive: true })
+  writeFileSync(shell, '')
+  try {
+    const got = resolveChromiumPath({ env: { PLAYWRIGHT_BROWSERS_PATH: cache }, platform: 'win32' })
+    assert.equal(got, shell)
+    // The same cache must NOT be found from the linux platform (no /usr/bin
+    // probe either — win32 skips the system fallback entirely).
+    assert.equal(resolveChromiumPath({ env: { PLAYWRIGHT_BROWSERS_PATH: cache }, platform: 'linux' }), undefined)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('no candidate anywhere resolves to undefined (system fallback skipped on win32)', () => {
   const got = resolveChromiumPath({
     env: { PLAYWRIGHT_BROWSERS_PATH: '/nonexistent/ms-playwright' },
     platform: 'win32',
   })
-  assert.equal(got, undefined)
+  assert.equal(got, undefined, 'win32 must not probe POSIX /usr/bin paths')
 })

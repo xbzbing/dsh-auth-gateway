@@ -7,8 +7,8 @@
  *   2. playwright's own registry — the installed revision's executable,
  *                                  versioned automatically by playwright
  *   3. a scan of the ms-playwright cache (chromium-* / headless-shell-*
- *      directories), probing every known per-platform relative path
- *   4. a system chromium on PATH (/usr/bin/chromium etc.)
+ *      directories), probing every known per-platform path layout
+ *   4. a system chromium on PATH (/usr/bin/chromium etc., POSIX only)
  *
  * The cache scan makes a reinstall work without editing any script: the
  * directory name embeds the playwright revision (chromium-1105, -1243, …),
@@ -23,8 +23,8 @@ import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
-/** Per-platform relative executable paths inside a chromium-<rev> cache dir. */
-const CHROMIUM_RELATIVES = {
+/** Per-platform executable path layouts inside a chromium-<rev> cache dir. */
+const CHROMIUM_LAYOUTS = {
   darwin: [
     'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
     'chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
@@ -34,21 +34,29 @@ const CHROMIUM_RELATIVES = {
   win32: ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe'],
 }
 
-/** Per-platform relative paths inside a chromium_headless_shell-<rev> dir. */
-const HEADLESS_SHELL_RELATIVES = {
+/**
+ * Per-platform executable path layouts inside a
+ * chromium_headless_shell-<rev> cache dir. Recent playwright installs put
+ * the headless shell in the 64-bit directories (chrome-linux64 etc.),
+ * mirroring the full chromium layout; the bare variants cover older ones.
+ */
+const HEADLESS_SHELL_LAYOUTS = {
   darwin: [
     'chrome-mac-arm64/headless_shell',
     'chrome-mac-x64/headless_shell',
     'chrome-mac/headless_shell',
   ],
-  linux: ['chrome-linux/headless_shell'],
-  win32: ['chrome-win/headless_shell.exe'],
+  linux: ['chrome-linux64/headless_shell', 'chrome-linux/headless_shell'],
+  win32: ['chrome-win64/headless_shell.exe', 'chrome-win/headless_shell.exe'],
 }
 
 const CACHE_DIR_RE = /^chromium(_headless_shell)?-\d+$/
 
+/** Revision number from a cache dir name ('chromium-1243' -> 1243). */
+const revNum = (dir) => Number(dir.slice(dir.lastIndexOf('-') + 1))
+
 /** Cache roots to scan, most specific first. */
-export function cacheRoots(env, platform) {
+function cacheRoots(env, platform) {
   const roots = []
   if (env.PLAYWRIGHT_BROWSERS_PATH) roots.push(env.PLAYWRIGHT_BROWSERS_PATH)
   const home = os.homedir()
@@ -79,21 +87,27 @@ export function resolveChromiumPath({ env = process.env, platform = process.plat
     let dirs
     try { dirs = readdirSync(root).filter((d) => CACHE_DIR_RE.test(d)) } catch { continue }
     // Newest revision first: chromium-1243 sorts above chromium-1105.
-    dirs.sort((a, b) => Number(b.slice(b.lastIndexOf('-') + 1)) - Number(a.slice(a.lastIndexOf('-') + 1)))
+    dirs.sort((a, b) => revNum(b) - revNum(a))
     for (const dir of dirs) {
-      const relatives = dir.startsWith('chromium_headless_shell')
-        ? (HEADLESS_SHELL_RELATIVES[platform] ?? [])
-        : (CHROMIUM_RELATIVES[platform] ?? [])
-      for (const rel of relatives) {
+      const layouts = dir.startsWith('chromium_headless_shell')
+        ? (HEADLESS_SHELL_LAYOUTS[platform] ?? [])
+        : (CHROMIUM_LAYOUTS[platform] ?? [])
+      for (const rel of layouts) {
         const candidate = path.join(root, dir, rel)
         if (existsSync(candidate)) return candidate
       }
     }
   }
 
-  for (const name of ['chromium', 'chromium-browser', 'google-chrome']) {
-    const candidate = `/usr/bin/${name}`
-    if (existsSync(candidate)) return candidate
+  // Last-resort system chromium. /usr/bin is a POSIX convention (Linux, and
+  // vacuously macOS); discovering Chrome/Edge on Windows would mean probing
+  // Program Files and the registry — out of scope: use CHROMIUM_PATH or
+  // `npx playwright install` there.
+  if (platform !== 'win32') {
+    for (const name of ['chromium', 'chromium-browser', 'google-chrome']) {
+      const candidate = `/usr/bin/${name}`
+      if (existsSync(candidate)) return candidate
+    }
   }
   return undefined
 }

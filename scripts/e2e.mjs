@@ -49,6 +49,27 @@ function ok(name) {
   console.log(`ok ${step}  ${name}`)
 }
 
+/**
+ * Close whatever first-run dialog is up (the beta notice with 继续, the
+ * API-key wizard with 稍后配置) so UI behind it is clickable. Some dsh
+ * builds greet a first sign-in with these; harmless when none is present.
+ */
+async function dismissFirstRunDialogs(page) {
+  for (let i = 0; i < 5; i++) {
+    const label = await page.evaluate(() => {
+      const dlg = [...document.querySelectorAll('[role="dialog"]')]
+        .find((d) => d.isConnected && d.offsetParent !== null)
+      if (!dlg) return null
+      const btn = [...dlg.querySelectorAll('button')]
+        .find((b) => /继续|稍后配置/.test(b.textContent || ''))
+      return btn ? btn.textContent.trim() : null
+    })
+    if (!label) return
+    await page.click(`[role="dialog"] button:has-text("${label}")`, { force: true }).catch(() => {})
+    await page.waitForTimeout(400)
+  }
+}
+
 const browser = await chromium.launch({ executablePath: CACHED_CHROMIUM, headless: true })
 try {
   const page = await browser.newPage()
@@ -139,6 +160,48 @@ try {
     + 'WebSocket check can never fire and is silently dead. If dsh changed its transport, update '
     + `this step. BASE=${BASE} (point it at the proxied origin to exercise the proxy hop)`)
   ok(`Remote mux WebSocket attempted (${webSockets.length}) with no failed handshake`)
+
+  // ── 2c. auth settings panel: cookie-Secure save & restore (click-through)
+  // The panel's Save button once called api.setCookieSecure() while the api
+  // factory did not define it — the click failed SILENTLY as "网络错误，未
+  // 保存", and because the error was swallowed by the catch, neither the
+  // zero-JS-errors assertion nor the console would have seen it (PR #21
+  // review R1). A real click-through pins the whole button chain: api
+  // method, POST route, hint copy, source flip, restore button lifecycle.
+  await dismissFirstRunDialogs(page)
+  await page.click('button:has-text("设置")', { force: true })
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
+  await page.waitForTimeout(600)
+  await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
+  await page.waitForSelector('text=Cookie 安全', { timeout: 10000 })
+  await page.waitForTimeout(500)
+
+  // Fresh panel: deployment source, no restore button yet.
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('来源：部署配置')),
+    'panel must open with the deployment source')
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')]
+    .some((b) => /恢复为部署配置/.test(b.textContent || ''))), false,
+  'no restore button while the deployment config rules')
+
+  // Save 关闭 -> hint, source flip, restore button appears.
+  await page.selectOption('select', 'false')
+  await page.click('button:has-text("保存")')
+  await page.waitForFunction(() => /已保存，新策略立即生效/.test(document.body.innerText), { timeout: 8000 })
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('来源：面板设置')),
+    'the source must flip to 面板设置 after a panel save')
+  assert.ok(await page.evaluate(() => [...document.querySelectorAll('button')]
+    .some((b) => /恢复为部署配置/.test(b.textContent || ''))),
+  'the restore button must appear after a panel save')
+
+  // Restore -> deployment source back, restore button gone.
+  await page.click('button:has-text("恢复为部署配置")')
+  await page.waitForFunction(() => /已恢复为部署配置/.test(document.body.innerText), { timeout: 8000 })
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('来源：部署配置')),
+    'the source must return to 部署配置 after restoring')
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')]
+    .some((b) => /恢复为部署配置/.test(b.textContent || ''))), false,
+  'the restore button must disappear after restoring')
+  ok('auth settings panel: cookie Secure save + restore work (no silent failure)')
 
   // ── 3. logout -> login page -> wrong password -> login ────────────────
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })

@@ -22,6 +22,7 @@ test('undefined/null config gets defaults', () => {
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
+      cookieSecure: 'auto',
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -36,6 +37,7 @@ test('partial config keeps defaults for omitted fields', () => {
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
       otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
+      cookieSecure: 'auto',
     },
   })
 })
@@ -50,6 +52,23 @@ test('updateCheck must be a boolean and is OFF by default', () => {
     const result = validate({ updateCheck: bad })
     assert.ok(result.issues, `updateCheck ${String(bad)} must be rejected`)
     assert.equal(result.issues[0].path[0], 'updateCheck')
+  }
+})
+
+test('cookieSecure is three-state: auto (default), true, false', () => {
+  // Default is 'auto' — byte-for-byte today's plain-HTTP behavior, with the
+  // Secure attribute arming itself once the connection is TLS (see
+  // lib/auth.js requestIsSecure).
+  assert.equal(validate({}).value.cookieSecure, 'auto')
+  assert.equal(validate({ cookieSecure: 'auto' }).value.cookieSecure, 'auto')
+  assert.equal(validate({ cookieSecure: true }).value.cookieSecure, true)
+  assert.equal(validate({ cookieSecure: false }).value.cookieSecure, false)
+  // Lookalikes and null are rejected, not coerced: a typo must not silently
+  // pin the attribute either way.
+  for (const bad of ['true', 'false', 'on', 'https', 1, 0, null]) {
+    const result = validate({ cookieSecure: bad })
+    assert.ok(result.issues, `cookieSecure ${String(bad)} must be rejected`)
+    assert.equal(result.issues[0].path[0], 'cookieSecure')
   }
 })
 

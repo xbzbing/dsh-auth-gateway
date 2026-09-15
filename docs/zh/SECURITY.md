@@ -82,7 +82,7 @@ DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Se
 ## 已知限制
 
 - **OTP 密钥加密存储**：`$DSH_HOME/auth-gateway/otp.json` 中的 Base32 密钥已用 AES-256-GCM 加密（lib/otp-crypto.js），读取需主密钥。主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64）或首次启用时自动生成的 `auth-gateway/otp-master.key`（0600）；仍属本机可信模型——能读 `$DSH_HOME` 的本机用户同时可取密钥，故需将主密钥置于加密卷或外部密钥管理方能真正隔离磁盘泄露；
-- **明文 HTTP**：密码与 Cookie 在网络中明文传输。局域网部署建议置于可信网络，或前置 TLS 反向代理（见 DEPLOYMENT.md）；
+- **明文 HTTP（传输层）**：密码与 Cookie 在网络中明文传输。这是传输层问题——本插件的会话 Cookie 支持 `Secure` 属性（配置项 `cookieSecure`，默认 `auto`）：当连接经 TLS（反向代理终结并透传 `X-Forwarded-Proto: https`）时自动附加，浏览器从此只经加密链路回传 Cookie；置 `true` 可强制附加（反代 TLS 但未透传协议头时使用）——注意纯 HTTP 下强制开启会使浏览器拒绝保存 Cookie、登录立即失败，这是**显式的失败而非静默降级**（网关还会在每次此类登录时通过 dsh 控制台告警，提示前置 TLS 或改回 `auto`）；`false` 显式关闭。Secure 只解决「Cookie 不被明文链路回传」，**不加密请求本身**——要真正消除明文暴露仍须部署 TLS（反向代理或证书，见 DEPLOYMENT.md）；
 - **OTP 启用权限（DoS 面）**：`/otp/enable` 与 `/otp/verify-setup` 仅要求任意有效会话——启用 2FA 是用户操作（无需部署开关），密码泄露场景下攻击者可用泄露的密码登录后绑定自己的认证器，锁死真实用户登录。这不构成凭据窃取，主要是 DoS 面；缓解为启用成功后**吊销全部会话**（含启用者自身，强制在 2FA 策略下重新登录）；后续方向为启用时要求密码重验证；
 - **内存会话**：dsh 重启后全员下线（需重新登录；OTP 已启用时需重新完成 2FA）；
 - **无分布式防护**：全局限流按单进程计数，多实例部署或分布式攻击者可分摊请求。

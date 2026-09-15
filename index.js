@@ -152,6 +152,17 @@ export async function apply(ctx, config) {
     ctx.logger.warn('[dsh-auth-gateway] %s', err instanceof Error ? err.message : String(err))
   }
 
+  // Deployment-configuration warnings (e.g. forced cookieSecure over a
+  // plain-HTTP link) go to the CONSOLE as well as the logger: ctx.logger is
+  // buffer-only in the current dsh runtime (the built-in exporter keeps the
+  // last 1000 records in memory), and a headless LAN box has no panel open
+  // to explain why logins "succeed" but hold no session.
+  gateway.onConfigWarning = (err) => {
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn(message)
+    ctx.logger.warn('[dsh-auth-gateway] %s', message)
+  }
+
   // Durable audit trail. ctx.logger is buffer-only in the current dsh runtime
   // (its built-in exporter keeps the last 1000 records in memory), so auth
   // events and brute-force alerts are additionally appended as JSONL to

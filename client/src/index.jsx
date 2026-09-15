@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 // client loader before this plugin's apply() runs (declared in dsh.client.inject).
 import '@deepseek-ai/dsh-client-ui-slots'
 import { afterCheckAttempt, readVersion, updateNotice } from './update-notice.js'
+import { cookieSecureState, cookieSecureEffective } from './cookie-secure.js'
 
 // dsh web design tokens (--dsw-alias-*). They are defined globally by the
 // dsh web client and switch automatically with the light/dark theme, so the
@@ -98,6 +99,17 @@ const zh = {
   'session.loggedIn': '已登录',
   'session.desc': '会话有效期 30 天；dsh 重启后需重新登录。',
   'session.logout': '退出登录',
+  'cookie.title': 'Cookie 安全',
+  'cookie.pill.effective': 'Secure 生效',
+  'cookie.pill.ineffective': 'Secure 未生效',
+  'cookie.pill.off': '已关闭',
+  'cookie.desc': 'Secure 属性只允许浏览器经加密链路（HTTPS）发送会话 Cookie；明文 HTTP 下强制开启会使登录立即失效。',
+  'cookie.state.auto-https': '自动模式：当前连接为 HTTPS，Secure 已生效。',
+  'cookie.state.auto-http': '自动模式：当前为明文 HTTP，Secure 未生效；前置 TLS（反向代理或证书）后自动启用。',
+  'cookie.state.forced-https': '已强制开启：当前 HTTPS 连接下 Secure 生效。',
+  'cookie.state.forced-http': '已强制开启：但当前为明文 HTTP，浏览器将拒绝保存 Secure Cookie，登录会立即失效——请先启用 TLS，或将配置改回 auto。',
+  'cookie.state.off': '已显式关闭：Cookie 可经明文链路发送（仅建议在可信内网使用；明文下任何监听者都能捕获会话）。',
+  'cookie.configHint': '由部署配置 cookieSecure 控制（auto / true / false；当前：{mode}）',
   'about.title': '关于',
   'about.version': '当前版本',
   'about.unknown': '未知',
@@ -165,6 +177,17 @@ const en = {
   'session.loggedIn': 'Signed in',
   'session.desc': 'Sessions last 30 days; a dsh restart signs everyone out.',
   'session.logout': 'Sign out',
+  'cookie.title': 'Cookie Security',
+  'cookie.pill.effective': 'Secure on',
+  'cookie.pill.ineffective': 'Secure off',
+  'cookie.pill.off': 'Disabled',
+  'cookie.desc': 'The Secure attribute lets the browser send the session cookie over an encrypted (HTTPS) link only; forcing it on a plain-HTTP link breaks the login instead of protecting it.',
+  'cookie.state.auto-https': 'Auto mode: this connection is HTTPS, so Secure is in effect.',
+  'cookie.state.auto-http': 'Auto mode: this connection is plain HTTP, so Secure is off; it engages automatically once TLS (reverse proxy or certificate) fronts the gateway.',
+  'cookie.state.forced-https': 'Forced on: HTTPS connection, Secure is in effect.',
+  'cookie.state.forced-http': 'Forced on, but this connection is plain HTTP: the browser will refuse to store the Secure cookie and logins fail immediately — enable TLS first, or set the config back to auto.',
+  'cookie.state.off': 'Explicitly off: the cookie may travel in clear text (trusted LAN only; any listener on the link can capture the session).',
+  'cookie.configHint': 'Controlled by the deployment config cookieSecure (auto / true / false; current: {mode})',
   'about.title': 'About',
   'about.version': 'Current version',
   'about.unknown': 'unknown',
@@ -233,11 +256,13 @@ function Button({ variant = 'primary', disabled, onClick, children, full, style 
   )
 }
 
-/** Small status badge (success tone or neutral). */
+/** Small status badge (success / warn / neutral tone). */
 function Pill({ children, tone = 'neutral' }) {
   const toneStyle = tone === 'success'
     ? { color: T.success, background: T.successBg }
-    : { color: T.textSecondary, background: T.hover }
+    : tone === 'warn'
+      ? { color: T.danger, background: T.dangerSoft }
+      : { color: T.textSecondary, background: T.hover }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', height: '22px', padding: '0 10px',
@@ -258,6 +283,13 @@ function UserSettingsPanel({ api, t }) {
   const [status, setStatus] = useState(null)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrData, setQrData] = useState(null)
+  // Cookie Secure policy from the gateway ('auto' | true | false) and the
+  // transport THIS browser actually used — the Secure attribute is enforced
+  // by the user agent against its own URL, so the card judges by
+  // window.location.protocol, never by what the server thinks it saw.
+  // Derivation lives in client/src/cookie-secure.js (unit-tested).
+  const [cookieSecure, setCookieSecure] = useState('auto')
+  const [isHttps] = useState(() => typeof window !== 'undefined' && window.location.protocol === 'https:')
   // Post-verification state inside the QR dialog: OTP is enabled, every
   // session (including this one) was revoked — show the backup codes, then
   // the user signs in again under the new password + OTP policy.
@@ -327,6 +359,9 @@ function UserSettingsPanel({ api, t }) {
         // state above: when false, enabling OTP from the panel is impossible
         // (the server answers otp-not-enabled) and the card explains why.
         setDigits(cfg.otpDigits || 6)
+        // Three-state cookie Secure policy; absent (older gateway) means auto.
+        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : 'auto'
+        setCookieSecure(mode)
       }
     } catch (err) {
       setStatus({ type: 'error', message: t('error.loadSettings', { message: err.message }) })
@@ -430,6 +465,11 @@ function UserSettingsPanel({ api, t }) {
   // The single notice the About card shows (null when nothing is known).
   const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? '')
 
+  // Cookie Secure card state: policy from the gateway + this browser's
+  // transport (see client/src/cookie-secure.js, unit-tested).
+  const secureState = cookieSecureState(cookieSecure, isHttps ? 'https:' : 'http:')
+  const secureEffective = cookieSecureEffective(secureState)
+
   return (
     <>
       <div style={{ paddingTop: '4px' }}>
@@ -514,6 +554,22 @@ function UserSettingsPanel({ api, t }) {
           </div>
           <p style={DESC}>{t('session.desc')}</p>
           <Button variant="dangerOutline" onClick={logout}>{t('session.logout')}</Button>
+        </div>
+
+        {/* Cookie Secure: deployment policy + what actually applies here */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={CARD_TITLE}>🛡️ {t('cookie.title')}</span>
+            <Pill tone={secureEffective ? 'success' : (secureState === 'auto-http' ? 'neutral' : 'warn')}>
+              {secureEffective ? t('cookie.pill.effective')
+                : (secureState === 'off' ? t('cookie.pill.off') : t('cookie.pill.ineffective'))}
+            </Pill>
+          </div>
+          <p style={DESC}>{t('cookie.desc')}</p>
+          <p style={{ ...DESC, margin: 0 }}>{t(`cookie.state.${secureState}`)}</p>
+          <p style={{ margin: '8px 0 0', fontSize: '12px', lineHeight: '18px', color: T.textTertiary }}>
+            {t('cookie.configHint', { mode: String(cookieSecure) })}
+          </p>
         </div>
 
         {/* About: running version, repository link, new-version notice */}

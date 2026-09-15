@@ -67,6 +67,18 @@ window.__ModuleLoader__.load({
 		  return null;
 		}
 
+		// client/src/cookie-secure.js
+		function cookieSecureState(mode, protocol) {
+		  const m = mode === true || mode === false ? mode : "auto";
+		  const https = protocol === "https:";
+		  if (m === true) return https ? "forced-https" : "forced-http";
+		  if (m === false) return "off";
+		  return https ? "auto-https" : "auto-http";
+		}
+		function cookieSecureEffective(state) {
+		  return state === "auto-https" || state === "forced-https";
+		}
+
 		// client/src/index.jsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var T = {
@@ -160,6 +172,17 @@ window.__ModuleLoader__.load({
 		  "session.loggedIn": "\u5DF2\u767B\u5F55",
 		  "session.desc": "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002",
 		  "session.logout": "\u9000\u51FA\u767B\u5F55",
+		  "cookie.title": "Cookie \u5B89\u5168",
+		  "cookie.pill.effective": "Secure \u751F\u6548",
+		  "cookie.pill.ineffective": "Secure \u672A\u751F\u6548",
+		  "cookie.pill.off": "\u5DF2\u5173\u95ED",
+		  "cookie.desc": "Secure \u5C5E\u6027\u53EA\u5141\u8BB8\u6D4F\u89C8\u5668\u7ECF\u52A0\u5BC6\u94FE\u8DEF\uFF08HTTPS\uFF09\u53D1\u9001\u4F1A\u8BDD Cookie\uFF1B\u660E\u6587 HTTP \u4E0B\u5F3A\u5236\u5F00\u542F\u4F1A\u4F7F\u767B\u5F55\u7ACB\u5373\u5931\u6548\u3002",
+		  "cookie.state.auto-https": "\u81EA\u52A8\u6A21\u5F0F\uFF1A\u5F53\u524D\u8FDE\u63A5\u4E3A HTTPS\uFF0CSecure \u5DF2\u751F\u6548\u3002",
+		  "cookie.state.auto-http": "\u81EA\u52A8\u6A21\u5F0F\uFF1A\u5F53\u524D\u4E3A\u660E\u6587 HTTP\uFF0CSecure \u672A\u751F\u6548\uFF1B\u524D\u7F6E TLS\uFF08\u53CD\u5411\u4EE3\u7406\u6216\u8BC1\u4E66\uFF09\u540E\u81EA\u52A8\u542F\u7528\u3002",
+		  "cookie.state.forced-https": "\u5DF2\u5F3A\u5236\u5F00\u542F\uFF1A\u5F53\u524D HTTPS \u8FDE\u63A5\u4E0B Secure \u751F\u6548\u3002",
+		  "cookie.state.forced-http": "\u5DF2\u5F3A\u5236\u5F00\u542F\uFF1A\u4F46\u5F53\u524D\u4E3A\u660E\u6587 HTTP\uFF0C\u6D4F\u89C8\u5668\u5C06\u62D2\u7EDD\u4FDD\u5B58 Secure Cookie\uFF0C\u767B\u5F55\u4F1A\u7ACB\u5373\u5931\u6548\u2014\u2014\u8BF7\u5148\u542F\u7528 TLS\uFF0C\u6216\u5C06\u914D\u7F6E\u6539\u56DE auto\u3002",
+		  "cookie.state.off": "\u5DF2\u663E\u5F0F\u5173\u95ED\uFF1ACookie \u53EF\u7ECF\u660E\u6587\u94FE\u8DEF\u53D1\u9001\uFF08\u4EC5\u5EFA\u8BAE\u5728\u53EF\u4FE1\u5185\u7F51\u4F7F\u7528\uFF1B\u660E\u6587\u4E0B\u4EFB\u4F55\u76D1\u542C\u8005\u90FD\u80FD\u6355\u83B7\u4F1A\u8BDD\uFF09\u3002",
+		  "cookie.configHint": "\u7531\u90E8\u7F72\u914D\u7F6E cookieSecure \u63A7\u5236\uFF08auto / true / false\uFF1B\u5F53\u524D\uFF1A{mode}\uFF09",
 		  "about.title": "\u5173\u4E8E",
 		  "about.version": "\u5F53\u524D\u7248\u672C",
 		  "about.unknown": "\u672A\u77E5",
@@ -225,6 +248,17 @@ window.__ModuleLoader__.load({
 		  "session.loggedIn": "Signed in",
 		  "session.desc": "Sessions last 30 days; a dsh restart signs everyone out.",
 		  "session.logout": "Sign out",
+		  "cookie.title": "Cookie Security",
+		  "cookie.pill.effective": "Secure on",
+		  "cookie.pill.ineffective": "Secure off",
+		  "cookie.pill.off": "Disabled",
+		  "cookie.desc": "The Secure attribute lets the browser send the session cookie over an encrypted (HTTPS) link only; forcing it on a plain-HTTP link breaks the login instead of protecting it.",
+		  "cookie.state.auto-https": "Auto mode: this connection is HTTPS, so Secure is in effect.",
+		  "cookie.state.auto-http": "Auto mode: this connection is plain HTTP, so Secure is off; it engages automatically once TLS (reverse proxy or certificate) fronts the gateway.",
+		  "cookie.state.forced-https": "Forced on: HTTPS connection, Secure is in effect.",
+		  "cookie.state.forced-http": "Forced on, but this connection is plain HTTP: the browser will refuse to store the Secure cookie and logins fail immediately \u2014 enable TLS first, or set the config back to auto.",
+		  "cookie.state.off": "Explicitly off: the cookie may travel in clear text (trusted LAN only; any listener on the link can capture the session).",
+		  "cookie.configHint": "Controlled by the deployment config cookieSecure (auto / true / false; current: {mode})",
 		  "about.title": "About",
 		  "about.version": "Current version",
 		  "about.unknown": "unknown",
@@ -311,7 +345,7 @@ window.__ModuleLoader__.load({
 		  );
 		}
 		function Pill({ children, tone = "neutral" }) {
-		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : { color: T.textSecondary, background: T.hover };
+		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : tone === "warn" ? { color: T.danger, background: T.dangerSoft } : { color: T.textSecondary, background: T.hover };
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
 		    display: "inline-flex",
 		    alignItems: "center",
@@ -330,6 +364,8 @@ window.__ModuleLoader__.load({
 		  const [status, setStatus] = (0, import_react.useState)(null);
 		  const [showQRModal, setShowQRModal] = (0, import_react.useState)(false);
 		  const [qrData, setQrData] = (0, import_react.useState)(null);
+		  const [cookieSecure, setCookieSecure] = (0, import_react.useState)("auto");
+		  const [isHttps] = (0, import_react.useState)(() => typeof window !== "undefined" && window.location.protocol === "https:");
 		  const [setupDone, setSetupDone] = (0, import_react.useState)(false);
 		  const [backupCodes, setBackupCodes] = (0, import_react.useState)([]);
 		  const [showChangePassword, setShowChangePassword] = (0, import_react.useState)(false);
@@ -374,6 +410,8 @@ window.__ModuleLoader__.load({
 		        const cfg = data.config?.["dsh-auth-gateway"] || {};
 		        setOtpEnabled(cfg.otpEnabled || false);
 		        setDigits(cfg.otpDigits || 6);
+		        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : "auto";
+		        setCookieSecure(mode);
 		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.loadSettings", { message: err.message }) });
@@ -495,6 +533,8 @@ window.__ModuleLoader__.load({
 		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
 		  }
 		  const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? "");
+		  const secureState = cookieSecureState(cookieSecure, isHttps ? "https:" : "http:");
+		  const secureEffective = cookieSecureEffective(secureState);
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: {
@@ -623,6 +663,18 @@ window.__ModuleLoader__.load({
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("session.desc") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		            "\u{1F6E1}\uFE0F ",
+		            t("cookie.title")
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: secureEffective ? "success" : secureState === "auto-http" ? "neutral" : "warn", children: secureEffective ? t("cookie.pill.effective") : secureState === "off" ? t("cookie.pill.off") : t("cookie.pill.ineffective") })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("cookie.desc") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: t(`cookie.state.${secureState}`) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 0", fontSize: "12px", lineHeight: "18px", color: T.textTertiary }, children: t("cookie.configHint", { mode: String(cookieSecure) }) })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [

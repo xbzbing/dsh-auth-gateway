@@ -32,11 +32,15 @@
 # (http://127.0.0.1:<internal port>), which is loopback-only by design and
 # would mislead; the login gateway prints the real URL instead. The whole
 # config is restated because a patch replaces it: surfaceContext stays on,
-# and --trusted-host must keep flowing through ctx.webStartup.trustedHosts.
+# openBrowser must keep flowing from the CLI flags (the web-app schema
+# default is TRUE — omitting it makes `dsh web --no-open` ineffective and
+# pops a browser tab pointing at the internal port on every boot), and
+# --trusted-host must keep flowing through ctx.webStartup.trustedHosts.
 - id: web-runtime
   config:
     printUrl: false
     surfaceContext: true
+    openBrowser: !!js ctx.webStartup.openBrowser
     trustedHosts: !!js ctx.webStartup.trustedHosts
 
 - insert:

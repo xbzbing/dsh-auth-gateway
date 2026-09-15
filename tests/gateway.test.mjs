@@ -587,6 +587,22 @@ test('cookieSecure panel write failure: 500, reported, and memory not polluted',
     'the transport rule keeps working after a failed panel write')
 })
 
+test('cookieSecure panel write shares the global auth rate budget', async () => {
+  await stopGateway()
+  await startGateway({ maxGlobalAuthAttemptsPerMinute: 2 }, undefined, null, memoryOverrideStore())
+  const events = []
+  gateway.onAuthEvent = (e) => events.push(e)
+  // Login consumes one budget slot; a second write still fits, the third 429.
+  const cookie = await login()
+  const first = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(first.status, 200)
+  const second = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' }, cookie })
+  assert.equal(second.status, 429)
+  assert.equal(JSON.parse(second.body).error, 'rate-limited')
+  assert.ok(events.some((e) => e.kind === 'cookie-secure-change-failed' && e.reason === 'rate-limited'),
+    'the rate-limited write must be audited like the other security-state transitions')
+})
+
 test('cookieSecure panel write without a record store answers storage-unavailable', async () => {
   // Default startGateway carries no override store (dsh ≤ 0.1.1 surface).
   const cookie = await login()

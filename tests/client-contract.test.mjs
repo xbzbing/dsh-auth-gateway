@@ -231,6 +231,18 @@ test('component takes no ctx prop and never fetches directly', () => {
     'panel must derive its API base from the injected basePath global')
 })
 
+test('panel api factory exposes the cookie-secure write methods', () => {
+  // Regression: the Save / Restore buttons once called api.setCookieSecure /
+  // api.resetCookieSecure while the api factory did not define them — clicks
+  // failed silently as "网络错误，未保存", and build:check could not catch it
+  // because the built bundle reproduced the same missing methods. Pin both
+  // the source factory and the built bundle.
+  assert.ok(source.includes('setCookieSecure: async'), 'api must expose setCookieSecure')
+  assert.ok(source.includes('resetCookieSecure: async'), 'api must expose resetCookieSecure')
+  assert.ok(code.includes('setCookieSecure'), 'built bundle must include setCookieSecure')
+  assert.ok(code.includes('resetCookieSecure'), 'built bundle must include resetCookieSecure')
+})
+
 test('client bundle keeps react and slots as external requires (not inlined)', () => {
   for (const spec of ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-slots']) {
     assert.ok(code.includes(`require("${spec}")`), `bundle must require ${spec}`)

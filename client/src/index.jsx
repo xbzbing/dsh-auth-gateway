@@ -118,6 +118,7 @@ const zh = {
   'cookie.edit.save': '保存',
   'cookie.edit.saving': '保存中...',
   'cookie.edit.saved': '已保存，新策略立即生效',
+  'cookie.edit.restored': '已恢复为部署配置，策略由部署配置决定',
   'cookie.edit.reset': '恢复为部署配置',
   'cookie.edit.failed.invalid-mode': '无效的模式值',
   'cookie.edit.failed.storage-unavailable': '当前部署不支持面板修改（凭据记录服务不可用）',
@@ -209,6 +210,7 @@ const en = {
   'cookie.edit.save': 'Save',
   'cookie.edit.saving': 'Saving...',
   'cookie.edit.saved': 'Saved — the new policy applies immediately',
+  'cookie.edit.restored': 'Restored — the deployment config rules again',
   'cookie.edit.reset': 'Restore deployment config',
   'cookie.edit.failed.invalid-mode': 'Invalid mode value',
   'cookie.edit.failed.storage-unavailable': 'This deployment cannot store panel changes (credential-record service unavailable)',
@@ -410,7 +412,7 @@ function UserSettingsPanel({ api, t }) {
       const data = await api.resetCookieSecure()
       if (data?.ok === true) {
         await loadSettings()
-        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') })
+        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.restored') })
       } else {
         setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
       }
@@ -968,6 +970,14 @@ function apply(ctx) {
     changePassword: async (oldPassword, newPassword) => (await fetch(BASE + '/login/change', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ oldPassword, newPassword }),
+    })).json(),
+    setCookieSecure: async (mode) => (await fetch(BASE + '/login-api/cookie-secure', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    })).json(),
+    resetCookieSecure: async () => (await fetch(BASE + '/login-api/cookie-secure', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reset: true }),
     })).json(),
     logout: async () => (await fetch(BASE + '/login/logout', { method: 'POST' })).json(),
   }

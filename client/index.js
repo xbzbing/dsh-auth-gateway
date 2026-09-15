@@ -191,6 +191,7 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.save": "\u4FDD\u5B58",
 		  "cookie.edit.saving": "\u4FDD\u5B58\u4E2D...",
 		  "cookie.edit.saved": "\u5DF2\u4FDD\u5B58\uFF0C\u65B0\u7B56\u7565\u7ACB\u5373\u751F\u6548",
+		  "cookie.edit.restored": "\u5DF2\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E\uFF0C\u7B56\u7565\u7531\u90E8\u7F72\u914D\u7F6E\u51B3\u5B9A",
 		  "cookie.edit.reset": "\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E",
 		  "cookie.edit.failed.invalid-mode": "\u65E0\u6548\u7684\u6A21\u5F0F\u503C",
 		  "cookie.edit.failed.storage-unavailable": "\u5F53\u524D\u90E8\u7F72\u4E0D\u652F\u6301\u9762\u677F\u4FEE\u6539\uFF08\u51ED\u636E\u8BB0\u5F55\u670D\u52A1\u4E0D\u53EF\u7528\uFF09",
@@ -280,6 +281,7 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.save": "Save",
 		  "cookie.edit.saving": "Saving...",
 		  "cookie.edit.saved": "Saved \u2014 the new policy applies immediately",
+		  "cookie.edit.restored": "Restored \u2014 the deployment config rules again",
 		  "cookie.edit.reset": "Restore deployment config",
 		  "cookie.edit.failed.invalid-mode": "Invalid mode value",
 		  "cookie.edit.failed.storage-unavailable": "This deployment cannot store panel changes (credential-record service unavailable)",
@@ -458,7 +460,7 @@ window.__ModuleLoader__.load({
 		      const data = await api.resetCookieSecure();
 		      if (data?.ok === true) {
 		        await loadSettings();
-		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") });
+		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") });
 		      } else {
 		        setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
 		      }
@@ -1042,6 +1044,16 @@ window.__ModuleLoader__.load({
 		      method: "POST",
 		      headers: { "content-type": "application/json" },
 		      body: JSON.stringify({ oldPassword, newPassword })
+		    })).json(),
+		    setCookieSecure: async (mode) => (await fetch(BASE + "/login-api/cookie-secure", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ mode })
+		    })).json(),
+		    resetCookieSecure: async () => (await fetch(BASE + "/login-api/cookie-secure", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ reset: true })
 		    })).json(),
 		    logout: async () => (await fetch(BASE + "/login/logout", { method: "POST" })).json()
 		  };

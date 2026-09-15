@@ -124,6 +124,8 @@ const zh = {
   'cookie.edit.failed.storage-unavailable': '当前部署不支持面板修改（凭据记录服务不可用）',
   'cookie.edit.failed.storage-failed': '保存失败，请稍后重试',
   'cookie.edit.failed.network': '网络错误，未保存',
+  'cookie.save.warn.force-on-http': '当前入口非 TLS：强制开启后，经此明文入口登录将立即失效（浏览器拒绝保存 Secure Cookie）。请改用 HTTPS 入口设置，或先为网关前置 TLS（反向代理需透传 X-Forwarded-Proto: https）。',
+  'cookie.save.note.secure-leftover': '提示：若浏览器此前经 HTTPS 访问过本网关，仍保留着带 Secure 的旧会话 Cookie——本明文入口无法覆盖它。请改用 HTTPS 入口重新执行此操作，或在浏览器中清除本站点 Cookie。',
   'about.title': '关于',
   'about.version': '当前版本',
   'about.unknown': '未知',
@@ -216,6 +218,8 @@ const en = {
   'cookie.edit.failed.storage-unavailable': 'This deployment cannot store panel changes (credential-record service unavailable)',
   'cookie.edit.failed.storage-failed': 'Save failed — retry later',
   'cookie.edit.failed.network': 'Network error — not saved',
+  'cookie.save.warn.force-on-http': 'This entry is not TLS: forcing Secure on breaks logins over this plaintext entry (browsers refuse to store Secure cookies). Use an HTTPS entry instead, or front the gateway with TLS (a reverse proxy must forward X-Forwarded-Proto: https).',
+  'cookie.save.note.secure-leftover': 'Note: if this browser previously reached the gateway over HTTPS, a Secure session cookie may still be stored — a plaintext entry cannot overwrite it. Repeat this change from an HTTPS entry, or clear this site\'s cookies in the browser.',
   'about.title': 'About',
   'about.version': 'Current version',
   'about.unknown': 'unknown',
@@ -332,6 +336,13 @@ function UserSettingsPanel({ api, t }) {
   const [cookieSecureDraft, setCookieSecureDraft] = useState(null)
   const [savingCookieSecure, setSavingCookieSecure] = useState(false)
   const [cookieSecureHint, setCookieSecureHint] = useState(null)
+  // The gateway's own view of THIS request's transport (TLS socket or a
+  // proxy-forwarded X-Forwarded-Proto: https), reported by /login-api/settings.
+  // Unlike the card state it is not about what the browser stores — it tells
+  // the panel whether THIS entry is a secure origin, i.e. whether a reissued
+  // cookie can overwrite a stored Secure one. Older gateways do not report
+  // it; the browser's protocol is then the best available proxy.
+  const [cookieSecureRequestSecure, setCookieSecureRequestSecure] = useState(false)
   const [isHttps] = useState(() => typeof window !== 'undefined' && window.location.protocol === 'https:')
   // Post-verification state inside the QR dialog: OTP is enabled, every
   // session (including this one) was revoked — show the backup codes, then
@@ -391,6 +402,14 @@ function UserSettingsPanel({ api, t }) {
 
   /** POST the panel's cookieSecure override, then re-read the effective state. */
   async function saveCookieSecure() {
+    // Forcing Secure from a plaintext entry locks the operator out of this
+    // very entry (the browser refuses to store the Secure cookie, so every
+    // login "succeeds" but holds no session) — refuse the save with the
+    // explanation instead of letting the next login die confusingly.
+    if (cookieSecureDraft === true && !cookieSecureRequestSecure) {
+      setCookieSecureHint({ tone: 'warn', text: t('cookie.save.warn.force-on-http') })
+      return
+    }
     setSavingCookieSecure(true)
     setCookieSecureHint(null)
     try {
@@ -403,7 +422,11 @@ function UserSettingsPanel({ api, t }) {
         setCookieSecure(mode)
         setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
         setCookieSecureDraft(null)
-        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') })
+        // The gateway reissued the session cookie under the new policy, but a
+        // plaintext entry cannot overwrite a stored Secure cookie — when
+        // that can be the case, say how to finish the job.
+        const leftover = mode !== true && !cookieSecureRequestSecure ? ' ' + t('cookie.save.note.secure-leftover') : ''
+        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') + leftover })
       } else {
         const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? 'network'
         setCookieSecureHint({ tone: 'warn', text: t(`cookie.edit.failed.${code}`) })
@@ -426,7 +449,8 @@ function UserSettingsPanel({ api, t }) {
         setCookieSecure(mode)
         setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
         setCookieSecureDraft(null)
-        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.restored') })
+        const leftover = mode !== true && !cookieSecureRequestSecure ? ' ' + t('cookie.save.note.secure-leftover') : ''
+        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.restored') + leftover })
       } else {
         setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
       }
@@ -454,6 +478,9 @@ function UserSettingsPanel({ api, t }) {
         const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : 'auto'
         setCookieSecure(mode)
         setCookieSecureSource(cfg.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
+        // Secure origin as the GATEWAY sees it; missing on older gateways,
+        // in which case the browser's own protocol is the best proxy.
+        setCookieSecureRequestSecure(cfg.requestSecure === undefined ? isHttps : cfg.requestSecure === true)
         setCookieSecureDraft(null)
       }
     } catch (err) {

@@ -197,6 +197,8 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.failed.storage-unavailable": "\u5F53\u524D\u90E8\u7F72\u4E0D\u652F\u6301\u9762\u677F\u4FEE\u6539\uFF08\u51ED\u636E\u8BB0\u5F55\u670D\u52A1\u4E0D\u53EF\u7528\uFF09",
 		  "cookie.edit.failed.storage-failed": "\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5",
 		  "cookie.edit.failed.network": "\u7F51\u7EDC\u9519\u8BEF\uFF0C\u672A\u4FDD\u5B58",
+		  "cookie.save.warn.force-on-http": "\u5F53\u524D\u5165\u53E3\u975E TLS\uFF1A\u5F3A\u5236\u5F00\u542F\u540E\uFF0C\u7ECF\u6B64\u660E\u6587\u5165\u53E3\u767B\u5F55\u5C06\u7ACB\u5373\u5931\u6548\uFF08\u6D4F\u89C8\u5668\u62D2\u7EDD\u4FDD\u5B58 Secure Cookie\uFF09\u3002\u8BF7\u6539\u7528 HTTPS \u5165\u53E3\u8BBE\u7F6E\uFF0C\u6216\u5148\u4E3A\u7F51\u5173\u524D\u7F6E TLS\uFF08\u53CD\u5411\u4EE3\u7406\u9700\u900F\u4F20 X-Forwarded-Proto: https\uFF09\u3002",
+		  "cookie.save.note.secure-leftover": "\u63D0\u793A\uFF1A\u82E5\u6D4F\u89C8\u5668\u6B64\u524D\u7ECF HTTPS \u8BBF\u95EE\u8FC7\u672C\u7F51\u5173\uFF0C\u4ECD\u4FDD\u7559\u7740\u5E26 Secure \u7684\u65E7\u4F1A\u8BDD Cookie\u2014\u2014\u672C\u660E\u6587\u5165\u53E3\u65E0\u6CD5\u8986\u76D6\u5B83\u3002\u8BF7\u6539\u7528 HTTPS \u5165\u53E3\u91CD\u65B0\u6267\u884C\u6B64\u64CD\u4F5C\uFF0C\u6216\u5728\u6D4F\u89C8\u5668\u4E2D\u6E05\u9664\u672C\u7AD9\u70B9 Cookie\u3002",
 		  "about.title": "\u5173\u4E8E",
 		  "about.version": "\u5F53\u524D\u7248\u672C",
 		  "about.unknown": "\u672A\u77E5",
@@ -287,6 +289,8 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.failed.storage-unavailable": "This deployment cannot store panel changes (credential-record service unavailable)",
 		  "cookie.edit.failed.storage-failed": "Save failed \u2014 retry later",
 		  "cookie.edit.failed.network": "Network error \u2014 not saved",
+		  "cookie.save.warn.force-on-http": "This entry is not TLS: forcing Secure on breaks logins over this plaintext entry (browsers refuse to store Secure cookies). Use an HTTPS entry instead, or front the gateway with TLS (a reverse proxy must forward X-Forwarded-Proto: https).",
+		  "cookie.save.note.secure-leftover": "Note: if this browser previously reached the gateway over HTTPS, a Secure session cookie may still be stored \u2014 a plaintext entry cannot overwrite it. Repeat this change from an HTTPS entry, or clear this site's cookies in the browser.",
 		  "about.title": "About",
 		  "about.version": "Current version",
 		  "about.unknown": "unknown",
@@ -402,6 +406,7 @@ window.__ModuleLoader__.load({
 		  const [cookieSecureDraft, setCookieSecureDraft] = (0, import_react.useState)(null);
 		  const [savingCookieSecure, setSavingCookieSecure] = (0, import_react.useState)(false);
 		  const [cookieSecureHint, setCookieSecureHint] = (0, import_react.useState)(null);
+		  const [cookieSecureRequestSecure, setCookieSecureRequestSecure] = (0, import_react.useState)(false);
 		  const [isHttps] = (0, import_react.useState)(() => typeof window !== "undefined" && window.location.protocol === "https:");
 		  const [setupDone, setSetupDone] = (0, import_react.useState)(false);
 		  const [backupCodes, setBackupCodes] = (0, import_react.useState)([]);
@@ -441,6 +446,10 @@ window.__ModuleLoader__.load({
 		    }
 		  }
 		  async function saveCookieSecure() {
+		    if (cookieSecureDraft === true && !cookieSecureRequestSecure) {
+		      setCookieSecureHint({ tone: "warn", text: t("cookie.save.warn.force-on-http") });
+		      return;
+		    }
 		    setSavingCookieSecure(true);
 		    setCookieSecureHint(null);
 		    try {
@@ -450,7 +459,8 @@ window.__ModuleLoader__.load({
 		        setCookieSecure(mode);
 		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
 		        setCookieSecureDraft(null);
-		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") });
+		        const leftover = mode !== true && !cookieSecureRequestSecure ? " " + t("cookie.save.note.secure-leftover") : "";
+		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") + leftover });
 		      } else {
 		        const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? "network";
 		        setCookieSecureHint({ tone: "warn", text: t(`cookie.edit.failed.${code}`) });
@@ -471,7 +481,8 @@ window.__ModuleLoader__.load({
 		        setCookieSecure(mode);
 		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
 		        setCookieSecureDraft(null);
-		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") });
+		        const leftover = mode !== true && !cookieSecureRequestSecure ? " " + t("cookie.save.note.secure-leftover") : "";
+		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") + leftover });
 		      } else {
 		        setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
 		      }
@@ -491,6 +502,7 @@ window.__ModuleLoader__.load({
 		        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : "auto";
 		        setCookieSecure(mode);
 		        setCookieSecureSource(cfg.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureRequestSecure(cfg.requestSecure === void 0 ? isHttps : cfg.requestSecure === true);
 		        setCookieSecureDraft(null);
 		      }
 		    } catch (err) {

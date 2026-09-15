@@ -415,6 +415,32 @@ test('cookieSecure panel override: set through the API, effective immediately', 
   assert.equal(setBody.cookieSecureSource, 'panel')
   assert.equal(await store.read(), false, 'the override must be persisted through the store')
   assert.ok(audit.some((e) => e.kind === 'cookie-secure-change'), 'the change must be audited')
+  // The success response reissues the caller's own session cookie under the
+  // new policy: same token, Secure dropped (mode false) — the STORED cookie
+  // changes on this response, not on the next login.
+  assert.equal(cookieValue(set.headers), cookie,
+    'the reissue must keep the caller\'s session token alive')
+  assert.ok(!rawSetCookie(set.headers).includes('Secure'),
+    'reissue under mode false must drop Secure (plain-HTTP entry)')
+
+  // ... and over a secure-proxy entry the reissue REPLACES a stored Secure
+  // cookie: the overwrite is accepted because the origin is https, so
+  // https → panel "off" takes effect immediately.
+  const setTrue = await request('/login-api/cookie-secure', {
+    method: 'POST', body: { mode: true }, cookie,
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(setTrue.status, 200)
+  assert.ok(rawSetCookie(setTrue.headers).includes('Secure'),
+    'reissue under mode true must arm Secure; a secure origin accepts the overwrite')
+  assert.equal(cookieValue(setTrue.headers), cookie, 'the reissued token must stay valid')
+  const setFalse = await request('/login-api/cookie-secure', {
+    method: 'POST', body: { mode: false }, cookie,
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(setFalse.status, 200)
+  assert.ok(!rawSetCookie(setFalse.headers).includes('Secure'),
+    'a secure origin may drop Secure from the stored cookie in the same response')
 
   await setPassword('GoodPass2')
   const login2 = await request('/login/auth', {
@@ -442,8 +468,17 @@ test('cookieSecure panel override: set through the API, effective immediately', 
   assert.equal(reset.status, 200)
   assert.equal(JSON.parse(reset.body).cookieSecureSource, 'deployment')
   assert.equal(await store.read(), null, 'the record must be cleared')
+  assert.ok(!rawSetCookie(reset.headers).includes('Secure'),
+    'the reset reissue follows the restored composition (auto over plain HTTP → no Secure)')
   const settings2 = await request('/login-api/settings', { cookie: cookie2 })
   assert.equal(JSON.parse(settings2.body).config['dsh-auth-gateway'].cookieSecureSource, 'deployment')
+  assert.equal(JSON.parse(settings2.body).requestSecure, false,
+    'settings must report the plain-HTTP entry as not secure')
+  const settingsHttps = await request('/login-api/settings', {
+    cookie: cookie2, headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(JSON.parse(settingsHttps.body).requestSecure, true,
+    'settings must report a TLS-proxied entry as secure')
   assert.ok(audit.some((e) => e.kind === 'cookie-secure-change' && e.reason === 'reset'),
     'the reset must be audited too')
 })

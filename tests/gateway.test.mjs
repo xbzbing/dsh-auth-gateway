@@ -603,6 +603,38 @@ test('cookieSecure panel write shares the global auth rate budget', async () => 
     'the rate-limited write must be audited like the other security-state transitions')
 })
 
+test('cookieSecure reset wins over a body mode (reset:true + mode)', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+  // Plant an override first so the reset has something to drop.
+  const set = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(set.status, 200)
+  assert.equal(await store.read(), false)
+  // reset:true together with a mode must follow RESET (the mode is ignored —
+  // gateway-panel-api treats reset as the dominant intent).
+  const reset = await request('/login-api/cookie-secure', {
+    method: 'POST', body: { mode: false, reset: true }, cookie,
+  })
+  assert.equal(reset.status, 200)
+  assert.equal(JSON.parse(reset.body).cookieSecureSource, 'deployment')
+  assert.equal(await store.read(), null, 'the override must be cleared despite the mode field')
+})
+
+test('cookieSecure body {reset:false} without a mode answers invalid-mode', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+  // reset:false is treated like an absent flag; without a mode the body is
+  // invalid — and nothing is written either way.
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { reset: false }, cookie })
+  assert.equal(res.status, 400)
+  assert.equal(JSON.parse(res.body).error, 'invalid-mode')
+  assert.equal(await store.read(), null, 'an invalid body must not touch the store')
+})
+
 test('cookieSecure panel write without a record store answers storage-unavailable', async () => {
   // Default startGateway carries no override store (dsh ≤ 0.1.1 surface).
   const cookie = await login()

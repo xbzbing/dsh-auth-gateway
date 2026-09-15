@@ -372,6 +372,11 @@ window.__ModuleLoader__.load({
 		    }
 		  );
 		}
+		var COOKIE_SECURE_FAILURE_CODES = {
+		  "invalid-mode": "invalid-mode",
+		  "storage-unavailable": "storage-unavailable",
+		  "storage-failed": "storage-failed"
+		};
 		function Pill({ children, tone = "neutral" }) {
 		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : tone === "warn" ? { color: T.danger, background: T.dangerSoft } : { color: T.textSecondary, background: T.hover };
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
@@ -441,10 +446,13 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.setCookieSecure(cookieSecureDraft);
 		      if (data?.ok === true) {
-		        await loadSettings();
+		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        setCookieSecure(mode);
+		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureDraft(null);
 		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") });
 		      } else {
-		        const code = data?.error === "invalid-mode" ? "invalid-mode" : data?.error === "storage-unavailable" ? "storage-unavailable" : data?.error === "storage-failed" ? "storage-failed" : "network";
+		        const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? "network";
 		        setCookieSecureHint({ tone: "warn", text: t(`cookie.edit.failed.${code}`) });
 		      }
 		    } catch {
@@ -459,7 +467,10 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.resetCookieSecure();
 		      if (data?.ok === true) {
-		        await loadSettings();
+		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        setCookieSecure(mode);
+		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureDraft(null);
 		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") });
 		      } else {
 		        setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });

@@ -284,6 +284,13 @@ function Button({ variant = 'primary', disabled, onClick, children, full, style 
   )
 }
 
+/** Server error codes the cookie-Secure save may answer, mapped to message keys. */
+const COOKIE_SECURE_FAILURE_CODES = {
+  'invalid-mode': 'invalid-mode',
+  'storage-unavailable': 'storage-unavailable',
+  'storage-failed': 'storage-failed',
+}
+
 /** Small status badge (success / warn / neutral tone). */
 function Pill({ children, tone = 'neutral' }) {
   const toneStyle = tone === 'success'
@@ -389,12 +396,16 @@ function UserSettingsPanel({ api, t }) {
     try {
       const data = await api.setCookieSecure(cookieSecureDraft)
       if (data?.ok === true) {
-        await loadSettings()
+        // The POST answers the new effective policy; patch local state
+        // instead of re-fetching the whole settings snapshot (it would
+        // re-read OTP state we did not touch, for zero benefit).
+        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : 'auto'
+        setCookieSecure(mode)
+        setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
+        setCookieSecureDraft(null)
         setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') })
       } else {
-        const code = data?.error === 'invalid-mode' ? 'invalid-mode'
-          : data?.error === 'storage-unavailable' ? 'storage-unavailable'
-            : data?.error === 'storage-failed' ? 'storage-failed' : 'network'
+        const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? 'network'
         setCookieSecureHint({ tone: 'warn', text: t(`cookie.edit.failed.${code}`) })
       }
     } catch {
@@ -411,7 +422,10 @@ function UserSettingsPanel({ api, t }) {
     try {
       const data = await api.resetCookieSecure()
       if (data?.ok === true) {
-        await loadSettings()
+        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : 'auto'
+        setCookieSecure(mode)
+        setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
+        setCookieSecureDraft(null)
         setCookieSecureHint({ tone: 'success', text: t('cookie.edit.restored') })
       } else {
         setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
@@ -676,6 +690,9 @@ function UserSettingsPanel({ api, t }) {
           </p>
           <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select
+              // The select value is a string; booleans map via String() so
+              // 'auto'/'true'/'false' never collide (mirrored by the parse
+              // in the onChange handler below).
               value={String(cookieSecureDraft ?? cookieSecure)}
               onChange={(e) => { const v = e.target.value; setCookieSecureDraft(v === 'true' ? true : v === 'false' ? false : 'auto') }}
               style={{

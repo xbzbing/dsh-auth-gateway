@@ -269,8 +269,13 @@ test('login page post-login probe is routed through __basePath (sub-path safe)',
   // old behavior, masking the Secure-cookie collision it exists to surface).
   const { loginPageHtml } = await import('../lib/login-page.js')
   const sub = loginPageHtml({ mode: 'auth', basePath: '/dsh' })
-  assert.ok(sub.includes("__basePath + '/login-api/session'"),
-    'probe URL must be built from __basePath')
+  // The probe function takes basePath as an argument (it is unit-executed
+  // from its exported source); the call site must pass the injected
+  // __ basePath so sub-path deployments probe their own prefix.
+  assert.ok(sub.includes("basePath + '/login-api/session'"),
+    'probe URL must be built from the basePath argument')
+  assert.ok(sub.includes('__basePath,'),
+    'the login onOk call must pass the injected __basePath to the probe')
 })
 
 // ── auth audit events ───────────────────────────────────────────────────

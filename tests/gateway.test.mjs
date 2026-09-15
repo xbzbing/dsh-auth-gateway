@@ -16,6 +16,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LoginGateway } from '../lib/gateway.js'
+import { PROBE_SESSION_SOURCE } from '../lib/login-page.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
 import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
 import { generateTOTP } from '../lib/totp.js'
@@ -485,6 +486,56 @@ test('session probe answers cookie liveness for the login page self-check', asyn
   assert.equal(afterChange.status, 401)
 })
 
+/** Instantiate the EXACT probe code the login page embeds, with injectable
+ * ERRORS and fetch (new Function shadows both globals). */
+function makeProbe(errors, fetchImpl) {
+  return new Function('ERRORS', 'fetch', PROBE_SESSION_SOURCE + '\nreturn probeSession')(errors, fetchImpl)
+}
+
+test('probeSession source: 200 lets the login proceed untouched', async () => {
+  const calls = []
+  const probe = makeProbe({}, async (url) => { calls.push(url); return { status: 200 } })
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  assert.equal(await probe(err, btn, ''), true)
+  assert.deepEqual(calls, ['/login-api/session'], 'root basePath probes the root-absolute path')
+  assert.equal(err.textContent, '', 'no message on success')
+  assert.equal(btn.disabled, true, 'button stays in its post-submit state')
+  const probe2 = makeProbe({}, async () => ({ status: 200 }))
+  assert.equal(await probe2(err, btn, '/dsh'), true)
+  assert.deepEqual(calls.concat('/dsh/login-api/session').slice(1), ['/dsh/login-api/session'],
+    'the probe URL is basePath + /login-api/session')
+})
+
+test('probeSession source: 401 blocks navigation and surfaces the message', async () => {
+  const msg = '登录未生效：浏览器未能保存会话 Cookie。'
+  const probe = makeProbe({ 'session-not-kept': msg }, async () => ({ status: 401 }))
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  assert.equal(await probe(err, btn, ''), false)
+  assert.equal(err.textContent, msg, 'the deadlock message must be the dictionary text')
+  assert.equal(btn.disabled, false, 'retry must be re-enabled — the fix is on the other entry')
+})
+
+test('probeSession source: any other status or a network error keeps the legacy behavior', async () => {
+  for (const status of [500, 302, 404]) {
+    const err = { textContent: '' }
+    const btn = { disabled: true }
+    const probe = makeProbe({}, async () => ({ status }))
+    assert.equal(await probe(err, btn, ''), true,
+      `status ${status} must not block a working login`)
+    assert.equal(err.textContent, '', `status ${status} must not surface a message`)
+    assert.equal(btn.disabled, true, `status ${status} must not touch the button`)
+  }
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  const probe = makeProbe({}, async () => { throw new Error('network down') })
+  assert.equal(await probe(err, btn, ''), true,
+    'a probe network error must never block a working login')
+  assert.equal(err.textContent, '')
+  assert.equal(btn.disabled, true)
+})
+
 test('session probe answers 200 for onboarding sessions (the cookie took)', async () => {
   // The probe's only question is "did the cookie take?" — an onboarding
   // session is live, so it must answer 200 even though /login-api/settings
@@ -497,6 +548,43 @@ test('session probe answers 200 for onboarding sessions (the cookie took)', asyn
   assert.equal(probe.status, 200, 'onboarding sessions are live sessions')
   // Onboarding sessions keep gateway-local access (OTP/settings flow); the
   // onboarding GATE lives on the dsh upstream (/api/*), covered elsewhere.
+})
+
+test('cookieSecure panel write failure: 500, reported, and memory not polluted', async () => {
+  // A store whose write path fails (disk full, permissions, service error):
+  // the panel gets the generic storage-failed code, the gateway reports the
+  // cause through onError, and — the invariant that matters — the live
+  // decision is NOT flipped (persist-first ordering), so the effective
+  // policy stays exactly what the deployment configured.
+  const store = {
+    read: async () => null,
+    write: async () => { throw new Error('EACCES: record store read-only') },
+    clear: async () => { throw new Error('EACCES: record store read-only') },
+  }
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const reported = []
+  gateway.onError = (err) => reported.push(err.message)
+  const cookie = await login()
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(res.status, 500)
+  assert.equal(JSON.parse(res.body).error, 'storage-failed')
+  assert.equal(reported.length, 1, 'the failure cause must reach the error sink')
+  assert.ok(reported[0].includes('EACCES'), 'the underlying cause must be reported, not swallowed')
+
+  // The live decision is untouched: settings still reports the deployment
+  // policy, and a proxy-declared https login still arms Secure (auto).
+  const settings = await request('/login-api/settings', { cookie })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, 'auto', 'a failed write must not flip the live decision')
+  assert.equal(cfg.cookieSecureSource, 'deployment')
+  await setPassword('GoodPass2')
+  const login2 = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass2' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.ok(rawSetCookie(login2.headers).includes('Secure'),
+    'the transport rule keeps working after a failed panel write')
 })
 
 test('cookieSecure panel write without a record store answers storage-unavailable', async () => {

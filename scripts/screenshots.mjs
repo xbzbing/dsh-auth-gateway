@@ -23,8 +23,8 @@
  */
 
 import { chromium } from 'playwright'
-import path from 'node:path'
-import { mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
+import { resolveChromiumPath } from './chromium.mjs'
 import { generateTOTP } from '../lib/totp.js'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8002'
@@ -33,33 +33,12 @@ const INITIAL = process.env.INITIAL_PASSWORD
 const OUT = new URL('../docs/assets/', import.meta.url).pathname
 mkdirSync(OUT, { recursive: true })
 
-/**
- * Chromium resolution order (first hit wins):
- *   1. CHROMIUM_PATH env — explicit executable
- *   2. playwright's own registry (ms-playwright cache, chromium-* dirs)
- *   3. system chromium binaries on PATH (/usr/bin/chromium etc.)
- */
-function resolveChromium() {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH
-  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH
-    || path.join(process.env.HOME ?? '', '.cache', 'ms-playwright')
-  if (existsSync(cache)) {
-    for (const dir of fs.readdirSync(cache).sort().reverse()) {
-      if (!dir.startsWith('chromium-')) continue
-      for (const rel of ['chrome-linux64/chrome', 'chrome-linux/chrome']) {
-        const exe = path.join(cache, dir, rel)
-        if (existsSync(exe)) return exe
-      }
-    }
-  }
-  for (const name of ['chromium', 'chromium-browser', 'google-chrome']) {
-    const exe = `/usr/bin/${name}`
-    if (existsSync(exe)) return exe
-  }
-  return undefined
-}
-
-const executablePath = resolveChromium()
+// Locate the Chromium executable dynamically (scripts/chromium.mjs): the
+// cache directory name embeds the playwright revision and changes on every
+// upgrade, so a hard-coded path would break on the next install. (This also
+// replaces the old Linux-only probe, which referenced fs.readdirSync without
+// importing fs and only understood chrome-linux layouts.)
+const executablePath = resolveChromiumPath({ playwrightExecutable: chromium.executablePath() })
 if (!executablePath) {
   console.error('no chromium found: set CHROMIUM_PATH, run `npx playwright install chromium`,'
     + ' or install a system chromium')

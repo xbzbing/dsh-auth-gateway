@@ -19,6 +19,10 @@
     # OTP routes (/otp/setup, the onboarding QR step, the 2FA login) are only
     # reachable when OTP is enabled in the composition.
     otpEnabled: true
+    # Whole-object replacement again: the web-app schema default for
+    # openBrowser is TRUE, so omitting it makes --no-open ineffective and pops
+    # a browser tab pointing at the internal port while capturing.
+    openBrowser: !!js ctx.webStartup.openBrowser
     # Screenshots are captured offline-friendly: no update check on panel open.
     # (The panel's own button still works, but nothing is captured from it.)
     updateCheck: false

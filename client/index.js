@@ -168,7 +168,7 @@ window.__ModuleLoader__.load({
 		  "password.confirm": "\u786E\u8BA4\u65B0\u5BC6\u7801",
 		  "password.submit": "\u786E\u8BA4\u4FEE\u6539",
 		  "password.progress": "\u4FEE\u6539\u4E2D...",
-		  "session.title": "\u767B\u5F55\u4F1A\u8BDD",
+		  "session.title": "\u4F1A\u8BDD\u7BA1\u7406",
 		  "session.loggedIn": "\u5DF2\u767B\u5F55",
 		  "session.desc": "\u4F1A\u8BDD\u6709\u6548\u671F 30 \u5929\uFF1Bdsh \u91CD\u542F\u540E\u9700\u91CD\u65B0\u767B\u5F55\u3002",
 		  "session.logout": "\u9000\u51FA\u767B\u5F55",
@@ -183,6 +183,20 @@ window.__ModuleLoader__.load({
 		  "cookie.state.forced-http": "\u5DF2\u5F3A\u5236\u5F00\u542F\uFF1A\u4F46\u5F53\u524D\u4E3A\u660E\u6587 HTTP\uFF0C\u6D4F\u89C8\u5668\u5C06\u62D2\u7EDD\u4FDD\u5B58 Secure Cookie\uFF0C\u767B\u5F55\u4F1A\u7ACB\u5373\u5931\u6548\u2014\u2014\u8BF7\u5148\u542F\u7528 TLS\uFF0C\u6216\u5C06\u914D\u7F6E\u6539\u56DE auto\u3002",
 		  "cookie.state.off": "\u5DF2\u663E\u5F0F\u5173\u95ED\uFF1ACookie \u53EF\u7ECF\u660E\u6587\u94FE\u8DEF\u53D1\u9001\uFF08\u4EC5\u5EFA\u8BAE\u5728\u53EF\u4FE1\u5185\u7F51\u4F7F\u7528\uFF1B\u660E\u6587\u4E0B\u4EFB\u4F55\u76D1\u542C\u8005\u90FD\u80FD\u6355\u83B7\u4F1A\u8BDD\uFF09\u3002",
 		  "cookie.configHint": "\u7531\u90E8\u7F72\u914D\u7F6E cookieSecure \u63A7\u5236\uFF08auto / true / false\uFF1B\u5F53\u524D\uFF1A{mode}\uFF09",
+		  "cookie.source.panel": "\u6765\u6E90\uFF1A\u9762\u677F\u8BBE\u7F6E\uFF08\u5DF2\u6301\u4E45\u5316\uFF0C\u4F18\u5148\u4E8E\u90E8\u7F72\u914D\u7F6E\uFF1B\u53EF\u201C\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E\u201D\u64A4\u9500\uFF09",
+		  "cookie.source.deployment": "\u6765\u6E90\uFF1A\u90E8\u7F72\u914D\u7F6E",
+		  "cookie.edit.mode.auto": "\u81EA\u52A8\uFF08\u8DDF\u968F\u8FDE\u63A5\uFF09",
+		  "cookie.edit.mode.true": "\u5F3A\u5236\u5F00\u542F",
+		  "cookie.edit.mode.false": "\u5173\u95ED",
+		  "cookie.edit.save": "\u4FDD\u5B58",
+		  "cookie.edit.saving": "\u4FDD\u5B58\u4E2D...",
+		  "cookie.edit.saved": "\u5DF2\u4FDD\u5B58\uFF0C\u65B0\u7B56\u7565\u7ACB\u5373\u751F\u6548",
+		  "cookie.edit.restored": "\u5DF2\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E\uFF0C\u7B56\u7565\u7531\u90E8\u7F72\u914D\u7F6E\u51B3\u5B9A",
+		  "cookie.edit.reset": "\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E",
+		  "cookie.edit.failed.invalid-mode": "\u65E0\u6548\u7684\u6A21\u5F0F\u503C",
+		  "cookie.edit.failed.storage-unavailable": "\u5F53\u524D\u90E8\u7F72\u4E0D\u652F\u6301\u9762\u677F\u4FEE\u6539\uFF08\u51ED\u636E\u8BB0\u5F55\u670D\u52A1\u4E0D\u53EF\u7528\uFF09",
+		  "cookie.edit.failed.storage-failed": "\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5",
+		  "cookie.edit.failed.network": "\u7F51\u7EDC\u9519\u8BEF\uFF0C\u672A\u4FDD\u5B58",
 		  "about.title": "\u5173\u4E8E",
 		  "about.version": "\u5F53\u524D\u7248\u672C",
 		  "about.unknown": "\u672A\u77E5",
@@ -244,7 +258,7 @@ window.__ModuleLoader__.load({
 		  "password.confirm": "Confirm new password",
 		  "password.submit": "Update",
 		  "password.progress": "Updating...",
-		  "session.title": "Session",
+		  "session.title": "Session Management",
 		  "session.loggedIn": "Signed in",
 		  "session.desc": "Sessions last 30 days; a dsh restart signs everyone out.",
 		  "session.logout": "Sign out",
@@ -259,6 +273,20 @@ window.__ModuleLoader__.load({
 		  "cookie.state.forced-http": "Forced on, but this connection is plain HTTP: the browser will refuse to store the Secure cookie and logins fail immediately \u2014 enable TLS first, or set the config back to auto.",
 		  "cookie.state.off": "Explicitly off: the cookie may travel in clear text (trusted LAN only; any listener on the link can capture the session).",
 		  "cookie.configHint": "Controlled by the deployment config cookieSecure (auto / true / false; current: {mode})",
+		  "cookie.source.panel": "Source: panel override (persisted, takes precedence over the deployment config; \u201CRestore deployment config\u201D undoes it)",
+		  "cookie.source.deployment": "Source: deployment config",
+		  "cookie.edit.mode.auto": "Auto (follow the connection)",
+		  "cookie.edit.mode.true": "Force on",
+		  "cookie.edit.mode.false": "Off",
+		  "cookie.edit.save": "Save",
+		  "cookie.edit.saving": "Saving...",
+		  "cookie.edit.saved": "Saved \u2014 the new policy applies immediately",
+		  "cookie.edit.restored": "Restored \u2014 the deployment config rules again",
+		  "cookie.edit.reset": "Restore deployment config",
+		  "cookie.edit.failed.invalid-mode": "Invalid mode value",
+		  "cookie.edit.failed.storage-unavailable": "This deployment cannot store panel changes (credential-record service unavailable)",
+		  "cookie.edit.failed.storage-failed": "Save failed \u2014 retry later",
+		  "cookie.edit.failed.network": "Network error \u2014 not saved",
 		  "about.title": "About",
 		  "about.version": "Current version",
 		  "about.unknown": "unknown",
@@ -344,6 +372,11 @@ window.__ModuleLoader__.load({
 		    }
 		  );
 		}
+		var COOKIE_SECURE_FAILURE_CODES = {
+		  "invalid-mode": "invalid-mode",
+		  "storage-unavailable": "storage-unavailable",
+		  "storage-failed": "storage-failed"
+		};
 		function Pill({ children, tone = "neutral" }) {
 		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : tone === "warn" ? { color: T.danger, background: T.dangerSoft } : { color: T.textSecondary, background: T.hover };
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
@@ -365,6 +398,10 @@ window.__ModuleLoader__.load({
 		  const [showQRModal, setShowQRModal] = (0, import_react.useState)(false);
 		  const [qrData, setQrData] = (0, import_react.useState)(null);
 		  const [cookieSecure, setCookieSecure] = (0, import_react.useState)("auto");
+		  const [cookieSecureSource, setCookieSecureSource] = (0, import_react.useState)("deployment");
+		  const [cookieSecureDraft, setCookieSecureDraft] = (0, import_react.useState)(null);
+		  const [savingCookieSecure, setSavingCookieSecure] = (0, import_react.useState)(false);
+		  const [cookieSecureHint, setCookieSecureHint] = (0, import_react.useState)(null);
 		  const [isHttps] = (0, import_react.useState)(() => typeof window !== "undefined" && window.location.protocol === "https:");
 		  const [setupDone, setSetupDone] = (0, import_react.useState)(false);
 		  const [backupCodes, setBackupCodes] = (0, import_react.useState)([]);
@@ -403,6 +440,47 @@ window.__ModuleLoader__.load({
 		      setCheckingUpdate(false);
 		    }
 		  }
+		  async function saveCookieSecure() {
+		    setSavingCookieSecure(true);
+		    setCookieSecureHint(null);
+		    try {
+		      const data = await api.setCookieSecure(cookieSecureDraft);
+		      if (data?.ok === true) {
+		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        setCookieSecure(mode);
+		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureDraft(null);
+		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") });
+		      } else {
+		        const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? "network";
+		        setCookieSecureHint({ tone: "warn", text: t(`cookie.edit.failed.${code}`) });
+		      }
+		    } catch {
+		      setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
+		    } finally {
+		      setSavingCookieSecure(false);
+		    }
+		  }
+		  async function resetCookieSecure() {
+		    setSavingCookieSecure(true);
+		    setCookieSecureHint(null);
+		    try {
+		      const data = await api.resetCookieSecure();
+		      if (data?.ok === true) {
+		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        setCookieSecure(mode);
+		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureDraft(null);
+		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") });
+		      } else {
+		        setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
+		      }
+		    } catch {
+		      setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
+		    } finally {
+		      setSavingCookieSecure(false);
+		    }
+		  }
 		  async function loadSettings() {
 		    try {
 		      const data = await api.getSettings();
@@ -412,6 +490,8 @@ window.__ModuleLoader__.load({
 		        setDigits(cfg.otpDigits || 6);
 		        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : "auto";
 		        setCookieSecure(mode);
+		        setCookieSecureSource(cfg.cookieSecureSource === "panel" ? "panel" : "deployment");
+		        setCookieSecureDraft(null);
 		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.loadSettings", { message: err.message }) });
@@ -537,7 +617,7 @@ window.__ModuleLoader__.load({
 		  const secureEffective = cookieSecureEffective(secureState);
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: {
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { style: {
 		        margin: "0 0 4px",
 		        fontSize: "16px",
 		        lineHeight: "24px",
@@ -546,7 +626,21 @@ window.__ModuleLoader__.load({
 		        display: "flex",
 		        alignItems: "center",
 		        gap: "8px"
-		      }, children: t("nav") }),
+		      }, children: [
+		        t("nav"),
+		        versionInfo !== null && versionInfo.version !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: {
+		          fontSize: "12px",
+		          lineHeight: "18px",
+		          padding: "0 8px",
+		          borderRadius: "9px",
+		          background: T.hover,
+		          color: T.textSecondary,
+		          fontWeight: 400
+		        }, children: [
+		          "v",
+		          versionInfo.version
+		        ] })
+		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: t("header.desc") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
@@ -591,78 +685,102 @@ window.__ModuleLoader__.load({
 		          ] })
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		          "\u{1F511} ",
-		          t("password.title")
-		        ] }) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("password.desc") }),
-		        !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: t("password.change") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		        display: "flex",
+		        gap: "12px",
+		        flexWrap: "wrap",
+		        alignItems: "stretch",
+		        marginBottom: "12px"
+		      }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          flex: "1 1 0",
+		          minWidth: "200px",
 		          display: "flex",
 		          flexDirection: "column",
-		          gap: "10px",
-		          padding: "12px",
-		          background: T.bg2,
+		          border: `1px solid ${T.border}`,
 		          borderRadius: "10px",
-		          border: `1px solid ${T.border}`
+		          padding: "12px"
 		        }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		            "input",
-		            {
-		              type: "password",
-		              placeholder: t("password.old"),
-		              value: oldPassword,
-		              onChange: (e) => setOldPassword(e.target.value),
-		              style: INPUT,
-		              ...focusProps
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		            "input",
-		            {
-		              type: "password",
-		              placeholder: t("password.new"),
-		              value: newPassword,
-		              onChange: (e) => setNewPassword(e.target.value),
-		              style: INPUT,
-		              ...focusProps
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		            "input",
-		            {
-		              type: "password",
-		              placeholder: t("password.confirm"),
-		              value: confirmPassword,
-		              onChange: (e) => setConfirmPassword(e.target.value),
-		              style: INPUT,
-		              ...focusProps,
-		              onKeyDown: (e) => {
-		                if (e.key === "Enter") changePassword();
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		            "\u{1F511} ",
+		            t("password.title")
+		          ] }) }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 10px" }, children: t("password.desc") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "auto", paddingTop: "8px" }, children: !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: t("password.change") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		            display: "flex",
+		            flexDirection: "column",
+		            gap: "10px",
+		            padding: "12px",
+		            background: T.bg2,
+		            borderRadius: "10px",
+		            border: `1px solid ${T.border}`
+		          }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		              "input",
+		              {
+		                type: "password",
+		                placeholder: t("password.old"),
+		                value: oldPassword,
+		                onChange: (e) => setOldPassword(e.target.value),
+		                style: INPUT,
+		                ...focusProps
 		              }
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? t("password.progress") : t("password.submit") }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
-		              setShowChangePassword(false);
-		              setOldPassword("");
-		              setNewPassword("");
-		              setConfirmPassword("");
-		            }, children: t("dialog.cancel") })
-		          ] })
-		        ] })
-		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		            "\u{1F512} ",
-		            t("session.title")
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("session.loggedIn") })
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		              "input",
+		              {
+		                type: "password",
+		                placeholder: t("password.new"),
+		                value: newPassword,
+		                onChange: (e) => setNewPassword(e.target.value),
+		                style: INPUT,
+		                ...focusProps
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		              "input",
+		              {
+		                type: "password",
+		                placeholder: t("password.confirm"),
+		                value: confirmPassword,
+		                onChange: (e) => setConfirmPassword(e.target.value),
+		                style: INPUT,
+		                ...focusProps,
+		                onKeyDown: (e) => {
+		                  if (e.key === "Enter") changePassword();
+		                }
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? t("password.progress") : t("password.submit") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
+		                setShowChangePassword(false);
+		                setOldPassword("");
+		                setNewPassword("");
+		                setConfirmPassword("");
+		              }, children: t("dialog.cancel") })
+		            ] })
+		          ] }) })
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("session.desc") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") })
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		          flex: "1 1 0",
+		          minWidth: "200px",
+		          display: "flex",
+		          flexDirection: "column",
+		          border: `1px solid ${T.border}`,
+		          borderRadius: "10px",
+		          padding: "12px"
+		        }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
+		              "\u{1F512} ",
+		              t("session.title")
+		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("session.loggedIn") })
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 10px" }, children: t("session.desc") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "auto", paddingTop: "8px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") }) })
+		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
@@ -674,7 +792,49 @@ window.__ModuleLoader__.load({
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("cookie.desc") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: t(`cookie.state.${secureState}`) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 0", fontSize: "12px", lineHeight: "18px", color: T.textTertiary }, children: t("cookie.configHint", { mode: String(cookieSecure) }) })
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: "8px 0 0", fontSize: "12px", lineHeight: "18px", color: T.textTertiary }, children: [
+		          t("cookie.configHint", { mode: String(cookieSecure) }),
+		          " \xB7 ",
+		          cookieSecureSource === "panel" ? t("cookie.source.panel") : t("cookie.source.deployment")
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: "10px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+		            "select",
+		            {
+		              value: String(cookieSecureDraft ?? cookieSecure),
+		              onChange: (e) => {
+		                const v = e.target.value;
+		                setCookieSecureDraft(v === "true" ? true : v === "false" ? false : "auto");
+		              },
+		              style: {
+		                height: "32px",
+		                padding: "0 10px",
+		                borderRadius: "8px",
+		                border: `1px solid ${T.border}`,
+		                background: T.bg1,
+		                color: T.textPrimary,
+		                fontSize: "13px",
+		                lineHeight: "20px",
+		                fontFamily: "inherit",
+		                cursor: "pointer",
+		                outline: "none",
+		                minWidth: "150px"
+		              },
+		              children: [
+		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "auto", children: t("cookie.edit.mode.auto") }),
+		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "true", children: t("cookie.edit.mode.true") }),
+		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "false", children: t("cookie.edit.mode.false") })
+		              ]
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: saveCookieSecure, disabled: savingCookieSecure || cookieSecureDraft === null || cookieSecureDraft === cookieSecure, children: savingCookieSecure ? t("cookie.edit.saving") : t("cookie.edit.save") }),
+		          cookieSecureSource === "panel" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: resetCookieSecure, disabled: savingCookieSecure, children: t("cookie.edit.reset") }),
+		          cookieSecureHint !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
+		            fontSize: "12px",
+		            lineHeight: "18px",
+		            color: cookieSecureHint.tone === "warn" ? T.danger : T.textSecondary
+		          }, children: cookieSecureHint.text })
+		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
@@ -895,6 +1055,16 @@ window.__ModuleLoader__.load({
 		      method: "POST",
 		      headers: { "content-type": "application/json" },
 		      body: JSON.stringify({ oldPassword, newPassword })
+		    })).json(),
+		    setCookieSecure: async (mode) => (await fetch(BASE + "/login-api/cookie-secure", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ mode })
+		    })).json(),
+		    resetCookieSecure: async () => (await fetch(BASE + "/login-api/cookie-secure", {
+		      method: "POST",
+		      headers: { "content-type": "application/json" },
+		      body: JSON.stringify({ reset: true })
 		    })).json(),
 		    logout: async () => (await fetch(BASE + "/login/logout", { method: "POST" })).json()
 		  };

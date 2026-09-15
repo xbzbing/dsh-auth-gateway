@@ -16,6 +16,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LoginGateway } from '../lib/gateway.js'
+import { PROBE_SESSION_SOURCE } from '../lib/login-page.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
 import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
 import { generateTOTP } from '../lib/totp.js'
@@ -58,7 +59,7 @@ function closeUpstream() {
 
 let gateway, gatewayPort, home
 
-async function startGateway(policy, cookieSecure) {
+async function startGateway(policy, cookieSecure, cookieSecureOverride, cookieSecureOverrideStore) {
   home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
@@ -68,6 +69,8 @@ async function startGateway(policy, cookieSecure) {
     upstreamPort,
     ...(policy !== undefined ? { policy } : {}),
     ...(cookieSecure !== undefined ? { cookieSecure } : {}),
+    ...(cookieSecureOverride !== undefined ? { cookieSecureOverride } : {}),
+    ...(cookieSecureOverrideStore !== undefined ? { cookieSecureOverrideStore } : {}),
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -192,6 +195,12 @@ test('fresh install: /login renders the login page; /login/auth answers uniforml
   assert.equal(page.status, 200)
   assert.ok(page.body.includes('请输入访问密码'))
   assert.ok(!page.body.includes('设置密码'), 'the legacy setup form must be gone')
+  assert.ok(page.body.includes('/login-api/session'), 'login page must carry the post-login session probe')
+  // The probe's 401 branch writes ERRORS['session-not-kept']; if the key is
+  // missing from the page's dictionary subset (errorsFor is key-filtered) the
+  // message renders as an empty string and the deadlock stays silent.
+  assert.ok(page.body.includes('"session-not-kept":'),
+    'login page dictionary must carry the probe message (a missing key renders an empty error)')
 
   // One uniform 401: nothing reveals whether a password exists yet.
   const res = await request('/login/auth', { method: 'POST', body: { password: 'whatever1' } })
@@ -372,6 +381,266 @@ test('settings API reports the cookie Secure policy for the panel card', async (
   assert.equal(res.status, 200)
   const cfg = JSON.parse(res.body).config['dsh-auth-gateway']
   assert.equal(cfg.cookieSecure, 'auto', 'the resolved policy must be readable by the panel')
+  assert.equal(cfg.cookieSecureSource, 'deployment', 'without an override the composition owns the policy')
+})
+
+/** In-memory stand-in for the plugin's credential-record store (index.js). */
+function memoryOverrideStore(initial = null) {
+  let stored = initial
+  return {
+    read: async () => stored,
+    write: async (mode) => { stored = mode },
+    clear: async () => { stored = null },
+  }
+}
+
+test('cookieSecure panel override: set through the API, effective immediately', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+
+  // Unauthenticated writes are refused like every safety-state change.
+  const anon = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' } })
+  assert.equal(anon.status, 401)
+
+  // Panel writes false: the next login must NOT arm Secure even behind a
+  // proxy-declared https link (the override beats the transport).
+  const audit = []
+  gateway.onAuthEvent = (e) => audit.push(e)
+  const set = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(set.status, 200)
+  const setBody = JSON.parse(set.body)
+  assert.equal(setBody.cookieSecure, false)
+  assert.equal(setBody.cookieSecureSource, 'panel')
+  assert.equal(await store.read(), false, 'the override must be persisted through the store')
+  assert.ok(audit.some((e) => e.kind === 'cookie-secure-change'), 'the change must be audited')
+
+  await setPassword('GoodPass2')
+  const login2 = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass2' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(login2.status, 200)
+  assert.ok(!rawSetCookie(login2.headers).includes('Secure'),
+    'the panel override false must win over the proxy https header')
+  const cookie2 = cookieValue(login2.headers)
+
+  // The settings card shows the panel source + effective mode.
+  const settings = await request('/login-api/settings', { cookie: cookie2 })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, false)
+  assert.equal(cfg.cookieSecureSource, 'panel')
+
+  // Lookalike modes are rejected, not coerced.
+  const bad = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'yes' }, cookie: cookie2 })
+  assert.equal(bad.status, 400)
+  assert.equal(JSON.parse(bad.body).error, 'invalid-mode')
+
+  // Reset drops the override: the deployment config (auto) rules again.
+  const reset = await request('/login-api/cookie-secure', { method: 'POST', body: { reset: true }, cookie: cookie2 })
+  assert.equal(reset.status, 200)
+  assert.equal(JSON.parse(reset.body).cookieSecureSource, 'deployment')
+  assert.equal(await store.read(), null, 'the record must be cleared')
+  const settings2 = await request('/login-api/settings', { cookie: cookie2 })
+  assert.equal(JSON.parse(settings2.body).config['dsh-auth-gateway'].cookieSecureSource, 'deployment')
+  assert.ok(audit.some((e) => e.kind === 'cookie-secure-change' && e.reason === 'reset'),
+    'the reset must be audited too')
+})
+
+test('cookieSecure boot override (panel record) rules from the first login', async () => {
+  await stopGateway()
+  await startGateway(undefined, undefined, true) // as if the record held true at apply
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  assert.ok(rawSetCookie(res.headers).includes('Secure'),
+    'the persisted panel override must arm Secure from the very first login')
+  const cookie = cookieValue(res.headers)
+  const settings = await request('/login-api/settings', { cookie })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, true)
+  assert.equal(cfg.cookieSecureSource, 'panel')
+})
+
+test('session probe answers cookie liveness for the login page self-check', async () => {
+  // No cookie: 401.
+  const anon = await request('/login-api/session')
+  assert.equal(anon.status, 401)
+
+  // A personal login: 200 while the session lives, 401 after logout.
+  const cookie = await login()
+  const probe = await request('/login-api/session', { cookie })
+  assert.equal(probe.status, 200)
+  assert.deepEqual(JSON.parse(probe.body), { ok: true })
+  await request('/login/logout', { method: 'POST', body: {}, cookie })
+  const afterLogout = await request('/login-api/session', { cookie })
+  assert.equal(afterLogout.status, 401, 'a dead session must answer 401')
+
+  // Password change revokes every session — the old cookie dies too.
+  const cookie2 = await login('GoodPass1')
+  await request('/login/change', {
+    method: 'POST', body: { oldPassword: 'GoodPass1', newPassword: 'NewPass1!' }, cookie: cookie2,
+  })
+  const afterChange = await request('/login-api/session', { cookie: cookie2 })
+  assert.equal(afterChange.status, 401)
+})
+
+/** Instantiate the EXACT probe code the login page embeds, with injectable
+ * ERRORS and fetch (new Function shadows both globals). */
+function makeProbe(errors, fetchImpl) {
+  return new Function('ERRORS', 'fetch', PROBE_SESSION_SOURCE + '\nreturn probeSession')(errors, fetchImpl)
+}
+
+test('probeSession source: 200 lets the login proceed untouched', async () => {
+  const calls = []
+  const probe = makeProbe({}, async (url) => { calls.push(url); return { status: 200 } })
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  assert.equal(await probe(err, btn, ''), true)
+  assert.deepEqual(calls, ['/login-api/session'], 'root basePath probes the root-absolute path')
+  assert.equal(err.textContent, '', 'no message on success')
+  assert.equal(btn.disabled, true, 'button stays in its post-submit state')
+  const probe2 = makeProbe({}, async () => ({ status: 200 }))
+  assert.equal(await probe2(err, btn, '/dsh'), true)
+  assert.deepEqual(calls.concat('/dsh/login-api/session').slice(1), ['/dsh/login-api/session'],
+    'the probe URL is basePath + /login-api/session')
+})
+
+test('probeSession source: 401 blocks navigation and surfaces the message', async () => {
+  const msg = '登录未生效：浏览器未能保存会话 Cookie。'
+  const probe = makeProbe({ 'session-not-kept': msg }, async () => ({ status: 401 }))
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  assert.equal(await probe(err, btn, ''), false)
+  assert.equal(err.textContent, msg, 'the deadlock message must be the dictionary text')
+  assert.equal(btn.disabled, false, 'retry must be re-enabled — the fix is on the other entry')
+})
+
+test('probeSession source: any other status or a network error keeps the legacy behavior', async () => {
+  for (const status of [500, 302, 404]) {
+    const err = { textContent: '' }
+    const btn = { disabled: true }
+    const probe = makeProbe({}, async () => ({ status }))
+    assert.equal(await probe(err, btn, ''), true,
+      `status ${status} must not block a working login`)
+    assert.equal(err.textContent, '', `status ${status} must not surface a message`)
+    assert.equal(btn.disabled, true, `status ${status} must not touch the button`)
+  }
+  const err = { textContent: '' }
+  const btn = { disabled: true }
+  const probe = makeProbe({}, async () => { throw new Error('network down') })
+  assert.equal(await probe(err, btn, ''), true,
+    'a probe network error must never block a working login')
+  assert.equal(err.textContent, '')
+  assert.equal(btn.disabled, true)
+})
+
+test('session probe answers 200 for onboarding sessions (the cookie took)', async () => {
+  // The probe's only question is "did the cookie take?" — an onboarding
+  // session is live, so it must answer 200 even though /login-api/settings
+  // (and everything else) stays blocked until onboarding completes.
+  await setPassword('Init1al!pw', { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'Init1al!pw' } })
+  const cookie = cookieValue(loginRes.headers)
+  assert.ok(cookie, 'initial-password login must mint a cookie')
+  const probe = await request('/login-api/session', { cookie })
+  assert.equal(probe.status, 200, 'onboarding sessions are live sessions')
+  // Onboarding sessions keep gateway-local access (OTP/settings flow); the
+  // onboarding GATE lives on the dsh upstream (/api/*), covered elsewhere.
+})
+
+test('cookieSecure panel write failure: 500, reported, and memory not polluted', async () => {
+  // A store whose write path fails (disk full, permissions, service error):
+  // the panel gets the generic storage-failed code, the gateway reports the
+  // cause through onError, and — the invariant that matters — the live
+  // decision is NOT flipped (persist-first ordering), so the effective
+  // policy stays exactly what the deployment configured.
+  const store = {
+    read: async () => null,
+    write: async () => { throw new Error('EACCES: record store read-only') },
+    clear: async () => { throw new Error('EACCES: record store read-only') },
+  }
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const reported = []
+  gateway.onError = (err) => reported.push(err.message)
+  const cookie = await login()
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(res.status, 500)
+  assert.equal(JSON.parse(res.body).error, 'storage-failed')
+  assert.equal(reported.length, 1, 'the failure cause must reach the error sink')
+  assert.ok(reported[0].includes('EACCES'), 'the underlying cause must be reported, not swallowed')
+
+  // The live decision is untouched: settings still reports the deployment
+  // policy, and a proxy-declared https login still arms Secure (auto).
+  const settings = await request('/login-api/settings', { cookie })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, 'auto', 'a failed write must not flip the live decision')
+  assert.equal(cfg.cookieSecureSource, 'deployment')
+  await setPassword('GoodPass2')
+  const login2 = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass2' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.ok(rawSetCookie(login2.headers).includes('Secure'),
+    'the transport rule keeps working after a failed panel write')
+})
+
+test('cookieSecure panel write shares the global auth rate budget', async () => {
+  await stopGateway()
+  await startGateway({ maxGlobalAuthAttemptsPerMinute: 2 }, undefined, null, memoryOverrideStore())
+  const events = []
+  gateway.onAuthEvent = (e) => events.push(e)
+  // Login consumes one budget slot; a second write still fits, the third 429.
+  const cookie = await login()
+  const first = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(first.status, 200)
+  const second = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' }, cookie })
+  assert.equal(second.status, 429)
+  assert.equal(JSON.parse(second.body).error, 'rate-limited')
+  assert.ok(events.some((e) => e.kind === 'cookie-secure-change-failed' && e.reason === 'rate-limited'),
+    'the rate-limited write must be audited like the other security-state transitions')
+})
+
+test('cookieSecure reset wins over a body mode (reset:true + mode)', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+  // Plant an override first so the reset has something to drop.
+  const set = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(set.status, 200)
+  assert.equal(await store.read(), false)
+  // reset:true together with a mode must follow RESET (the mode is ignored —
+  // gateway-panel-api treats reset as the dominant intent).
+  const reset = await request('/login-api/cookie-secure', {
+    method: 'POST', body: { mode: false, reset: true }, cookie,
+  })
+  assert.equal(reset.status, 200)
+  assert.equal(JSON.parse(reset.body).cookieSecureSource, 'deployment')
+  assert.equal(await store.read(), null, 'the override must be cleared despite the mode field')
+})
+
+test('cookieSecure body {reset:false} without a mode answers invalid-mode', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+  // reset:false is treated like an absent flag; without a mode the body is
+  // invalid — and nothing is written either way.
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { reset: false }, cookie })
+  assert.equal(res.status, 400)
+  assert.equal(JSON.parse(res.body).error, 'invalid-mode')
+  assert.equal(await store.read(), null, 'an invalid body must not touch the store')
+})
+
+test('cookieSecure panel write without a record store answers storage-unavailable', async () => {
+  // Default startGateway carries no override store (dsh ≤ 0.1.1 surface).
+  const cookie = await login()
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' }, cookie })
+  assert.equal(res.status, 400)
+  assert.equal(JSON.parse(res.body).error, 'storage-unavailable')
 })
 
 test('LAN access: external Host/Origin are rewritten, request passes the fence', async () => {

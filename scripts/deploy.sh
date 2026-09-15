@@ -19,6 +19,7 @@ DST="${DSH_PROFILE_DIR:-$HOME/.dsh/profiles/web}/node_modules/dsh-auth-gateway"
 JS_FILES=(
   index.js
   lib/audit-log.js
+  lib/gateway-panel-api.js
   lib/auth.js
   lib/config.js
   lib/errors.js

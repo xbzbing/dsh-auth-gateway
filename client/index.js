@@ -191,9 +191,12 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.save": "\u4FDD\u5B58",
 		  "cookie.edit.saving": "\u4FDD\u5B58\u4E2D...",
 		  "cookie.edit.saved": "\u5DF2\u4FDD\u5B58\uFF0C\u65B0\u7B56\u7565\u7ACB\u5373\u751F\u6548",
+		  "cookie.edit.saved.with-hint": "\u5DF2\u4FDD\u5B58\uFF0C\u65B0\u7B56\u7565\u7ACB\u5373\u751F\u6548 {hint}",
 		  "cookie.edit.restored": "\u5DF2\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E\uFF0C\u7B56\u7565\u7531\u90E8\u7F72\u914D\u7F6E\u51B3\u5B9A",
+		  "cookie.edit.restored.with-hint": "\u5DF2\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E\uFF0C\u7B56\u7565\u7531\u90E8\u7F72\u914D\u7F6E\u51B3\u5B9A {hint}",
 		  "cookie.edit.reset": "\u6062\u590D\u4E3A\u90E8\u7F72\u914D\u7F6E",
 		  "cookie.edit.failed.invalid-mode": "\u65E0\u6548\u7684\u6A21\u5F0F\u503C",
+		  "cookie.edit.failed.force-secure-requires-tls": "\u5F53\u524D\u5165\u53E3\u975E TLS\uFF0C\u670D\u52A1\u7AEF\u62D2\u7EDD\u5F3A\u5236\u5F00\u542F Secure",
 		  "cookie.edit.failed.storage-unavailable": "\u5F53\u524D\u90E8\u7F72\u4E0D\u652F\u6301\u9762\u677F\u4FEE\u6539\uFF08\u51ED\u636E\u8BB0\u5F55\u670D\u52A1\u4E0D\u53EF\u7528\uFF09",
 		  "cookie.edit.failed.storage-failed": "\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5",
 		  "cookie.edit.failed.network": "\u7F51\u7EDC\u9519\u8BEF\uFF0C\u672A\u4FDD\u5B58",
@@ -283,9 +286,12 @@ window.__ModuleLoader__.load({
 		  "cookie.edit.save": "Save",
 		  "cookie.edit.saving": "Saving...",
 		  "cookie.edit.saved": "Saved \u2014 the new policy applies immediately",
+		  "cookie.edit.saved.with-hint": "Saved \u2014 the new policy applies immediately {hint}",
 		  "cookie.edit.restored": "Restored \u2014 the deployment config rules again",
+		  "cookie.edit.restored.with-hint": "Restored \u2014 the deployment config rules again {hint}",
 		  "cookie.edit.reset": "Restore deployment config",
 		  "cookie.edit.failed.invalid-mode": "Invalid mode value",
+		  "cookie.edit.failed.force-secure-requires-tls": "This entry is not TLS \u2014 the server refuses to force Secure on",
 		  "cookie.edit.failed.storage-unavailable": "This deployment cannot store panel changes (credential-record service unavailable)",
 		  "cookie.edit.failed.storage-failed": "Save failed \u2014 retry later",
 		  "cookie.edit.failed.network": "Network error \u2014 not saved",
@@ -378,6 +384,7 @@ window.__ModuleLoader__.load({
 		}
 		var COOKIE_SECURE_FAILURE_CODES = {
 		  "invalid-mode": "invalid-mode",
+		  "force-secure-requires-tls": "force-secure-requires-tls",
 		  "storage-unavailable": "storage-unavailable",
 		  "storage-failed": "storage-failed"
 		};
@@ -406,7 +413,8 @@ window.__ModuleLoader__.load({
 		  const [cookieSecureDraft, setCookieSecureDraft] = (0, import_react.useState)(null);
 		  const [savingCookieSecure, setSavingCookieSecure] = (0, import_react.useState)(false);
 		  const [cookieSecureHint, setCookieSecureHint] = (0, import_react.useState)(null);
-		  const [cookieSecureRequestSecure, setCookieSecureRequestSecure] = (0, import_react.useState)(false);
+		  const [requestSecure, setRequestSecure] = (0, import_react.useState)(false);
+		  const normalizeMode = (v) => v === true || v === false ? v : "auto";
 		  const [isHttps] = (0, import_react.useState)(() => typeof window !== "undefined" && window.location.protocol === "https:");
 		  const [setupDone, setSetupDone] = (0, import_react.useState)(false);
 		  const [backupCodes, setBackupCodes] = (0, import_react.useState)([]);
@@ -446,7 +454,7 @@ window.__ModuleLoader__.load({
 		    }
 		  }
 		  async function saveCookieSecure() {
-		    if (cookieSecureDraft === true && !cookieSecureRequestSecure) {
+		    if (cookieSecureDraft === true && !requestSecure) {
 		      setCookieSecureHint({ tone: "warn", text: t("cookie.save.warn.force-on-http") });
 		      return;
 		    }
@@ -455,12 +463,16 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.setCookieSecure(cookieSecureDraft);
 		      if (data?.ok === true) {
-		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        const mode = normalizeMode(data.cookieSecure);
 		        setCookieSecure(mode);
 		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
 		        setCookieSecureDraft(null);
-		        const leftover = mode !== true && !cookieSecureRequestSecure ? " " + t("cookie.save.note.secure-leftover") : "";
-		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.saved") + leftover });
+		        const hasLeftover = (mode === false || mode === "auto" && !isHttps) && !requestSecure;
+		        const hint = hasLeftover ? t("cookie.save.note.secure-leftover") : "";
+		        setCookieSecureHint({
+		          tone: "success",
+		          text: hasLeftover ? t("cookie.edit.saved.with-hint", { hint }) : t("cookie.edit.saved")
+		        });
 		      } else {
 		        const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? "network";
 		        setCookieSecureHint({ tone: "warn", text: t(`cookie.edit.failed.${code}`) });
@@ -477,12 +489,16 @@ window.__ModuleLoader__.load({
 		    try {
 		      const data = await api.resetCookieSecure();
 		      if (data?.ok === true) {
-		        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : "auto";
+		        const mode = normalizeMode(data.cookieSecure);
 		        setCookieSecure(mode);
 		        setCookieSecureSource(data.cookieSecureSource === "panel" ? "panel" : "deployment");
 		        setCookieSecureDraft(null);
-		        const leftover = mode !== true && !cookieSecureRequestSecure ? " " + t("cookie.save.note.secure-leftover") : "";
-		        setCookieSecureHint({ tone: "success", text: t("cookie.edit.restored") + leftover });
+		        const hasLeftover = (mode === false || mode === "auto" && !isHttps) && !requestSecure;
+		        const hint = hasLeftover ? t("cookie.save.note.secure-leftover") : "";
+		        setCookieSecureHint({
+		          tone: "success",
+		          text: hasLeftover ? t("cookie.edit.restored.with-hint", { hint }) : t("cookie.edit.restored")
+		        });
 		      } else {
 		        setCookieSecureHint({ tone: "warn", text: t("cookie.edit.failed.network") });
 		      }
@@ -499,10 +515,10 @@ window.__ModuleLoader__.load({
 		        const cfg = data.config?.["dsh-auth-gateway"] || {};
 		        setOtpEnabled(cfg.otpEnabled || false);
 		        setDigits(cfg.otpDigits || 6);
-		        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : "auto";
+		        const mode = normalizeMode(cfg.cookieSecure);
 		        setCookieSecure(mode);
 		        setCookieSecureSource(cfg.cookieSecureSource === "panel" ? "panel" : "deployment");
-		        setCookieSecureRequestSecure(cfg.requestSecure === void 0 ? isHttps : cfg.requestSecure === true);
+		        setRequestSecure(cfg.requestSecure === void 0 ? isHttps : cfg.requestSecure === true);
 		        setCookieSecureDraft(null);
 		      }
 		    } catch (err) {

@@ -118,9 +118,12 @@ const zh = {
   'cookie.edit.save': '保存',
   'cookie.edit.saving': '保存中...',
   'cookie.edit.saved': '已保存，新策略立即生效',
+  'cookie.edit.saved.with-hint': '已保存，新策略立即生效 {hint}',
   'cookie.edit.restored': '已恢复为部署配置，策略由部署配置决定',
+  'cookie.edit.restored.with-hint': '已恢复为部署配置，策略由部署配置决定 {hint}',
   'cookie.edit.reset': '恢复为部署配置',
   'cookie.edit.failed.invalid-mode': '无效的模式值',
+  'cookie.edit.failed.force-secure-requires-tls': '当前入口非 TLS，服务端拒绝强制开启 Secure',
   'cookie.edit.failed.storage-unavailable': '当前部署不支持面板修改（凭据记录服务不可用）',
   'cookie.edit.failed.storage-failed': '保存失败，请稍后重试',
   'cookie.edit.failed.network': '网络错误，未保存',
@@ -212,9 +215,12 @@ const en = {
   'cookie.edit.save': 'Save',
   'cookie.edit.saving': 'Saving...',
   'cookie.edit.saved': 'Saved — the new policy applies immediately',
+  'cookie.edit.saved.with-hint': 'Saved — the new policy applies immediately {hint}',
   'cookie.edit.restored': 'Restored — the deployment config rules again',
+  'cookie.edit.restored.with-hint': 'Restored — the deployment config rules again {hint}',
   'cookie.edit.reset': 'Restore deployment config',
   'cookie.edit.failed.invalid-mode': 'Invalid mode value',
+  'cookie.edit.failed.force-secure-requires-tls': 'This entry is not TLS — the server refuses to force Secure on',
   'cookie.edit.failed.storage-unavailable': 'This deployment cannot store panel changes (credential-record service unavailable)',
   'cookie.edit.failed.storage-failed': 'Save failed — retry later',
   'cookie.edit.failed.network': 'Network error — not saved',
@@ -291,6 +297,7 @@ function Button({ variant = 'primary', disabled, onClick, children, full, style 
 /** Server error codes the cookie-Secure save may answer, mapped to message keys. */
 const COOKIE_SECURE_FAILURE_CODES = {
   'invalid-mode': 'invalid-mode',
+  'force-secure-requires-tls': 'force-secure-requires-tls',
   'storage-unavailable': 'storage-unavailable',
   'storage-failed': 'storage-failed',
 }
@@ -342,7 +349,10 @@ function UserSettingsPanel({ api, t }) {
   // the panel whether THIS entry is a secure origin, i.e. whether a reissued
   // cookie can overwrite a stored Secure one. Older gateways do not report
   // it; the browser's protocol is then the best available proxy.
-  const [cookieSecureRequestSecure, setCookieSecureRequestSecure] = useState(false)
+  const [requestSecure, setRequestSecure] = useState(false)
+  /** Normalize a policy value from the gateway ('auto' | true | false) —
+   * lookalikes fall back to 'auto', mirroring the gateway's own rule. */
+  const normalizeMode = (v) => (v === true || v === false ? v : 'auto')
   const [isHttps] = useState(() => typeof window !== 'undefined' && window.location.protocol === 'https:')
   // Post-verification state inside the QR dialog: OTP is enabled, every
   // session (including this one) was revoked — show the backup codes, then
@@ -406,7 +416,7 @@ function UserSettingsPanel({ api, t }) {
     // very entry (the browser refuses to store the Secure cookie, so every
     // login "succeeds" but holds no session) — refuse the save with the
     // explanation instead of letting the next login die confusingly.
-    if (cookieSecureDraft === true && !cookieSecureRequestSecure) {
+    if (cookieSecureDraft === true && !requestSecure) {
       setCookieSecureHint({ tone: 'warn', text: t('cookie.save.warn.force-on-http') })
       return
     }
@@ -418,15 +428,23 @@ function UserSettingsPanel({ api, t }) {
         // The POST answers the new effective policy; patch local state
         // instead of re-fetching the whole settings snapshot (it would
         // re-read OTP state we did not touch, for zero benefit).
-        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : 'auto'
+        const mode = normalizeMode(data.cookieSecure)
         setCookieSecure(mode)
         setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
         setCookieSecureDraft(null)
         // The gateway reissued the session cookie under the new policy, but a
-        // plaintext entry cannot overwrite a stored Secure cookie — when
-        // that can be the case, say how to finish the job.
-        const leftover = mode !== true && !cookieSecureRequestSecure ? ' ' + t('cookie.save.note.secure-leftover') : ''
-        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') + leftover })
+        // plaintext entry cannot overwrite a stored Secure cookie. The note
+        // is relevant only when the NEW policy drops Secure ('off', or
+        // 'auto' over plain HTTP) and this entry cannot rewrite a leftover —
+        // switching between Secure states over HTTPS needs no warning.
+        const hasLeftover = (mode === false || (mode === 'auto' && !isHttps)) && !requestSecure
+        const hint = hasLeftover ? t('cookie.save.note.secure-leftover') : ''
+        setCookieSecureHint({
+          tone: 'success',
+          text: hasLeftover
+            ? t('cookie.edit.saved.with-hint', { hint })
+            : t('cookie.edit.saved'),
+        })
       } else {
         const code = COOKIE_SECURE_FAILURE_CODES[data?.error] ?? 'network'
         setCookieSecureHint({ tone: 'warn', text: t(`cookie.edit.failed.${code}`) })
@@ -445,12 +463,18 @@ function UserSettingsPanel({ api, t }) {
     try {
       const data = await api.resetCookieSecure()
       if (data?.ok === true) {
-        const mode = data.cookieSecure === true || data.cookieSecure === false ? data.cookieSecure : 'auto'
+        const mode = normalizeMode(data.cookieSecure)
         setCookieSecure(mode)
         setCookieSecureSource(data.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
         setCookieSecureDraft(null)
-        const leftover = mode !== true && !cookieSecureRequestSecure ? ' ' + t('cookie.save.note.secure-leftover') : ''
-        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.restored') + leftover })
+        const hasLeftover = (mode === false || (mode === 'auto' && !isHttps)) && !requestSecure
+        const hint = hasLeftover ? t('cookie.save.note.secure-leftover') : ''
+        setCookieSecureHint({
+          tone: 'success',
+          text: hasLeftover
+            ? t('cookie.edit.restored.with-hint', { hint })
+            : t('cookie.edit.restored'),
+        })
       } else {
         setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
       }
@@ -475,12 +499,12 @@ function UserSettingsPanel({ api, t }) {
         // (the server answers otp-not-enabled) and the card explains why.
         setDigits(cfg.otpDigits || 6)
         // Three-state cookie Secure policy; absent (older gateway) means auto.
-        const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : 'auto'
+        const mode = normalizeMode(cfg.cookieSecure)
         setCookieSecure(mode)
         setCookieSecureSource(cfg.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
         // Secure origin as the GATEWAY sees it; missing on older gateways,
         // in which case the browser's own protocol is the best proxy.
-        setCookieSecureRequestSecure(cfg.requestSecure === undefined ? isHttps : cfg.requestSecure === true)
+        setRequestSecure(cfg.requestSecure === undefined ? isHttps : cfg.requestSecure === true)
         setCookieSecureDraft(null)
       }
     } catch (err) {

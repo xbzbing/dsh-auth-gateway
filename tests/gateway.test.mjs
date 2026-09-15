@@ -404,6 +404,14 @@ test('cookieSecure panel override: set through the API, effective immediately', 
   const anon = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' } })
   assert.equal(anon.status, 401)
 
+  // Arming Secure from a plaintext entry is refused on the SERVER side too
+  // (the panel blocks it client-side; this is the curl-proof half).
+  const forceOverHttp = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: true }, cookie })
+  assert.equal(forceOverHttp.status, 400)
+  assert.equal(JSON.parse(forceOverHttp.body).error, 'force-secure-requires-tls')
+  assert.equal(await store.read(), null,
+    'a refused force-on must not write anything to the record store')
+
   // Panel writes false: the next login must NOT arm Secure even behind a
   // proxy-declared https link (the override beats the transport).
   const audit = []
@@ -432,7 +440,7 @@ test('cookieSecure panel override: set through the API, effective immediately', 
   })
   assert.equal(setTrue.status, 200)
   assert.ok(rawSetCookie(setTrue.headers).includes('Secure'),
-    'reissue under mode true must arm Secure; a secure origin accepts the overwrite')
+    'reissue under mode true must arm Secure on the stored cookie')
   assert.equal(cookieValue(setTrue.headers), cookie, 'the reissued token must stay valid')
   const setFalse = await request('/login-api/cookie-secure', {
     method: 'POST', body: { mode: false }, cookie,

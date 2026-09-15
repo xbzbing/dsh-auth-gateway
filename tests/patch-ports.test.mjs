@@ -76,16 +76,22 @@ test('--port 65535 would break (internal 65536): config schema must reject it', 
   assert.ok(result.issues, 'upstreamPort 65536 must fail the config schema')
 })
 
-test('web-runtime row: printUrl off, trustedHosts flows through webStartup', () => {
+test('web-runtime row: printUrl off, openBrowser/trustedHosts flow through webStartup', () => {
   const patchLines = patch.split('\n')
   const webRuntime = patchLines.indexOf('- id: web-runtime')
   assert.ok(webRuntime !== -1, 'patch must carry the web-runtime row')
   const block = patchLines.slice(webRuntime, patchLines.indexOf('- insert:'))
   assert.ok(block.join('\n').includes('printUrl: false'), 'misleading internal URL line must be off')
   assert.ok(block.join('\n').includes('surfaceContext: true'))
+  // openBrowser must be restated: the web-app schema default is TRUE, so a
+  // whole-config replacement without it resurrects the browser popup and
+  // makes `dsh web --no-open` ineffective (observed on dsh 0.1.6-alpha.1).
+  assert.ok(block.join('\n').includes('openBrowser: !!js ctx.webStartup.openBrowser'),
+    'openBrowser must keep flowing from the CLI flags (schema default is true)')
   // trustedHosts expression must read ctx.webStartup (--trusted-host survives).
-  const e = evalPatch(8080, { webStartup: { port: 8080, trustedHosts: ['lan.example:8080'] } })
+  const e = evalPatch(8080, { webStartup: { port: 8080, trustedHosts: ['lan.example:8080'], openBrowser: false } })
   assert.deepEqual(e('trustedHosts'), ['lan.example:8080'])
+  assert.equal(e('openBrowser'), false, 'the CLI --no-open value must reach the web-runtime row')
 })
 
 test('webserver row: whole-config replacement must restate the compression defaults', () => {

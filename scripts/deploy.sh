@@ -11,7 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
 DST="${DSH_PROFILE_DIR:-$HOME/.dsh/profiles/web}/node_modules/dsh-auth-gateway"
 
+# JS 文件清单：入口 index.js + lib/*.js。index.js 也必须在列——deploy 的目标
+# node_modules/dsh-auth-gateway 是快照拷贝（profile 的 pnpm-workspace.yaml 为
+# nodeLinker: hoisted，普通副本而非符号链接；若首装来自 npm 包则入口已存在，
+# 但版本重装/手工搭建后入口缺失会让整个插件 "failed to import")。本清单同时
+# 驱动前置与安装后的 node --check。
 JS_FILES=(
+  index.js
   lib/audit-log.js
   lib/auth.js
   lib/config.js

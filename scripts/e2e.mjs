@@ -27,21 +27,23 @@
 
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
-import os from 'node:os'
-import path from 'node:path'
+import { resolveChromiumPath } from './chromium.mjs'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8002'
 const PASSWORD = process.env.PASSWORD || 'e2e-pass'
 const NEW_PASSWORD = `${PASSWORD}-2`
 
-// Point at the locally cached executable instead of downloading ~150 MB.
-// CHROMIUM_PATH wins (same override scripts/screenshots.mjs honours); the
-// default tracks the cache directory the current playwright install produced.
-const CACHED_CHROMIUM = process.env.CHROMIUM_PATH || path.join(
-  os.homedir(),
-  'Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/'
-  + 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-)
+// Locate the Chromium executable dynamically (scripts/chromium.mjs):
+// CHROMIUM_PATH wins, then the installed playwright's own registry, then a
+// scan of the ms-playwright cache. The cache directory name embeds the
+// playwright revision (-1105, -1243, …) and changes on every upgrade — a
+// hard-coded path here would break on the next `npx playwright install`.
+const executablePath = resolveChromiumPath({ playwrightExecutable: chromium.executablePath() })
+if (!executablePath) {
+  console.error('no chromium found: set CHROMIUM_PATH, run `npx playwright install chromium`,'
+    + ' or install a system chromium')
+  process.exit(2)
+}
 
 let step = 0
 function ok(name) {
@@ -70,7 +72,7 @@ async function dismissFirstRunDialogs(page) {
   }
 }
 
-const browser = await chromium.launch({ executablePath: CACHED_CHROMIUM, headless: true })
+const browser = await chromium.launch({ executablePath, headless: true })
 try {
   const page = await browser.newPage()
   const jsErrors = []

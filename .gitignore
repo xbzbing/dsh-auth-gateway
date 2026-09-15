@@ -14,3 +14,5 @@ test-results/
 docs/assets/architecture.html
 docs/assets/architecture-en.html
 docs/assets/architecture.json
+# vision tooling artifacts (not part of the plugin)
+.dsh-vision-router/

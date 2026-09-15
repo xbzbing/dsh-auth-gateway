@@ -222,6 +222,8 @@ test('component takes no ctx prop and never fetches directly', () => {
   // side would silently show the card as auto forever.
   assert.ok(source.includes('cfg.cookieSecure'),
     'panel must read the cookieSecure policy from the settings response')
+  assert.ok(source.includes('cfg.cookieSecureSource'),
+    'panel must read where the cookieSecure policy comes from (deployment vs panel)')
   // All panel API calls and redirects must go through the basePath global
   // injected by index.js — root-absolute paths would break sub-path
   // (reverse-proxy) deployments.

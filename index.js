@@ -36,6 +36,9 @@ export const inject = ['webServer', 'credentials']
 /** The credential record dsh persists its upstream browser-session secret in. */
 const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
 
+/** Our own credential record holding the panel's cookieSecure override. */
+const COOKIE_SECURE_RECORD = 'dsh-auth-gateway/cookie-secure'
+
 /**
  * Build the upstream browser-auth secret source (see
  * createCachedSecretReader in lib/upstream-auth.js for the caching and
@@ -64,11 +67,56 @@ function upstreamSecretReader(ctx) {
 }
 
 /**
+ * Build the credential-record persistence half of the cookieSecure override
+ * (the settings panel writes it via POST /login-api/cookie-secure). The
+ * record lives in our own scope (`dsh-auth-gateway/cookie-secure`, a grant
+ * payload in our format — the seam treats it as opaque). Absent on dsh
+ * surfaces without the record service (≤ 0.1.1) → the panel stays read-only.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ */
+function cookieSecureOverrideStore(ctx) {
+  if (typeof ctx.credentials?.readRecord !== 'function'
+    || typeof ctx.credentials?.modifyRecord !== 'function'
+    || typeof ctx.credentials?.deleteRecord !== 'function') {
+    return undefined
+  }
+  return {
+    read: async () => {
+      try {
+        const record = await ctx.credentials.readRecord(COOKIE_SECURE_RECORD)
+        const mode = record?.kind === 'grant' ? record.payload?.mode : undefined
+        return mode === true || mode === false || mode === 'auto' ? mode : null
+      } catch (err) {
+        // A broken record (or a transient service error) must not brick
+        // startup: fall back to the composition value, keep the panel's
+        // write path available (a failed write reports storage-failed).
+        ctx.logger.warn('[dsh-auth-gateway] 读取 cookieSecure 面板覆盖失败，回退到部署配置: %s',
+          err instanceof Error ? err.message : String(err))
+        return null
+      }
+    },
+    write: async (mode) => {
+      await ctx.credentials.modifyRecord(COOKIE_SECURE_RECORD, async () => ({ kind: 'grant', payload: { mode } }))
+    },
+    clear: async () => {
+      await ctx.credentials.deleteRecord(COOKIE_SECURE_RECORD)
+    },
+  }
+}
+
+/**
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {object} [config] - plugin config from the composition
  */
 export async function apply(ctx, config) {
   const upstream = upstreamSecretReader(ctx)
+  // The panel override of the cookie Secure policy, persisted through the
+  // credential record; read BEFORE the gateway listens so the first login
+  // already applies it (empty record → the composition value rules).
+  const cookieSecureOverrideStoreInstance = cookieSecureOverrideStore(ctx)
+  const cookieSecureOverride = cookieSecureOverrideStoreInstance === undefined
+    ? null
+    : await cookieSecureOverrideStoreInstance.read()
   // Running version + repository, read from the package.json shipped beside
   // this module: the settings panel displays them and the update check
   // compares against them. Read once per apply — a deploy replaces both the
@@ -82,6 +130,8 @@ export async function apply(ctx, config) {
   const gateway = createGateway(config, {
     upstreamSecretReader: upstream.secret,
     versionInfo: packageMeta,
+    cookieSecureOverride,
+    cookieSecureOverrideStore: cookieSecureOverrideStoreInstance,
     // Automatic checks are opt-IN (default off), so a fresh install makes no
     // outbound request. The panel's "check for updates" button drives an
     // explicit on-demand check whatever this is set to.

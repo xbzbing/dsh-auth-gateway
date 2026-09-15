@@ -95,7 +95,7 @@ const zh = {
   'password.confirm': '确认新密码',
   'password.submit': '确认修改',
   'password.progress': '修改中...',
-  'session.title': '登录会话',
+  'session.title': '会话管理',
   'session.loggedIn': '已登录',
   'session.desc': '会话有效期 30 天；dsh 重启后需重新登录。',
   'session.logout': '退出登录',
@@ -110,6 +110,19 @@ const zh = {
   'cookie.state.forced-http': '已强制开启：但当前为明文 HTTP，浏览器将拒绝保存 Secure Cookie，登录会立即失效——请先启用 TLS，或将配置改回 auto。',
   'cookie.state.off': '已显式关闭：Cookie 可经明文链路发送（仅建议在可信内网使用；明文下任何监听者都能捕获会话）。',
   'cookie.configHint': '由部署配置 cookieSecure 控制（auto / true / false；当前：{mode}）',
+  'cookie.source.panel': '来源：面板设置（已持久化，优先于部署配置；可“恢复为部署配置”撤销）',
+  'cookie.source.deployment': '来源：部署配置',
+  'cookie.edit.mode.auto': '自动（跟随连接）',
+  'cookie.edit.mode.true': '强制开启',
+  'cookie.edit.mode.false': '关闭',
+  'cookie.edit.save': '保存',
+  'cookie.edit.saving': '保存中...',
+  'cookie.edit.saved': '已保存，新策略立即生效',
+  'cookie.edit.reset': '恢复为部署配置',
+  'cookie.edit.failed.invalid-mode': '无效的模式值',
+  'cookie.edit.failed.storage-unavailable': '当前部署不支持面板修改（凭据记录服务不可用）',
+  'cookie.edit.failed.storage-failed': '保存失败，请稍后重试',
+  'cookie.edit.failed.network': '网络错误，未保存',
   'about.title': '关于',
   'about.version': '当前版本',
   'about.unknown': '未知',
@@ -173,7 +186,7 @@ const en = {
   'password.confirm': 'Confirm new password',
   'password.submit': 'Update',
   'password.progress': 'Updating...',
-  'session.title': 'Session',
+  'session.title': 'Session Management',
   'session.loggedIn': 'Signed in',
   'session.desc': 'Sessions last 30 days; a dsh restart signs everyone out.',
   'session.logout': 'Sign out',
@@ -188,6 +201,19 @@ const en = {
   'cookie.state.forced-http': 'Forced on, but this connection is plain HTTP: the browser will refuse to store the Secure cookie and logins fail immediately — enable TLS first, or set the config back to auto.',
   'cookie.state.off': 'Explicitly off: the cookie may travel in clear text (trusted LAN only; any listener on the link can capture the session).',
   'cookie.configHint': 'Controlled by the deployment config cookieSecure (auto / true / false; current: {mode})',
+  'cookie.source.panel': 'Source: panel override (persisted, takes precedence over the deployment config; “Restore deployment config” undoes it)',
+  'cookie.source.deployment': 'Source: deployment config',
+  'cookie.edit.mode.auto': 'Auto (follow the connection)',
+  'cookie.edit.mode.true': 'Force on',
+  'cookie.edit.mode.false': 'Off',
+  'cookie.edit.save': 'Save',
+  'cookie.edit.saving': 'Saving...',
+  'cookie.edit.saved': 'Saved — the new policy applies immediately',
+  'cookie.edit.reset': 'Restore deployment config',
+  'cookie.edit.failed.invalid-mode': 'Invalid mode value',
+  'cookie.edit.failed.storage-unavailable': 'This deployment cannot store panel changes (credential-record service unavailable)',
+  'cookie.edit.failed.storage-failed': 'Save failed — retry later',
+  'cookie.edit.failed.network': 'Network error — not saved',
   'about.title': 'About',
   'about.version': 'Current version',
   'about.unknown': 'unknown',
@@ -289,6 +315,14 @@ function UserSettingsPanel({ api, t }) {
   // window.location.protocol, never by what the server thinks it saw.
   // Derivation lives in client/src/cookie-secure.js (unit-tested).
   const [cookieSecure, setCookieSecure] = useState('auto')
+  // Where the effective policy comes from ('deployment' = composition patch,
+  // 'panel' = runtime override in the credential record). The panel edits it
+  // via POST /login-api/cookie-secure.
+  const [cookieSecureSource, setCookieSecureSource] = useState('deployment')
+  // Draft mode for the edit radio; null while the card shows the state only.
+  const [cookieSecureDraft, setCookieSecureDraft] = useState(null)
+  const [savingCookieSecure, setSavingCookieSecure] = useState(false)
+  const [cookieSecureHint, setCookieSecureHint] = useState(null)
   const [isHttps] = useState(() => typeof window !== 'undefined' && window.location.protocol === 'https:')
   // Post-verification state inside the QR dialog: OTP is enabled, every
   // session (including this one) was revoked — show the backup codes, then
@@ -346,6 +380,47 @@ function UserSettingsPanel({ api, t }) {
     }
   }
 
+  /** POST the panel's cookieSecure override, then re-read the effective state. */
+  async function saveCookieSecure() {
+    setSavingCookieSecure(true)
+    setCookieSecureHint(null)
+    try {
+      const data = await api.setCookieSecure(cookieSecureDraft)
+      if (data?.ok === true) {
+        await loadSettings()
+        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') })
+      } else {
+        const code = data?.error === 'invalid-mode' ? 'invalid-mode'
+          : data?.error === 'storage-unavailable' ? 'storage-unavailable'
+            : data?.error === 'storage-failed' ? 'storage-failed' : 'network'
+        setCookieSecureHint({ tone: 'warn', text: t(`cookie.edit.failed.${code}`) })
+      }
+    } catch {
+      setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
+    } finally {
+      setSavingCookieSecure(false)
+    }
+  }
+
+  /** Drop the panel override; the deployment config rules again. */
+  async function resetCookieSecure() {
+    setSavingCookieSecure(true)
+    setCookieSecureHint(null)
+    try {
+      const data = await api.resetCookieSecure()
+      if (data?.ok === true) {
+        await loadSettings()
+        setCookieSecureHint({ tone: 'success', text: t('cookie.edit.saved') })
+      } else {
+        setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
+      }
+    } catch {
+      setCookieSecureHint({ tone: 'warn', text: t('cookie.edit.failed.network') })
+    } finally {
+      setSavingCookieSecure(false)
+    }
+  }
+
   async function loadSettings() {
     try {
       const data = await api.getSettings()
@@ -362,6 +437,8 @@ function UserSettingsPanel({ api, t }) {
         // Three-state cookie Secure policy; absent (older gateway) means auto.
         const mode = cfg.cookieSecure === true || cfg.cookieSecure === false ? cfg.cookieSecure : 'auto'
         setCookieSecure(mode)
+        setCookieSecureSource(cfg.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
+        setCookieSecureDraft(null)
       }
     } catch (err) {
       setStatus({ type: 'error', message: t('error.loadSettings', { message: err.message }) })
@@ -478,6 +555,12 @@ function UserSettingsPanel({ api, t }) {
           color: T.textPrimary, display: 'flex', alignItems: 'center', gap: '8px',
         }}>
           {t('nav')}
+          {versionInfo !== null && versionInfo.version !== '' && (
+            <span style={{
+              fontSize: '12px', lineHeight: '18px', padding: '0 8px', borderRadius: '9px',
+              background: T.hover, color: T.textSecondary, fontWeight: 400,
+            }}>v{versionInfo.version}</span>
+          )}
         </h3>
         <p style={{ ...DESC, margin: '0 0 16px' }}>{t('header.desc')}</p>
 
@@ -516,47 +599,64 @@ function UserSettingsPanel({ api, t }) {
           )}
         </div>
 
-        {/* Change password */}
-        <div style={CARD}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={CARD_TITLE}>🔑 {t('password.title')}</span>
-          </div>
-          <p style={DESC}>{t('password.desc')}</p>
-          {!showChangePassword ? (
-            <Button variant="primary" onClick={() => setShowChangePassword(true)}>{t('password.change')}</Button>
-          ) : (
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
-              background: T.bg2, borderRadius: '10px', border: `1px solid ${T.border}`,
-            }}>
-              <input type="password" placeholder={t('password.old')} value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)} style={INPUT} {...focusProps} />
-              <input type="password" placeholder={t('password.new')} value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)} style={INPUT} {...focusProps} />
-              <input type="password" placeholder={t('password.confirm')} value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)} style={INPUT} {...focusProps}
-                onKeyDown={(e) => { if (e.key === 'Enter') changePassword() }} />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="primary" onClick={changePassword} disabled={changingPassword}>
-                  {changingPassword ? t('password.progress') : t('password.submit')}
-                </Button>
-                <Button variant="outline" onClick={() => { setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('') }}>{t('dialog.cancel')}</Button>
+        {/* Password change + session management, side by side. No outer CARD
+            shell: the two bordered boxes ARE the card, and a nested border
+            would draw a double frame. */}
+        <div style={{
+          display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'stretch',
+          marginBottom: '12px',
+        }}>
+          <div style={{
+            flex: '1 1 0', minWidth: '200px', display: 'flex', flexDirection: 'column',
+            border: `1px solid ${T.border}`, borderRadius: '10px', padding: '12px',
+          }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                <span style={CARD_TITLE}>🔑 {t('password.title')}</span>
+              </div>
+              <p style={{ ...DESC, margin: '0 0 10px' }}>{t('password.desc')}</p>
+              <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                {!showChangePassword ? (
+                  <Button variant="primary" onClick={() => setShowChangePassword(true)}>{t('password.change')}</Button>
+                ) : (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
+                    background: T.bg2, borderRadius: '10px', border: `1px solid ${T.border}`,
+                  }}>
+                    <input type="password" placeholder={t('password.old')} value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)} style={INPUT} {...focusProps} />
+                    <input type="password" placeholder={t('password.new')} value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)} style={INPUT} {...focusProps} />
+                    <input type="password" placeholder={t('password.confirm')} value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)} style={INPUT} {...focusProps}
+                      onKeyDown={(e) => { if (e.key === 'Enter') changePassword() }} />
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Button variant="primary" onClick={changePassword} disabled={changingPassword}>
+                        {changingPassword ? t('password.progress') : t('password.submit')}
+                      </Button>
+                      <Button variant="outline" onClick={() => { setShowChangePassword(false); setOldPassword(''); setNewPassword(''); setConfirmPassword('') }}>{t('dialog.cancel')}</Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+            <div style={{
+              flex: '1 1 0', minWidth: '200px', display: 'flex', flexDirection: 'column',
+              border: `1px solid ${T.border}`, borderRadius: '10px', padding: '12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                <span style={CARD_TITLE}>🔒 {t('session.title')}</span>
+                <Pill>{t('session.loggedIn')}</Pill>
+              </div>
+              <p style={{ ...DESC, margin: '0 0 10px' }}>{t('session.desc')}</p>
+              <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                <Button variant="dangerOutline" onClick={logout}>{t('session.logout')}</Button>
+              </div>
+            </div>
         </div>
 
-        {/* Session */}
-        <div style={CARD}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={CARD_TITLE}>🔒 {t('session.title')}</span>
-            <Pill>{t('session.loggedIn')}</Pill>
-          </div>
-          <p style={DESC}>{t('session.desc')}</p>
-          <Button variant="dangerOutline" onClick={logout}>{t('session.logout')}</Button>
-        </div>
-
-        {/* Cookie Secure: deployment policy + what actually applies here */}
+        {/* Cookie Secure: effective policy + what actually applies here,
+            plus the panel override editor (persisted via the credential
+            record; POST /login-api/cookie-secure) */}
         <div style={CARD}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span style={CARD_TITLE}>🛡️ {t('cookie.title')}</span>
@@ -569,7 +669,40 @@ function UserSettingsPanel({ api, t }) {
           <p style={{ ...DESC, margin: 0 }}>{t(`cookie.state.${secureState}`)}</p>
           <p style={{ margin: '8px 0 0', fontSize: '12px', lineHeight: '18px', color: T.textTertiary }}>
             {t('cookie.configHint', { mode: String(cookieSecure) })}
+            {' · '}
+            {cookieSecureSource === 'panel' ? t('cookie.source.panel') : t('cookie.source.deployment')}
           </p>
+          <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              value={String(cookieSecureDraft ?? cookieSecure)}
+              onChange={(e) => { const v = e.target.value; setCookieSecureDraft(v === 'true' ? true : v === 'false' ? false : 'auto') }}
+              style={{
+                height: '32px', padding: '0 10px', borderRadius: '8px', border: `1px solid ${T.border}`,
+                background: T.bg1, color: T.textPrimary, fontSize: '13px', lineHeight: '20px',
+                fontFamily: 'inherit', cursor: 'pointer', outline: 'none', minWidth: '150px',
+              }}
+            >
+              <option value="auto">{t('cookie.edit.mode.auto')}</option>
+              <option value="true">{t('cookie.edit.mode.true')}</option>
+              <option value="false">{t('cookie.edit.mode.false')}</option>
+            </select>
+            <Button variant="primary" onClick={saveCookieSecure} disabled={
+              savingCookieSecure || cookieSecureDraft === null || cookieSecureDraft === cookieSecure
+            }>
+              {savingCookieSecure ? t('cookie.edit.saving') : t('cookie.edit.save')}
+            </Button>
+            {cookieSecureSource === 'panel' && (
+              <Button variant="outline" onClick={resetCookieSecure} disabled={savingCookieSecure}>
+                {t('cookie.edit.reset')}
+              </Button>
+            )}
+            {cookieSecureHint !== null && (
+              <span style={{ fontSize: '12px', lineHeight: '18px',
+                color: cookieSecureHint.tone === 'warn' ? T.danger : T.textSecondary }}>
+                {cookieSecureHint.text}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* About: running version, repository link, new-version notice */}

@@ -58,7 +58,7 @@ function closeUpstream() {
 
 let gateway, gatewayPort, home
 
-async function startGateway(policy, cookieSecure) {
+async function startGateway(policy, cookieSecure, cookieSecureOverride, cookieSecureOverrideStore) {
   home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
@@ -68,6 +68,8 @@ async function startGateway(policy, cookieSecure) {
     upstreamPort,
     ...(policy !== undefined ? { policy } : {}),
     ...(cookieSecure !== undefined ? { cookieSecure } : {}),
+    ...(cookieSecureOverride !== undefined ? { cookieSecureOverride } : {}),
+    ...(cookieSecureOverrideStore !== undefined ? { cookieSecureOverrideStore } : {}),
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -372,6 +374,94 @@ test('settings API reports the cookie Secure policy for the panel card', async (
   assert.equal(res.status, 200)
   const cfg = JSON.parse(res.body).config['dsh-auth-gateway']
   assert.equal(cfg.cookieSecure, 'auto', 'the resolved policy must be readable by the panel')
+  assert.equal(cfg.cookieSecureSource, 'deployment', 'without an override the composition owns the policy')
+})
+
+/** In-memory stand-in for the plugin's credential-record store (index.js). */
+function memoryOverrideStore(initial = null) {
+  let stored = initial
+  return {
+    read: async () => stored,
+    write: async (mode) => { stored = mode },
+    clear: async () => { stored = null },
+  }
+}
+
+test('cookieSecure panel override: set through the API, effective immediately', async () => {
+  const store = memoryOverrideStore()
+  await stopGateway()
+  await startGateway(undefined, undefined, null, store)
+  const cookie = await login()
+
+  // Unauthenticated writes are refused like every safety-state change.
+  const anon = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' } })
+  assert.equal(anon.status, 401)
+
+  // Panel writes false: the next login must NOT arm Secure even behind a
+  // proxy-declared https link (the override beats the transport).
+  const audit = []
+  gateway.onAuthEvent = (e) => audit.push(e)
+  const set = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: false }, cookie })
+  assert.equal(set.status, 200)
+  const setBody = JSON.parse(set.body)
+  assert.equal(setBody.cookieSecure, false)
+  assert.equal(setBody.cookieSecureSource, 'panel')
+  assert.equal(await store.read(), false, 'the override must be persisted through the store')
+  assert.ok(audit.some((e) => e.kind === 'cookie-secure-change'), 'the change must be audited')
+
+  await setPassword('GoodPass2')
+  const login2 = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass2' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(login2.status, 200)
+  assert.ok(!rawSetCookie(login2.headers).includes('Secure'),
+    'the panel override false must win over the proxy https header')
+  const cookie2 = cookieValue(login2.headers)
+
+  // The settings card shows the panel source + effective mode.
+  const settings = await request('/login-api/settings', { cookie: cookie2 })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, false)
+  assert.equal(cfg.cookieSecureSource, 'panel')
+
+  // Lookalike modes are rejected, not coerced.
+  const bad = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'yes' }, cookie: cookie2 })
+  assert.equal(bad.status, 400)
+  assert.equal(JSON.parse(bad.body).error, 'invalid-mode')
+
+  // Reset drops the override: the deployment config (auto) rules again.
+  const reset = await request('/login-api/cookie-secure', { method: 'POST', body: { reset: true }, cookie: cookie2 })
+  assert.equal(reset.status, 200)
+  assert.equal(JSON.parse(reset.body).cookieSecureSource, 'deployment')
+  assert.equal(await store.read(), null, 'the record must be cleared')
+  const settings2 = await request('/login-api/settings', { cookie: cookie2 })
+  assert.equal(JSON.parse(settings2.body).config['dsh-auth-gateway'].cookieSecureSource, 'deployment')
+  assert.ok(audit.some((e) => e.kind === 'cookie-secure-change' && e.reason === 'reset'),
+    'the reset must be audited too')
+})
+
+test('cookieSecure boot override (panel record) rules from the first login', async () => {
+  await stopGateway()
+  await startGateway(undefined, undefined, true) // as if the record held true at apply
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  assert.ok(rawSetCookie(res.headers).includes('Secure'),
+    'the persisted panel override must arm Secure from the very first login')
+  const cookie = cookieValue(res.headers)
+  const settings = await request('/login-api/settings', { cookie })
+  const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, true)
+  assert.equal(cfg.cookieSecureSource, 'panel')
+})
+
+test('cookieSecure panel write without a record store answers storage-unavailable', async () => {
+  // Default startGateway carries no override store (dsh ≤ 0.1.1 surface).
+  const cookie = await login()
+  const res = await request('/login-api/cookie-secure', { method: 'POST', body: { mode: 'auto' }, cookie })
+  assert.equal(res.status, 400)
+  assert.equal(JSON.parse(res.body).error, 'storage-unavailable')
 })
 
 test('LAN access: external Host/Origin are rewritten, request passes the fence', async () => {

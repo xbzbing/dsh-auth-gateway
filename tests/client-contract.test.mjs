@@ -166,12 +166,12 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   // STABLE sort, so an order EQUAL to a shipped section's collapses to plugin
   // load order — the entry then flips between "last" and "before Agent 预设"
   // depending on the composition instead of following the "official menus
-  // first" rule. dsh ships general 0, models 10, plugins 15, agent-presets 20:
-  // sorting strictly above that maximum is what pins this section after every
-  // shipped one.
+  // first" rule. dsh ships general 0, models 10, plugins 15, agent-presets 20
+  // (0.1.6 added the archived-sessions section at 25): sorting strictly above
+  // that maximum is what pins this section after every shipped one.
   assert.equal(typeof registered.order, 'number', 'section must declare a numeric order')
-  assert.ok(registered.order > 20,
-    `settings.section order must sort after every shipped section (highest is 20), got ${registered.order}`)
+  assert.ok(registered.order > 25,
+    `settings.section order must sort after every shipped section (highest is 25 as of dsh 0.1.6), got ${registered.order}`)
 
   // The registration follows the standard settings.section seam only —
   // no DOM probing, no style injection (the shell renders its own icon).
@@ -217,6 +217,11 @@ test('component takes no ctx prop and never fetches directly', () => {
   // a rename miss here silently shows OTP as disabled.
   assert.ok(source.includes("config?.['dsh-auth-gateway']"),
     'panel must read the dsh-auth-gateway config key')
+  // The cookie-Secure card reads the policy field the gateway resolves into
+  // that same response (#handleGetSettings `cookieSecure`); a rename on one
+  // side would silently show the card as auto forever.
+  assert.ok(source.includes('cfg.cookieSecure'),
+    'panel must read the cookieSecure policy from the settings response')
   // All panel API calls and redirects must go through the basePath global
   // injected by index.js — root-absolute paths would break sub-path
   // (reverse-proxy) deployments.

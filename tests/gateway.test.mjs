@@ -58,7 +58,7 @@ function closeUpstream() {
 
 let gateway, gatewayPort, home
 
-async function startGateway(policy) {
+async function startGateway(policy, cookieSecure) {
   home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
@@ -67,6 +67,7 @@ async function startGateway(policy) {
     upstreamHost: '127.0.0.1',
     upstreamPort,
     ...(policy !== undefined ? { policy } : {}),
+    ...(cookieSecure !== undefined ? { cookieSecure } : {}),
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -116,6 +117,13 @@ function cookieValue(headers) {
   const list = Array.isArray(raw) ? raw : [raw]
   const hit = list.find((c) => c.startsWith('dsh_auth='))
   return hit?.split(';')[0]
+}
+
+/** All Set-Cookie values joined into one string for attribute assertions. */
+function rawSetCookie(headers) {
+  const raw = headers['set-cookie']
+  if (raw === undefined) return ''
+  return (Array.isArray(raw) ? raw : [raw]).join('; ')
 }
 
 /**
@@ -254,6 +262,73 @@ test('onboarding without a session redirects to /login', async () => {
   const res = await request('/onboarding')
   assert.equal(res.status, 302)
   assert.equal(res.headers.location, '/login')
+})
+
+test('cookieSecure auto: plain HTTP stays byte-for-byte the old cookie', async () => {
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  const raw = rawSetCookie(res.headers)
+  assert.ok(raw.includes('HttpOnly') && raw.includes('SameSite=Strict'), 'baseline attributes must stay')
+  assert.ok(!raw.includes('Secure'),
+    'auto mode on a plain-HTTP request must not set Secure — the browser would then refuse to send the cookie back')
+})
+
+test('cookieSecure auto: X-Forwarded-Proto https arms Secure', async () => {
+  await setPassword('GoodPass1')
+  // What a TLS-terminating reverse proxy forwards. The gateway itself is on a
+  // plain socket; the browser's link is HTTPS, so the attribute must be set.
+  const res = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass1' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(res.status, 200)
+  assert.ok(rawSetCookie(res.headers).includes('Secure'),
+    'a proxy-declared https request must get the Secure attribute')
+
+  // A multi-hop list is read at the first (closest-proxy) entry, and the
+  // attribute must survive on the clearing cookie too — a logout over https
+  // has to match what login set.
+  const cookie = cookieValue(res.headers)
+  const logout = await request('/login/logout', {
+    method: 'POST', body: {}, cookie,
+    headers: { 'x-forwarded-proto': 'https, http' },
+  })
+  assert.equal(logout.status, 200)
+  const cleared = rawSetCookie(logout.headers)
+  assert.ok(cleared.includes('Max-Age=0') && cleared.includes('Secure'),
+    'the clearing cookie must carry the same Secure attribute')
+})
+
+test('cookieSecure true pins Secure on plain HTTP (loud failure, not a silent downgrade)', async () => {
+  await stopGateway()
+  await startGateway(undefined, true)
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  assert.ok(rawSetCookie(res.headers).includes('Secure'),
+    'forced mode must set Secure even without proxy headers — the deployment opted into HTTPS-only')
+})
+
+test('cookieSecure false never sets Secure, even behind a proxy header', async () => {
+  await stopGateway()
+  await startGateway(undefined, false)
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass1' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(res.status, 200)
+  assert.ok(!rawSetCookie(res.headers).includes('Secure'),
+    'an explicit false must win over transport detection')
+})
+
+test('settings API reports the cookie Secure policy for the panel card', async () => {
+  const cookie = await login()
+  const res = await request('/login-api/settings', { cookie })
+  assert.equal(res.status, 200)
+  const cfg = JSON.parse(res.body).config['dsh-auth-gateway']
+  assert.equal(cfg.cookieSecure, 'auto', 'the resolved policy must be readable by the panel')
 })
 
 test('LAN access: external Host/Origin are rewritten, request passes the fence', async () => {

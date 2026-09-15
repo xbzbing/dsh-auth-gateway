@@ -58,7 +58,7 @@ dsh web                # 默认：对外 3080，内部 3081
 ## 网络与安全建议
 
 - **LAN 部署**：置于可信网络；网关默认监听所有网卡，跨网络暴露前务必配置防火墙；
-- **HTTPS**：插件当前服务明文 HTTP（`Secure` Cookie 未启用）。生产建议前置 TLS 反向代理（nginx/Caddy 等）到网关端口，并配置 `trustedHosts`（见下）；启用 TLS 后可将 Cookie 的 `Secure` 标记纳入后续版本；
+- **HTTPS / Secure Cookie**：配置项 `cookieSecure`（默认 `auto`）控制会话 Cookie 的 `Secure` 属性——连接经 TLS 时自动附加（反向代理需透传 `X-Forwarded-Proto: https` 头），浏览器自此只经加密链路回传 Cookie；`true` 强制附加（反代已终结 TLS 但未透传协议头时使用）；`false` 显式关闭。**注意**：Secure 只在 HTTPS 链路生效——纯 HTTP 下强制开启会使浏览器拒绝保存 Cookie、登录立即失败（显式失败而非静默降级）。传输加密仍需自行部署：生产建议前置 TLS 反向代理（nginx/Caddy 等）到网关端口并配置 `trustedHosts`（见下）；内网直连、无公网证书时可自建内部 CA（如 mkcert）为网关签发证书并导入终端信任库，即可获得无警告的 HTTPS；
 - **trustedHosts**：若经反向代理/自定义域名访问，需在 `dsh-client-connection` 行配置 `trustedHosts`（内部 fence 的授权权威；本插件转发已改写 Host/Origin 为回环，正常情况下无需配置，特殊拓扑下按 dsh 文档配置）；
 - **备份**：凭据数据位于 `$DSH_HOME/auth-gateway/`（password.json、otp.json、otp-master.key），备份时注意加密（OTP 密钥已 AES-256-GCM 加密，但主密钥 `otp-master.key` 同样需保护，见 SECURITY.md）。
 - **OTP 主密钥管理**：默认自动生成 `auth-gateway/otp-master.key`，密钥与密文同目录（本机可信模型）。要隔离磁盘泄露，部署前设置环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex 或 base64 编码的 32 字节），并把它放到加密卷或外部密钥管理（KMS / Docker secret / systemd credentials 等）；设置了环境变量即不再生成/读取密钥文件。生成示例：`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`。详见 [SECURITY.md](SECURITY.md) 的「OTP 密钥加密」。

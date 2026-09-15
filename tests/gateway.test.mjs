@@ -323,6 +323,49 @@ test('cookieSecure false never sets Secure, even behind a proxy header', async (
     'an explicit false must win over transport detection')
 })
 
+test('cookieSecure auto: password-change clearing cookie carries Secure over a TLS proxy', async () => {
+  await setPassword('GoodPass1')
+  const login = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass1' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(login.status, 200)
+  const cookie = cookieValue(login.headers)
+  const change = await request('/login/change', {
+    method: 'POST', body: { oldPassword: 'GoodPass1', newPassword: 'NewPass1!' }, cookie,
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(change.status, 200)
+  const cleared = rawSetCookie(change.headers)
+  assert.ok(cleared.includes('Max-Age=0') && cleared.includes('Secure'),
+    'the post-change clearing cookie must match the Secure session cookie')
+})
+
+test('cookieSecure true on plain HTTP warns through the config-warning sink', async () => {
+  await stopGateway()
+  await startGateway(undefined, true)
+  const warnings = []
+  gateway.onConfigWarning = (err) => warnings.push(err instanceof Error ? err.message : String(err))
+  await setPassword('GoodPass1')
+  const res = await request('/login/auth', { method: 'POST', body: { password: 'GoodPass1' } })
+  assert.equal(res.status, 200)
+  assert.equal(warnings.length, 1, 'forced cookieSecure on a non-TLS login must warn once')
+  assert.ok(warnings[0].includes('cookieSecure'), 'warning must name the misconfiguration')
+
+  // The same forced policy over a proxy-declared HTTPS link is the intended
+  // deployment: no warning.
+  await stopGateway()
+  await startGateway(undefined, true)
+  gateway.onConfigWarning = (err) => warnings.push(err instanceof Error ? err.message : String(err))
+  await setPassword('GoodPass1')
+  const tls = await request('/login/auth', {
+    method: 'POST', body: { password: 'GoodPass1' },
+    headers: { 'x-forwarded-proto': 'https' },
+  })
+  assert.equal(tls.status, 200)
+  assert.equal(warnings.length, 1, 'a TLS link must not warn')
+})
+
 test('settings API reports the cookie Secure policy for the panel card', async () => {
   const cookie = await login()
   const res = await request('/login-api/settings', { cookie })

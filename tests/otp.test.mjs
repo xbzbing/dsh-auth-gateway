@@ -811,13 +811,21 @@ test('enabling OTP via the HTTP flow revokes every session and requires re-login
   assert.equal(enable.status, 200)
   const secret = JSON.parse(enable.body).secret
   const code = generateTOTP(secret)
+  // Sent with the proxy-style https marker: activation revokes this session
+  // and clears the cookie, and that clearing cookie must carry the same
+  // Secure attribute the session cookie was minted with (cookieSecure auto).
   const verify = await request('/otp/verify-setup', {
     method: 'POST', cookie, body: { otp: code },
+    headers: { 'x-forwarded-proto': 'https' },
   })
   assert.equal(verify.status, 200)
   const vBody = JSON.parse(verify.body)
   assert.equal(vBody.sessionRevoked, true, 'response must flag the session revocation')
   assert.ok(vBody.backupCodes.length > 0, 'backup codes are returned for saving')
+  const cleared = (Array.isArray(verify.headers['set-cookie'])
+    ? verify.headers['set-cookie'] : [verify.headers['set-cookie']]).join('; ')
+  assert.ok(cleared.includes('Max-Age=0') && cleared.includes('Secure'),
+    'the OTP-activation clearing cookie must mirror the Secure session cookie')
 
   // Every pre-2FA session is gone, including the one that enabled OTP.
   const after = await request('/login-api/settings', { cookie })

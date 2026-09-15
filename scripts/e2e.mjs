@@ -34,11 +34,12 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8002'
 const PASSWORD = process.env.PASSWORD || 'e2e-pass'
 const NEW_PASSWORD = `${PASSWORD}-2`
 
-// Playwright 1.62 expects a newer chromium than the machine has cached; point
-// at the locally cached executable instead of downloading ~150 MB.
-const CACHED_CHROMIUM = path.join(
+// Point at the locally cached executable instead of downloading ~150 MB.
+// CHROMIUM_PATH wins (same override scripts/screenshots.mjs honours); the
+// default tracks the cache directory the current playwright install produced.
+const CACHED_CHROMIUM = process.env.CHROMIUM_PATH || path.join(
   os.homedir(),
-  'Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/'
+  'Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/'
   + 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
 )
 

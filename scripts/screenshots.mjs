@@ -23,6 +23,7 @@
  */
 
 import { chromium } from 'playwright'
+import path from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { resolveChromiumPath } from './chromium.mjs'
 import { generateTOTP } from '../lib/totp.js'

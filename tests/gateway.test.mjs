@@ -194,6 +194,12 @@ test('fresh install: /login renders the login page; /login/auth answers uniforml
   assert.equal(page.status, 200)
   assert.ok(page.body.includes('请输入访问密码'))
   assert.ok(!page.body.includes('设置密码'), 'the legacy setup form must be gone')
+  assert.ok(page.body.includes('/login-api/session'), 'login page must carry the post-login session probe')
+  // The probe's 401 branch writes ERRORS['session-not-kept']; if the key is
+  // missing from the page's dictionary subset (errorsFor is key-filtered) the
+  // message renders as an empty string and the deadlock stays silent.
+  assert.ok(page.body.includes('"session-not-kept":'),
+    'login page dictionary must carry the probe message (a missing key renders an empty error)')
 
   // One uniform 401: nothing reveals whether a password exists yet.
   const res = await request('/login/auth', { method: 'POST', body: { password: 'whatever1' } })
@@ -454,6 +460,43 @@ test('cookieSecure boot override (panel record) rules from the first login', asy
   const cfg = JSON.parse(settings.body).config['dsh-auth-gateway']
   assert.equal(cfg.cookieSecure, true)
   assert.equal(cfg.cookieSecureSource, 'panel')
+})
+
+test('session probe answers cookie liveness for the login page self-check', async () => {
+  // No cookie: 401.
+  const anon = await request('/login-api/session')
+  assert.equal(anon.status, 401)
+
+  // A personal login: 200 while the session lives, 401 after logout.
+  const cookie = await login()
+  const probe = await request('/login-api/session', { cookie })
+  assert.equal(probe.status, 200)
+  assert.deepEqual(JSON.parse(probe.body), { ok: true })
+  await request('/login/logout', { method: 'POST', body: {}, cookie })
+  const afterLogout = await request('/login-api/session', { cookie })
+  assert.equal(afterLogout.status, 401, 'a dead session must answer 401')
+
+  // Password change revokes every session — the old cookie dies too.
+  const cookie2 = await login('GoodPass1')
+  await request('/login/change', {
+    method: 'POST', body: { oldPassword: 'GoodPass1', newPassword: 'NewPass1!' }, cookie: cookie2,
+  })
+  const afterChange = await request('/login-api/session', { cookie: cookie2 })
+  assert.equal(afterChange.status, 401)
+})
+
+test('session probe answers 200 for onboarding sessions (the cookie took)', async () => {
+  // The probe's only question is "did the cookie take?" — an onboarding
+  // session is live, so it must answer 200 even though /login-api/settings
+  // (and everything else) stays blocked until onboarding completes.
+  await setPassword('Init1al!pw', { initial: true })
+  const loginRes = await request('/login/auth', { method: 'POST', body: { password: 'Init1al!pw' } })
+  const cookie = cookieValue(loginRes.headers)
+  assert.ok(cookie, 'initial-password login must mint a cookie')
+  const probe = await request('/login-api/session', { cookie })
+  assert.equal(probe.status, 200, 'onboarding sessions are live sessions')
+  // Onboarding sessions keep gateway-local access (OTP/settings flow); the
+  // onboarding GATE lives on the dsh upstream (/api/*), covered elsewhere.
 })
 
 test('cookieSecure panel write without a record store answers storage-unavailable', async () => {

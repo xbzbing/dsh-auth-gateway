@@ -262,6 +262,17 @@ test('all gateway pages inject a defined __basePath (no undefined concatenation)
   assert.ok(rootHtml.includes('const __basePath = ""'), 'root basePath renders empty string')
 })
 
+test('login page post-login probe is routed through __basePath (sub-path safe)', async () => {
+  // The session probe the login page runs after a successful sign-in must
+  // use the injected base path — a root-absolute URL would 404 on sub-path
+  // deployments and the probe would silently never run (it degrades to the
+  // old behavior, masking the Secure-cookie collision it exists to surface).
+  const { loginPageHtml } = await import('../lib/login-page.js')
+  const sub = loginPageHtml({ mode: 'auth', basePath: '/dsh' })
+  assert.ok(sub.includes("__basePath + '/login-api/session'"),
+    'probe URL must be built from __basePath')
+})
+
 // ── auth audit events ───────────────────────────────────────────────────
 
 test('auth audit: login success/failure, logout and password change emit events', async () => {

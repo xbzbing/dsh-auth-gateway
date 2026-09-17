@@ -54,7 +54,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。
 - **客户端面板经注入的 basePath 全局量构造 API 路径**（`window.__dshAuthGatewayBasePath__`，由 index.js tapIndex 写入）：面板内禁止根绝对路径 fetch/跳转，否则子路径部署失效。
-- **`settings.section` 的 `order` 必须严格大于官方全部 section 的最大值**（dsh 现为 general 0 / models 10 / plugins 15 / agent-presets 20，本插件取 100）：slot 列表按 `order` 稳定排序，与官方取值相等时位置由插件加载顺序决定，会随组合在「Agent 预设」前后漂移——第三方面板必须落在所有官方菜单之后。
+- **`settings.section` 的 `order` 必须严格大于官方全部 section 的最大值**（dsh 0.1.6 现为 general 0 / models 10 / plugins 15 / agent-presets 20 / unarchive-sessions 25，本插件取 100）：slot 列表按 `order` 稳定排序，与官方取值相等时位置由插件加载顺序决定，会随组合在「Agent 预设」前后漂移——第三方面板必须落在所有官方菜单之后。
 - **登录失败只返回统一错误码** `invalid-credentials`（防凭据枚举）；受保护流程（OTP 绑定/禁用）才允许细分错误码。页面文案一律走 lib/errors.js 字典，不硬编码。
 - **安全状态变更必须留审计**：登录/登出/改密/OTP 启停经 `onAuthEvent` 输出（只含 kind/ip/reason，绝不带凭据），并与暴力破解告警（`onSecurityEvent`）一同落盘 `audit.log`（lib/audit-log.js）；错误密码计入与登录共享的按地址锁定。
 - **凭据落盘模式**：原子写（temp + rename）、文件 0600 / 目录 0700；scrypt 只用异步 API；OTP secret 先 AES-256-GCM 密封再写盘，主密钥缺失时显式报错、绝不静默重生成。

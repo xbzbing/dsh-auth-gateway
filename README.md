@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作，也没有针对反向代理/网关的处理」（*"There is no logout operation or reverse-proxy-specific handling"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-本项目已支持最新的 dsh 0.1.5-rc.2 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。0.1.5 系列已验证兼容：网关所依赖的全部扩展点（`webServer.tapIndex`、`dsh.bundle` patch、`settings.section` slot、`credentials` record 与 BrowserAuth cookie 格式）在该版本均未变动，WS 无限重连与文件上传流式转发均可正常通过网关。
+本项目已支持最新的 dsh 0.1.6-alpha.2 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。0.1.5 与 0.1.6 系列均已验证兼容：网关所依赖的全部扩展点（`webServer.tapIndex`、`dsh.bundle` patch、`settings.section` slot、`credentials` record 与 BrowserAuth cookie 格式）在 0.1.6-alpha.2 均未变动（settings 面板新增官方 section 至 order 25，本插件 100 依然严格最大），WS 无限重连与文件上传流式转发均可正常通过网关；0.1.6 起 profile 配置 HMR 默认开启（`dsh-hmr`），部署后插件自身变更仍按既有流程生效。
 
 ## 安装和卸载
 

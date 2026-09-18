@@ -228,6 +228,7 @@ window.__ModuleLoader__.load({
 		  "status.otpDisabled": "OTP \u5DF2\u7981\u7528",
 		  "status.passwordChanged": "\u5BC6\u7801\u4FEE\u6539\u6210\u529F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55",
 		  "error.loadSettings": "\u52A0\u8F7D\u5931\u8D25: {message}",
+		  "error.sessionExpired": "\u767B\u5F55\u72B6\u6001\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55",
 		  "error.enableOtp": "\u542F\u7528\u5931\u8D25: {message}",
 		  "error.disableOtp": "\u7981\u7528\u5931\u8D25: {message}",
 		  "error.disableOtpInvalid": "\u9A8C\u8BC1\u7801\u9519\u8BEF\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u4F7F\u7528\u8BA4\u8BC1\u5668\u4E2D\u7684\u6700\u65B0\u9A8C\u8BC1\u7801\u91CD\u8BD5\u3002",
@@ -323,6 +324,7 @@ window.__ModuleLoader__.load({
 		  "status.otpDisabled": "OTP disabled",
 		  "status.passwordChanged": "Password updated \u2014 please sign in again",
 		  "error.loadSettings": "Failed to load: {message}",
+		  "error.sessionExpired": "Your session has expired \u2014 sign in again",
 		  "error.enableOtp": "Failed to enable: {message}",
 		  "error.disableOtp": "Failed to disable: {message}",
 		  "error.disableOtpInvalid": "Invalid or expired code \u2014 use the latest code from your authenticator and try again.",
@@ -423,6 +425,7 @@ window.__ModuleLoader__.load({
 		  const [newPassword, setNewPassword] = (0, import_react.useState)("");
 		  const [confirmPassword, setConfirmPassword] = (0, import_react.useState)("");
 		  const [changingPassword, setChangingPassword] = (0, import_react.useState)(false);
+		  const [enablingOtp, setEnablingOtp] = (0, import_react.useState)(false);
 		  const [otpCode, setOtpCode] = (0, import_react.useState)("");
 		  const [verifyingOtp, setVerifyingOtp] = (0, import_react.useState)(false);
 		  const [showDisableOtp, setShowDisableOtp] = (0, import_react.useState)(false);
@@ -518,8 +521,13 @@ window.__ModuleLoader__.load({
 		        const mode = normalizeMode(cfg.cookieSecure);
 		        setCookieSecure(mode);
 		        setCookieSecureSource(cfg.cookieSecureSource === "panel" ? "panel" : "deployment");
-		        setRequestSecure(cfg.requestSecure === void 0 ? isHttps : cfg.requestSecure === true);
+		        setRequestSecure(data.requestSecure === void 0 ? isHttps : data.requestSecure === true);
 		        setCookieSecureDraft(null);
+		      } else {
+		        setStatus({
+		          type: "error",
+		          message: data?.error === "unauthenticated" ? t("error.sessionExpired") : t("error.loadSettings", { message: data?.error || t("error.unknown") })
+		        });
 		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.loadSettings", { message: err.message }) });
@@ -528,17 +536,21 @@ window.__ModuleLoader__.load({
 		    }
 		  }
 		  async function enableOTP() {
+		    if (enablingOtp) return;
+		    setEnablingOtp(true);
 		    setStatus(null);
 		    try {
 		      const data = await api.enableOtp();
 		      if (data.ok) {
-		        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes });
+		        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl });
 		        setShowQRModal(true);
 		      } else {
 		        setStatus({ type: "error", message: t("error.enableOtp", { message: data.error || t("error.unknown") }) });
 		      }
 		    } catch (err) {
 		      setStatus({ type: "error", message: t("error.enableOtp", { message: err.message }) });
+		    } finally {
+		      setEnablingOtp(false);
 		    }
 		  }
 		  async function disableOTP() {
@@ -569,6 +581,7 @@ window.__ModuleLoader__.load({
 		    }
 		  }
 		  function closeQRModal() {
+		    if (setupDone) return;
 		    setShowQRModal(false);
 		    setQrData(null);
 		    setOtpCode("");
@@ -679,7 +692,7 @@ window.__ModuleLoader__.load({
 		          otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: "success", children: t("otp.enabled") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("otp.disabled") })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("otp.desc") }),
-		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, children: t("otp.enable") }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: t("otp.disable") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, disabled: enablingOtp, children: t("otp.enable") }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: t("otp.disable") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		          display: "flex",
 		          flexDirection: "column",
 		          gap: "10px",
@@ -936,7 +949,9 @@ window.__ModuleLoader__.load({
 		      alignItems: "center",
 		      justifyContent: "center",
 		      padding: "24px"
-		    }, onClick: closeQRModal, children: [
+		      // After a successful setup the dialog holds the one-time backup
+		      // codes; the mask must not dismiss it (see closeQRModal).
+		    }, onClick: setupDone ? void 0 : closeQRModal, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { position: "absolute", inset: 0, background: T.mask1, backdropFilter: T.maskBlur } }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
 		        position: "relative",
@@ -951,7 +966,7 @@ window.__ModuleLoader__.load({
 		      }, onClick: (e) => e.stopPropagation(), children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "20px 24px 4px" }, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: t("dialog.title") }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
+		          !setupDone && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "0 24px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {

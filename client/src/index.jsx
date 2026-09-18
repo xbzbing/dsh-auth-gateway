@@ -155,6 +155,7 @@ const zh = {
   'status.otpDisabled': 'OTP 已禁用',
   'status.passwordChanged': '密码修改成功，请重新登录',
   'error.loadSettings': '加载失败: {message}',
+  'error.sessionExpired': '登录状态已失效，请重新登录',
   'error.enableOtp': '启用失败: {message}',
   'error.disableOtp': '禁用失败: {message}',
   'error.disableOtpInvalid': '验证码错误或已过期，请使用认证器中的最新验证码重试。',
@@ -252,6 +253,7 @@ const en = {
   'status.otpDisabled': 'OTP disabled',
   'status.passwordChanged': 'Password updated — please sign in again',
   'error.loadSettings': 'Failed to load: {message}',
+  'error.sessionExpired': 'Your session has expired — sign in again',
   'error.enableOtp': 'Failed to enable: {message}',
   'error.disableOtp': 'Failed to disable: {message}',
   'error.disableOtpInvalid': 'Invalid or expired code — use the latest code from your authenticator and try again.',
@@ -365,6 +367,10 @@ function UserSettingsPanel({ api, t }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+  // In-flight guard for the enable click: a double-click would POST /otp/enable
+  // twice and the second response would OVERWRITE the staged secret, making
+  // the scanned QR disagree with the codes the user verifies.
+  const [enablingOtp, setEnablingOtp] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [verifyingOtp, setVerifyingOtp] = useState(false)
   const [showDisableOtp, setShowDisableOtp] = useState(false)
@@ -502,10 +508,24 @@ function UserSettingsPanel({ api, t }) {
         const mode = normalizeMode(cfg.cookieSecure)
         setCookieSecure(mode)
         setCookieSecureSource(cfg.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
-        // Secure origin as the GATEWAY sees it; missing on older gateways,
-        // in which case the browser's own protocol is the best proxy.
-        setRequestSecure(cfg.requestSecure === undefined ? isHttps : cfg.requestSecure === true)
+        // Secure origin as the GATEWAY sees it. It lives at the TOP level of
+        // the response (server-side transport truth, incl. X-Forwarded-Proto),
+        // NOT inside cfg — reading it from cfg would always be undefined and
+        // silently fall back to the browser's own protocol. Missing on older
+        // gateways, in which case the browser's protocol is the best proxy.
+        setRequestSecure(data.requestSecure === undefined ? isHttps : data.requestSecure === true)
         setCookieSecureDraft(null)
+      } else {
+        // A non-ok answer (401: the session died while the panel was open;
+        // 5xx: plugin/record state broken) must NOT render the default
+        // snapshot — "OTP off / deployment policy" would be a fake security
+        // picture. Surface the failure instead.
+        setStatus({
+          type: 'error',
+          message: data?.error === 'unauthenticated'
+            ? t('error.sessionExpired')
+            : t('error.loadSettings', { message: data?.error || t('error.unknown') }),
+        })
       }
     } catch (err) {
       setStatus({ type: 'error', message: t('error.loadSettings', { message: err.message }) })
@@ -513,11 +533,15 @@ function UserSettingsPanel({ api, t }) {
   }
 
   async function enableOTP() {
+    if (enablingOtp) return
+    setEnablingOtp(true)
     setStatus(null)
     try {
       const data = await api.enableOtp()
       if (data.ok) {
-        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl, backupCodes: data.backupCodes })
+        // /otp/enable answers the staged secret + QR, NOT the backup codes
+        // (those exist only after verify-setup) — no backupCodes field here.
+        setQrData({ secret: data.secret, uri: data.uri, svgUrl: data.svgUrl })
         setShowQRModal(true)
         // Do NOT flip the panel state here — OTP is not enabled
         // until the code is verified via verify-setup.
@@ -525,6 +549,7 @@ function UserSettingsPanel({ api, t }) {
         setStatus({ type: 'error', message: t('error.enableOtp', { message: data.error || t('error.unknown') }) })
       }
     } catch (err) { setStatus({ type: 'error', message: t('error.enableOtp', { message: err.message }) }) }
+    finally { setEnablingOtp(false) }
   }
 
   async function disableOTP() {
@@ -552,6 +577,11 @@ function UserSettingsPanel({ api, t }) {
   }
 
   function closeQRModal() {
+    // The backup codes are returned EXACTLY ONCE by /otp/verify-setup (the
+    // gateway revoked every session, so they can never be re-fetched). Once
+    // setup is done the dialog must not be closable: the mask and the ✕ no
+    // longer call this, and this guard is the second line of defence.
+    if (setupDone) return
     // Cancel path: just close, keep the panel button in its
     // current state (OTP was not verified here).
     setShowQRModal(false); setQrData(null); setOtpCode(''); setVerifyingOtp(false)
@@ -639,7 +669,7 @@ function UserSettingsPanel({ api, t }) {
           </div>
           <p style={DESC}>{t('otp.desc')}</p>
           {!otpEnabled ? (
-            <Button variant="primary" onClick={enableOTP}>{t('otp.enable')}</Button>
+            <Button variant="primary" onClick={enableOTP} disabled={enablingOtp}>{t('otp.enable')}</Button>
           ) : !showDisableOtp ? (
             <Button variant="dangerOutline" onClick={() => setShowDisableOtp(true)}>{t('otp.disable')}</Button>
           ) : (
@@ -863,7 +893,9 @@ function UserSettingsPanel({ api, t }) {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000, display: 'flex',
           alignItems: 'center', justifyContent: 'center', padding: '24px',
-        }} onClick={closeQRModal}>
+          // After a successful setup the dialog holds the one-time backup
+          // codes; the mask must not dismiss it (see closeQRModal).
+        }} onClick={setupDone ? undefined : closeQRModal}>
           <div style={{ position: 'absolute', inset: 0, background: T.mask1, backdropFilter: T.maskBlur }} />
           <div style={{
             position: 'relative', boxSizing: 'border-box', background: T.bg2,
@@ -874,7 +906,10 @@ function UserSettingsPanel({ api, t }) {
               <h3 style={{ margin: 0, fontSize: '16px', lineHeight: '24px', fontWeight: 500, color: T.textPrimary }}>
                 {t('dialog.title')}
               </h3>
-              <Button variant="ghost" onClick={closeQRModal} style={{ height: '28px', width: '28px', padding: 0, borderRadius: '8px' }}>✕</Button>
+              {/* No ✕ after setup: closing would drop the one-time backup codes. */}
+              {!setupDone && (
+                <Button variant="ghost" onClick={closeQRModal} style={{ height: '28px', width: '28px', padding: 0, borderRadius: '8px' }}>✕</Button>
+              )}
             </div>
             <div style={{ padding: '0 24px' }}>
               {setupDone ? (
@@ -962,7 +997,7 @@ function UserSettingsPanel({ api, t }) {
 const inject = ['slots', 'locale', 'connection']
 
 /**
- * LAN trust through the official plugin seam.
+ * LAN trust through the official plugin seam (second layer).
  *
  * dsh computes `connection.isLoopback` once from `location.hostname` when the
  * connection plugin applies; every settings consumer snapshots it for its
@@ -971,12 +1006,14 @@ const inject = ['slots', 'locale', 'connection']
  * per-browser memory — even though the gateway has already authenticated the
  * page and rewrites Host/Origin to loopback server-side.
  *
- * The previous fix wrapped the module loader to intercept
- * `ctx.provide('connection', ...)`; that global surgery broke coexisting
- * plugins (dsh-better-sidebar's service registration chain). This version
- * stays on the official seam: declare `connection` in inject, then install a
- * getter that always reports trusted. A getter (not a plain write) is used so
- * a consumer whose apply ran before ours still reads true afterwards.
+ * The PRIMARY mechanism is the host plugin's tapIndex-injected loader proxy
+ * (lib/lan-trust-script.js): it intercepts the connection registration before
+ * any consumer wakes, per the sanctioned minimal intervention documented in
+ * AGENTS.md. THIS function is the second layer — a getter on the final
+ * handle for boots where that bootstrap did not run (unexpected loader
+ * shape): a getter (not a plain write) is used so a consumer whose apply ran
+ * before ours still reads true afterwards. The historical 0.4.2 breakage came
+ * from REPLACING ctx.provide during registration; neither layer does that.
  */
 function installLanTrust(ctx) {
   if (typeof location === 'undefined' || !location.hostname) return

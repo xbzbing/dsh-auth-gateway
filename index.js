@@ -153,10 +153,14 @@ export async function apply(ctx, config) {
   // polyfill can run at the start of <head>; it also publishes the gateway's
   // basePath ('' for root) as a global so the client settings panel builds
   // API paths and redirects that survive sub-path (reverse-proxy) deployments.
-  // The LAN trust fix lives in the CLIENT plugin (client/src/index.jsx): it
-  // marks connection.isLoopback through the official inject seam at apply
-  // time — no module-loader surgery, so coexisting plugins (better-sidebar
-  // and friends) keep their activation semantics untouched.
+  // LAN trust has TWO layers: (1) the loader proxy injected below — the
+  // sanctioned minimal intervention that flips connection.isLoopback true at
+  // REGISTRATION time, before any consumer snapshots it (see
+  // lib/lan-trust-script.js for the mechanism and its boundaries); (2) a
+  // getter in the client plugin (client/src/index.jsx installLanTrust) that
+  // covers boots where the loader bootstrap did not run. Both restore the
+  // authenticated-LAN settings persistence that the gateway's own
+  // authentication makes safe; neither touches ctx.provide.
   const randomUUIDScript = '<script>'
     + 'window.__dshAuthGatewayBasePath__=' + JSON.stringify(gateway.basePath) + ';'
     + 'if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {'

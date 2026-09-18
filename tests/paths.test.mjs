@@ -107,8 +107,8 @@ test('a stray file named auth-gate is skipped by the migration (left in place)',
 
     assert.equal(dir, join(home, 'auth-gateway'))
     assert.ok(existsSync(stray), 'the stray file is left untouched (no rename over it)')
-    assert.ok(!existsSync(join(home, 'auth-gateway', 'password.json')) || true,
-      'the gateway proceeds with a fresh directory')
+    assert.ok(!existsSync(join(home, 'auth-gateway')),
+      'credentialDir must not create the new directory when the migration is skipped')
   } finally {
     rmSync(home, { recursive: true, force: true })
   }

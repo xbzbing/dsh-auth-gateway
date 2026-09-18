@@ -6,13 +6,39 @@
  *   node scripts/smoke.mjs          # serves 127.0.0.1:3180 -> fake upstream :3181
  *
  * Ports are deliberately NOT 3080/3081 (a real dsh web may be running).
+ *
+ * CREDENTIAL ISOLATION: the mock runs the REAL apply(), whose store writes
+ * under $DSH_HOME/auth-gateway/. Without isolation a smoke run would mint an
+ * initial password INTO A REAL deployment's home (first run) or let
+ * verify.sh's /login/change rewrite a real password. An ambient DSH_HOME
+ * (e.g. exported by a parent dsh process) is NOT trusted — only the
+ * dedicated SMOKE_DSH_HOME variable opts into a specific sandbox. Otherwise
+ * a temp home is created here, printed on startup and removed on exit.
  */
 
 import http from 'node:http'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { apply } from '../index.js'
 
 const UPSTREAM_PORT = 3181
 const LISTEN_PORT = 3180
+
+// Only an EXPLICIT SMOKE_DSH_HOME is respected; a merely ambient DSH_HOME is
+// overridden so the smoke can never touch a real deployment's credentials.
+const SMOKE_HOME_ENV = 'SMOKE_DSH_HOME'
+const ambientHome = process.env.DSH_HOME
+const ownedHome = process.env[SMOKE_HOME_ENV] === undefined
+const dshHome = ownedHome
+  ? mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-smoke-'))
+  : process.env[SMOKE_HOME_ENV]
+process.env.DSH_HOME = dshHome
+if (ownedHome) {
+  console.log(`smoke DSH_HOME: ${dshHome}（临时目录，退出时清理）${ambientHome !== undefined ? `；已隔离环境中的 DSH_HOME=${ambientHome}` : ''}`)
+} else {
+  console.log(`smoke DSH_HOME: ${dshHome}（SMOKE_DSH_HOME 指定的沙箱）`)
+}
 
 // Fake upstream: any page 200, any /api 200 json, no upgrade handling. The
 // captured tapIndex transform runs on the index page, like the real server.
@@ -65,6 +91,7 @@ async function shutdown() {
     if (typeof disposer === 'function') await disposer()
   }
   await new Promise((resolve) => upstream.close(resolve))
+  if (ownedHome) rmSync(dshHome, { recursive: true, force: true })
   process.exit(0)
 }
 process.on('SIGINT', shutdown)

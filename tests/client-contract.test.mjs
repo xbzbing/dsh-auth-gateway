@@ -81,10 +81,7 @@ test('LAN trust installs a permanent getter on the connection handle (official s
     get connection() { seen.push('get'); return connection },
   }
   // Simulate the LAN case: hostname is not loopback in this VM realm? The
-  // sandbox pins 127.0.0.1, so override through the same global the bundle
-  // reads — delete-and-replace keeps the test on the bundle's real code path.
-  vm.runInContext('location = { hostname: "172.19.0.1" }', vm.createContext(globalThis.__clientSandbox ?? undefined))
-  // Re-run apply against a LAN-flavoured sandbox built the same way:
+  // sandbox pins 127.0.0.1, so use a dedicated LAN-flavoured sandbox below.
   let handoff2 = null
   const lanSandbox = {
     window: { __ModuleLoader__: { load: (h) => { handoff2 = h } } },
@@ -224,6 +221,11 @@ test('component takes no ctx prop and never fetches directly', () => {
     'panel must read the cookieSecure policy from the settings response')
   assert.ok(source.includes('cfg.cookieSecureSource'),
     'panel must read where the cookieSecure policy comes from (deployment vs panel)')
+  // The gateway's transport-truth field rides at the TOP level of the
+  // /login-api/settings response (lib/gateway-panel-api.js `requestSecure`),
+  // not inside the config block — a read from cfg would always be undefined.
+  assert.ok(source.includes('data.requestSecure'),
+    'panel must read the gateway transport signal from the TOP level of the settings response')
   // All panel API calls and redirects must go through the basePath global
   // injected by index.js — root-absolute paths would break sub-path
   // (reverse-proxy) deployments.

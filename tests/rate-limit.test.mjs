@@ -87,12 +87,29 @@ test('the lockout is shared: a locked address is refused by the OTP layer too', 
   assert.equal(limiter.otpVerifyAllowed('10.0.0.2', T0 + 6 * MINUTE), true)
 })
 
-test('a later successful login clearing the map frees the address (gateway behaviour)', () => {
-  const { limiter } = setup({ maxLoginFailures: 5, lockMinutes: 5 })
+test('deleting an entry on successful login (gateway behaviour) recounts failures from zero', () => {
+  // The limiter does not delete on success — the gateway does
+  // (`attempts.delete(key)` in /login/auth). This pins the CONTRACT the
+  // gateway relies on: once the entry is gone, the next failure starts a
+  // fresh count toward a NEW lockout (the gateway-side clearing itself is
+  // covered end-to-end in gateway.test.mjs "successful login resets the
+  // failure counter").
+  const { limiter, events } = setup({ maxLoginFailures: 3, lockMinutes: 5 })
   limiter.recordFailure('10.0.0.3', T0)
-  assert.equal(limiter.attempts.get('10.0.0.3').count, 1)
+  limiter.recordFailure('10.0.0.3', T0)
+  assert.equal(limiter.attempts.get('10.0.0.3').count, 2)
   limiter.attempts.delete('10.0.0.3') // what /login/auth does on success
   assert.equal(limiter.attempts.has('10.0.0.3'), false)
+
+  // The recount must not silently carry the old count: three fresh failures
+  // (not one) trip the next lockout, and the address emits a second alert.
+  limiter.recordFailure('10.0.0.3', T0 + 1000)
+  limiter.recordFailure('10.0.0.3', T0 + 2000)
+  assert.equal(events.length, 0, 'two fresh failures stay below the threshold')
+  limiter.recordFailure('10.0.0.3', T0 + 3000)
+  assert.equal(limiter.attempts.get('10.0.0.3').lockedUntil, T0 + 3000 + 5 * MINUTE,
+    'the third fresh failure trips a lockout dated NOW, not from the old streak')
+  assert.equal(events.filter((e) => e.kind === 'lockout').length, 1)
 })
 
 // ── layer 3: per-address OTP window ────────────────────────────────────

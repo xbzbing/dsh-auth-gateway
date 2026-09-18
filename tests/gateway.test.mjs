@@ -19,6 +19,7 @@ import { LoginGateway } from '../lib/gateway.js'
 import { PROBE_SESSION_SOURCE } from '../lib/login-page.js'
 import { SESSION_TTL_SECONDS } from '../lib/auth.js'
 import { setPassword, verifyPassword, isInitialPassword } from '../lib/store.js'
+import { enableOTP, getOTPSecret } from '../lib/otp-store.js'
 import { generateTOTP } from '../lib/totp.js'
 import { createUpdateChecker } from '../lib/update-check.js'
 
@@ -985,6 +986,35 @@ test('websocket: a session owing onboarding is rejected even with a valid cookie
   assert.equal(upgradedSockets.length, before, 'onboarding session must never reach the upstream socket')
 })
 
+test('websocket: a session that has not completed OTP verification is rejected once 2FA is active', async () => {
+  // The upgrade path applies the SAME OTP gate as #route: a password-only
+  // session (2FA became active after its login) must not reach the upstream
+  // event stream — an unverified session has no business receiving agent
+  // events. The regression class here is the 0.7.x-era "gate split": HTTP and
+  // WS gating diverging as the state machine grew.
+  const password = 'GoodPass1'
+  await setPassword(password)
+  // Login BEFORE 2FA is active → a session that owes OTP verification.
+  const preLogin = await request('/login/auth', { method: 'POST', body: { password } })
+  const cookie = cookieValue(preLogin.headers)
+  assert.ok(cookie)
+  await enableOTP()
+
+  const before = upgradedSockets.length
+  const outcome = await tryUpgrade('/api/remote.mux', cookie)
+  assert.equal(outcome, 'rejected')
+  assert.equal(upgradedSockets.length, before, 'an OTP-unverified session must never reach the upstream socket')
+
+  // After verifying the OTP step the same cookie passes the gate.
+  const verify = await request('/otp/verify', {
+    method: 'POST', cookie, body: { otp: generateTOTP(getOTPSecret()) },
+  })
+  assert.equal(verify.status, 200)
+  const outcome2 = await tryUpgrade('/api/remote.mux', cookie)
+  assert.equal(outcome2, 'upgraded')
+  assert.equal(upgradedSockets.length, before + 1)
+})
+
 test('a WebSocket handshake that lost its Upgrade header is refused with a diagnosis', async () => {
   // Root cause of the "登录成功但页面提示连接失败" outage: an edge proxy that
   // does not forward Upgrade/Connection turns the handshake into a plain GET.
@@ -1048,6 +1078,34 @@ test('malformed json body answers 400', async () => {
     req.end()
   })
   assert.equal(res.status, 400)
+})
+
+test('request body over the 1 MiB bound answers 413 payload-too-large', async () => {
+  // The auth endpoints' body reader caps at MAX_BODY_BYTES — a DoS guard so a
+  // hostile request cannot make the gateway buffer an unbounded upload.
+  const res = await new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1', port: gatewayPort, path: '/login/auth', method: 'POST',
+      headers: { host: 'test-host:3080', 'content-type': 'application/json' },
+    }, (r) => {
+      const chunks = []
+      r.on('data', (c) => chunks.push(c))
+      r.on('end', () => resolve({ status: r.statusCode, body: Buffer.concat(chunks).toString() }))
+    })
+    req.on('error', reject)
+    req.write(JSON.stringify({ password: 'x'.repeat(1024 * 1024 + 64) }))
+    req.end()
+  })
+  assert.equal(res.status, 413)
+  assert.equal(JSON.parse(res.body).error, 'payload-too-large')
+
+  // A body just under the bound still reaches the auth logic.
+  await setPassword('GoodPass1')
+  const ok = await request('/login/auth', {
+    method: 'POST',
+    body: { password: 'GoodPass1', padding: 'x'.repeat(16 * 1024) },
+  })
+  assert.equal(ok.status, 200)
 })
 
 test('duplicate mount: a second gateway on the same port fails loud', async () => {

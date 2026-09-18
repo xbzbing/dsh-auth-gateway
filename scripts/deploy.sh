@@ -65,7 +65,7 @@ ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" cordis.patch.yml package.json)
 errors=0
 
 # ── 1. Pre-deploy 检查（在 workspace 源码上跑） ──────────────────────────
-echo "▸ [1/3] 语法检查（workspace 源码）"
+echo "▸ [1/4] 语法检查（workspace 源码）"
 for f in "${JS_FILES[@]}"; do
   if node --check "$SRC/$f" 2>/dev/null; then
     echo "  ✓ $f"
@@ -81,7 +81,7 @@ if ((errors > 0)); then
 fi
 
 echo
-echo "▸ [2/3] 单元测试"
+echo "▸ [2/4] 单元测试"
 cd "$SRC"
 if npm test 2>&1 | tail -1; then
   echo "  ✓ 测试通过"
@@ -91,9 +91,25 @@ else
   exit 1
 fi
 
+# Client bundle freshness gate: the panel half ships as a BUILT artifact, and
+# the copy below deploys byte-for-byte what sits in the checkout — a bundle
+# stale against client/src would silently ship the new server routes with the
+# OLD panel (nothing downstream notices; node --check only proves syntax).
+# build:check rebuilds the bundle and fails on any diff against the committed
+# artifact, which is exactly the discipline the repo requires.
+echo
+echo "▸ [3/4] client bundle 新鲜度（build:check）"
+if npm run build:check >/dev/null 2>&1; then
+  echo "  ✓ client/index.js 与 client/src 一致"
+else
+  echo "  ✗ client bundle 与源码不一致，中止部署。" >&2
+  echo "  运行 npm run build:client 并提交产物后重试" >&2
+  exit 1
+fi
+
 # ── 2. 复制 ──────────────────────────────────────────────────────────────
 echo
-echo "▸ [3/3] 同步 → $DST"
+echo "▸ [4/4] 同步 → $DST"
 for f in "${ALL_FILES[@]}"; do
   if [[ ! -f "$SRC/$f" ]]; then
     echo "  ✗ 源文件不存在: $f" >&2; exit 1

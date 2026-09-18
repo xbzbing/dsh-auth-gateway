@@ -156,6 +156,11 @@ let home
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-otp-test-'))
   process.env.DSH_HOME = home
+  // otp-crypto caches the resolved master key for the process lifetime; a
+  // fresh $DSH_HOME per test must resolve against ITS key file (or generate
+  // one), not reuse the previous test's key. The in-test manual resets stay
+  // for mid-test key swaps; this covers the cross-test boundary.
+  _resetMasterKeyCache()
 })
 
 afterEach(() => {
@@ -468,6 +473,62 @@ test('replay watermark is clamped to the current step (no future advance)', asyn
     getLastCounter() <= currentStep,
     `watermark must not advance past current step, got ${getLastCounter()} > ${currentStep}`,
   )
+  await stopGateway()
+})
+
+test('replay watermark survives a gateway restart (persisted lastCounter)', async () => {
+  // The anti-replay contract holds across PROCESS churn: setLastCounter
+  // writes otp.json (lib/otp-store.js), a fresh gateway re-reads it, and the
+  // code that already logged in once must be rejected afterwards — with NO
+  // in-memory state carried over.
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  await enableOTP({ backupCodeCount: 3 })
+
+  // Consume the current time step's code through a real login.
+  const code = generateTOTP(getOTPSecret())
+  const first = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!', otp: code } })
+  assert.equal(first.status, 200)
+  assert.ok(getLastCounter() !== null, 'the accepted step was persisted')
+
+  // "Restart": a fresh gateway instance over the same $DSH_HOME (module-level
+  // caches are still around in-process, so drop the master-key cache the way
+  // a real process restart would).
+  await stopGateway()
+  _resetMasterKeyCache()
+  await startGateway({}, { otpEnabled: true })
+
+  // The same code must now be refused: whether the 30s step rolled over in
+  // between or not, its counter is <= the persisted watermark.
+  const replay = await request('/login/auth', { method: 'POST', body: { password: 'Test1234!', otp: code } })
+  assert.equal(replay.status, 401)
+  assert.equal(JSON.parse(replay.body).error, 'invalid-credentials')
+
+  // A FRESH code still works after the restart — the persisted watermark
+  // did not brick the second factor.
+  const fresh = await request('/login/auth', {
+    method: 'POST',
+    body: { password: 'Test1234!', otp: generateTOTP(getOTPSecret(), { timestamp: Date.now() + 30000 }) },
+  })
+  assert.equal(fresh.status, 200)
+  await stopGateway()
+})
+
+test('concurrent submissions of the same backup code mint at most one session', async () => {
+  // Regression for the TOCTOU race: verify-and-mark spans an async scrypt
+  // gap, and two overlapping submissions of the SAME code must not both see
+  // `used: false`. VerifyAndUseBackupCode is serialized, so only one wins.
+  await startGateway({}, { otpEnabled: true })
+  await setPassword('Test1234!')
+  const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
+
+  const [a, b] = await Promise.all([
+    verifyAndUseBackupCode(backupCodes[0]),
+    verifyAndUseBackupCode(backupCodes[0]),
+  ])
+  assert.equal(a === true && b === true, false, 'only one of the two may succeed')
+  const second = await verifyAndUseBackupCode(backupCodes[0])
+  assert.equal(second, false, 'the loser wins nothing either')
   await stopGateway()
 })
 

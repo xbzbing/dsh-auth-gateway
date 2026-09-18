@@ -10,7 +10,10 @@ index.js        插件入口：gateway 生命周期、tapIndex 注入（randomUU
 lib/
   gateway.js    认证门禁：路由、认证状态机（会话/onboarding/OTP 三态）、三层防爆破、basePath 剥离
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
+  gateway-panel-api.js 设置面板 API（/login-api/*，含 cookieSecure 运行时覆盖）
   forward.js    HTTP/WS 转发管道：Host/Origin 回环改写、upgrade 双向管道、lanAddresses
+  upstream-auth.js dsh ≥ 0.1.2 上游 BrowserAuth cookie 铸造（credentials record 读密钥 + 缓存）
+  rate-limit.js 三层防爆破状态机（全局限流 / 按地址锁定 / OTP 窗口）
   auth.js       内存会话表（256-bit token）+ Cookie 编解码
   audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/log/audit.log，按天轮转、保留 90 天）
   locale.js     页面语言解析（settings.yaml preference > Accept-Language > zh）
@@ -22,8 +25,10 @@ lib/
   *-page.js     自包含 HTML 页面（login / onboarding / otp），共享脚手架在 page-shell.js
   policy.js     密码强度策略（服务端权威，客户端仅提前反馈）
   config.js     Standard Schema v1 配置校验
+  paths.js      $DSH_HOME 路径解析与旧目录迁移（auth-gate/login-plugin → auth-gateway）
   version.js    自身版本/仓库读取（package.json）+ SemVer 子集比较
   update-check.js 新版本检查：唯一的对外请求（npm registry latest），默认不自动发起、仅手动按钮或 updateCheck=true 触发；TTL 缓存、绝不抛错
+  lan-trust-script.js 认证后 LAN trust bootstrap（透传代理仅拦截 connection 注册，见下方安全例外）
 client/         设置面板（slot settings.section）；src/index.jsx 源码，index.js+.map 为入库构建产物
 scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；smoke.mjs 冒烟；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图

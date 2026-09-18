@@ -8,7 +8,12 @@
  *   2. after auth: homepage UI loaded, zero JS errors
  *   3. logout -> login page -> wrong password rejected -> login -> homepage
  *   4. change password -> all sessions revoked -> re-login with new password
- *   5. the Remote mux WebSocket completes its handshake — catches a reverse
+ *   5. two-factor: enable OTP through the settings panel, verify with a real
+ *      TOTP code, log in with password + code, disable OTP again (restores
+ *      the deployment state) — 2FA is THE product's core feature, so the
+ *      suite actually exercises it instead of only skipping the onboarding
+ *      binding
+ *   6. the Remote mux WebSocket completes its handshake — catches a reverse
  *      proxy that does not forward Upgrade/Connection (TROUBLESHOOTING §7)
  *
  * Point BASE at the URL users actually use. When a reverse proxy fronts the
@@ -22,12 +27,13 @@
  *
  * A fresh deployment mints an auto-generated initial password printed to the
  * dsh console; pass it via INITIAL_PASSWORD. The script ends with the
- * password changed to `${PASSWORD}-2`.
+ * password changed to `${PASSWORD}-2` and OTP disabled again.
  */
 
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
 import { resolveChromiumPath } from './chromium.mjs'
+import { generateTOTP } from '../lib/totp.js'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8002'
 const PASSWORD = process.env.PASSWORD || 'e2e-pass'
@@ -74,7 +80,11 @@ async function dismissFirstRunDialogs(page) {
 
 const browser = await chromium.launch({ executablePath, headless: true })
 try {
-  const page = await browser.newPage()
+  // Pin the browser locale: every selector and assertion in this suite is
+  // Chinese (gateway pages AND the dsh shell UI), and an en-US default
+  // context would make them time out against a pristine instance.
+  const context = await browser.newContext({ locale: 'zh-CN' })
+  const page = await context.newPage()
   const jsErrors = []
   page.on('pageerror', (e) => jsErrors.push(`pageerror: ${e.message}`))
   page.on('console', (m) => {
@@ -260,6 +270,93 @@ try {
   await page.waitForURL(`${BASE}/`, { timeout: 15000 })
   await page.waitForSelector('text=新会话', { timeout: 30000 })
   ok('new password logs in and lands on /')
+
+  // ── 5. two-factor: enable OTP via the panel, log in with password + TOTP
+  // code, then disable it again (the deployment must be left password-only)
+  // ────────────────────────────────────────────────────────────────────────
+  // Instrument fetch to capture the staged secret /otp/enable answers (the
+  // QR modal shows it too, but the API is the stable contract the panel
+  // itself reads, and the same fields drive the later login). Installed in
+  // the CURRENT document: the panel flow never navigates, so an init script
+  // would not apply.
+  await page.evaluate(() => {
+    window.__otpEnable = null
+    const originalFetch = window.fetch.bind(window)
+    window.fetch = async (...args) => {
+      const res = await originalFetch(...args)
+      const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '')
+      if (url.includes('/otp/enable') && res.ok) {
+        res.clone().json()
+          .then((data) => { if (data && data.ok && typeof data.secret === 'string') window.__otpEnable = data })
+          .catch(() => {})
+      }
+      return res
+    }
+  })
+
+  await dismissFirstRunDialogs(page)
+  await page.click('button:has-text("设置")', { force: true })
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
+  await page.waitForTimeout(600)
+  await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
+  await page.waitForSelector('text=双因素认证', { timeout: 10000 })
+  await page.waitForTimeout(500)
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('未启用')),
+    'the OTP card must start disabled')
+  await page.click('button:has-text("启用 OTP")')
+  await page.waitForFunction(() => window.__otpEnable !== null, { timeout: 10000 })
+
+  const otpSecret = await page.evaluate(() => window.__otpEnable.secret)
+  assert.match(otpSecret, /^[A-Z2-7]{16,}$/, 'the staged secret must be plain base32')
+  // Verify the setup with a REAL code computed from that secret — pins the
+  // whole chain: staged secret -> QR -> authenticator -> verify-setup.
+  await page.fill('input[placeholder*="位验证码"]', generateTOTP(otpSecret))
+  await page.click('button:has-text("验证并启用")')
+  // The dialog must show the one-time backup codes after a verified setup.
+  await page.waitForFunction(() => /\w{4}-\w{4}/.test(document.body.innerText),
+    undefined, { timeout: 10000 })
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('备份代码')),
+    'backup codes must be presented once for saving')
+  ok('panel enables OTP; a real TOTP code verifies the setup; backup codes shown')
+
+  // Enabling revoked every session: the dialog's own button signs back in.
+  await page.click('button:has-text("完成并重新登录")')
+  await page.waitForURL('**/login', { timeout: 15000 })
+  await page.waitForSelector('#auth', { timeout: 10000 })
+  assert.ok(await page.evaluate(() => document.getElementById('otp') !== null),
+    'with 2FA active the login form must carry the OTP field')
+  // Password alone must no longer suffice: the login form (2FA mode) refuses
+  // to submit without a full code — the server-side otp-required refusal is
+  // pinned by the unit tests, this is the UI half of the same gate.
+  await page.fill('#password', NEW_PASSWORD)
+  await page.click('#auth button[type=submit]')
+  await page.waitForFunction(() => document.getElementById('error')?.textContent?.length > 0)
+  ok('the 2FA login form blocks a password-only submit (OTP code demanded)')
+  // Password + a fresh code (computed at submit time so the 30s step cannot
+  // roll over in between).
+  await page.fill('#password', NEW_PASSWORD)
+  await page.fill('#otp', generateTOTP(otpSecret))
+  await page.click('#auth button[type=submit]')
+  await page.waitForURL(`${BASE}/`, { timeout: 15000 })
+  await page.waitForSelector('text=新会话', { timeout: 30000 })
+  ok('password + TOTP code logs in and lands on / (real 2FA login)')
+
+  // ── 5b. disable OTP again (restore the password-only deployment state) ──
+  await dismissFirstRunDialogs(page)
+  await page.click('button:has-text("设置")', { force: true })
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
+  await page.waitForTimeout(600)
+  await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
+  await page.waitForSelector('text=双因素认证', { timeout: 10000 })
+  await page.waitForTimeout(500)
+  await page.click('button:has-text("禁用 OTP")')
+  await page.waitForSelector('input[placeholder*="备份代码"]', { timeout: 10000 })
+  await page.fill('input[placeholder*="备份代码"]', generateTOTP(otpSecret))
+  await page.click('[role="dialog"] button:has-text("禁用")')
+  await page.waitForFunction(() => document.body.innerText.includes('OTP 已禁用'), { timeout: 10000 })
+  assert.ok(await page.evaluate(() => document.body.innerText.includes('未启用')),
+    'the OTP card must return to disabled after the confirmed disable')
+  ok('OTP disabled again with a fresh code (deployment state restored)')
 
   // The two 401 resource logs are the TEST's own wrong-password submissions
   // (browsers log a failed resource load for any HTTP error status — that is

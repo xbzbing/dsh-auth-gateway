@@ -14,7 +14,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
-`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作，也没有针对反向代理/网关的处理」（*"There is no logout operation or reverse-proxy-specific handling"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
+`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作」（*"There is no logout operation"*），并声明「认证不意味着支持网络部署、TLS、转发头解释或代理配置」（*"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
 本项目支持 dsh `0.1.5-rc.2`、`0.1.6-alpha.2` 与 `0.1.7-alpha.1`（均经隔离实例实测：认证门禁、初始密码登录、引导设密、面板 API、上游 BrowserAuth 转发与语言偏好全部通过；更早版本未验证）。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好；子路径反代使用 dsh 0.1.7 的文档相对路由（0.1.6 子路径需自行转发根路径前缀，见 [NGINX 部署](docs/zh/NGINX-DEPLOYMENT.md)）。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。插件管理页的 icon 与标题/描述展示资源为 0.1.7 能力，0.1.6 忽略这些文件、不影响加载。
 

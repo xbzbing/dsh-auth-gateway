@@ -132,6 +132,8 @@ Key points:
 **Use when**: other web apps run on the same domain and you **cannot add a subdomain**. dsh must be mounted at a sub-path (e.g. `https://example.com/dsh/`).
 
 > **Since 0.1.7**: dsh pages use `<base href="./">` and document-relative routes (`api/...`, `plugins/...`) to preserve the mount prefix. nginx only needs to strip `/dsh/` before forwarding to the gateway; no `/api/`, `/plugins/`, or `/assets/` root-path allowlist is required.
+>
+> **On 0.1.6**: pages still reference root-absolute URLs, so forward the root-path prefixes (`/api/`, `/plugins/`, `/assets/`, etc.) to the gateway as well (the gateway's `basePath` logic handles those requests correctly).
 
 ### Gateway side: configure `basePath`
 

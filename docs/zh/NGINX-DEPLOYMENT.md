@@ -132,6 +132,8 @@ server {
 **适用**：同一域名下还跑着其他 Web 应用，且**无法添加子域名**。dsh 需要挂在子路径（如 `https://example.com/dsh/`）。
 
 > **0.1.7 起**：dsh 页面通过 `<base href="./">` 和文档相对路由（`api/...`、`plugins/...`）保留挂载前缀。nginx 只需把 `/dsh/` 前缀剥离后转发到网关，不再维护 `/api/`、`/plugins/`、`/assets/` 等根路径白名单。
+>
+> **0.1.6 部署**：页面仍是根绝对路径 URL，需自行把根路径前缀（`/api/`、`/plugins/`、`/assets/` 等）转发到网关（网关的 `basePath` 逻辑会正确处理这些请求）。
 
 ### 网关侧：配置 `basePath`
 

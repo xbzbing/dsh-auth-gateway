@@ -61,9 +61,17 @@ function ok(name) {
  * Close whatever first-run dialog is up (the beta notice with 继续, the
  * API-key wizard with 稍后配置) so UI behind it is clickable. Some dsh
  * builds greet a first sign-in with these; harmless when none is present.
+ *
+ * The queue pops the next dialog a few hundred ms after the previous one
+ * closes, so a single quiet probe can slip through the gap and a later pop
+ * would then cover the settings dialog this suite opens next. Only return
+ * after the surface has stayed quiet for a full quiet window.
  */
 async function dismissFirstRunDialogs(page) {
-  for (let i = 0; i < 5; i++) {
+  const QUIET_MS = 3000
+  const DEADLINE = Date.now() + 15000
+  let quietSince = Date.now()
+  while (Date.now() < DEADLINE) {
     const label = await page.evaluate(() => {
       const dlg = [...document.querySelectorAll('[role="dialog"]')]
         .find((d) => d.isConnected && d.offsetParent !== null)
@@ -72,9 +80,14 @@ async function dismissFirstRunDialogs(page) {
         .find((b) => /继续|稍后配置/.test(b.textContent || ''))
       return btn ? btn.textContent.trim() : null
     })
-    if (!label) return
-    await page.click(`[role="dialog"] button:has-text("${label}")`, { force: true }).catch(() => {})
-    await page.waitForTimeout(400)
+    if (label) {
+      await page.click(`[role="dialog"] button:has-text("${label}")`, { force: true }).catch(() => {})
+      quietSince = Date.now()
+      await page.waitForTimeout(400)
+    } else {
+      if (Date.now() - quietSince >= QUIET_MS) return
+      await page.waitForTimeout(300)
+    }
   }
 }
 
@@ -327,10 +340,16 @@ try {
     'with 2FA active the login form must carry the OTP field')
   // Password alone must no longer suffice: the login form (2FA mode) refuses
   // to submit without a full code — the server-side otp-required refusal is
-  // pinned by the unit tests, this is the UI half of the same gate.
+  // pinned by the unit tests, this is the UI half of the same gate. The
+  // refusal can arrive as either the browser's native validation (the #otp
+  // input is required with a digit pattern, so the submit event never fires)
+  // or wire()'s own otp-length message in #error; accept whichever the
+  // current browser enforces first.
   await page.fill('#password', NEW_PASSWORD)
   await page.click('#auth button[type=submit]')
-  await page.waitForFunction(() => document.getElementById('error')?.textContent?.length > 0)
+  await page.waitForFunction(() =>
+    (document.getElementById('error')?.textContent?.length ?? 0) > 0
+    || (document.getElementById('otp')?.validationMessage?.length ?? 0) > 0)
   ok('the 2FA login form blocks a password-only submit (OTP code demanded)')
   // Password + a fresh code (computed at submit time so the 30s step cannot
   // roll over in between).

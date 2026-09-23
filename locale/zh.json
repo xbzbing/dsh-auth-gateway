@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "DSH Auth Gateway",
+    "title": "DSH 认证网关",
     "description": "为 DSH Web 提供密码、TOTP 和审计保护的认证网关。"
   }
 }

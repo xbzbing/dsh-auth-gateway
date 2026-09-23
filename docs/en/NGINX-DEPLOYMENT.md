@@ -133,7 +133,7 @@ Key points:
 
 > **Since 0.1.7**: dsh pages use `<base href="./">` and document-relative routes (`api/...`, `plugins/...`) to preserve the mount prefix. nginx only needs to strip `/dsh/` before forwarding to the gateway; no `/api/`, `/plugins/`, or `/assets/` root-path allowlist is required.
 >
-> **On 0.1.6**: pages still reference root-absolute URLs, so forward the root-path prefixes (`/api/`, `/plugins/`, `/assets/`, etc.) to the gateway as well (the gateway's `basePath` logic handles those requests correctly).
+> **Below 0.1.7 (0.1.5-rc.2 / 0.1.6)**: pages resolve URLs against the root via `<base href="/">`, so forward the root-path prefixes (`/api/`, `/plugins/`, `/assets/`, etc.) to the gateway as well (the gateway's `basePath` logic handles those requests correctly).
 
 ### Gateway side: configure `basePath`
 

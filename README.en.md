@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), yet its design note states explicitly *"There is no logout operation"* and that *"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*, while the CLI still rejects `--host 0.0.0.0` — **dsh never envisioned or supports remote access, and reserved no integration channel for putting another gateway in front of it**. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports dsh `0.1.5-rc.2`, `0.1.6-alpha.2`, `0.1.7-alpha.1`, `0.1.7-alpha.2` and `0.1.7-rc.1` (all verified on isolated instances: auth gate, initial-password login, onboarding password set, panel API, upstream BrowserAuth forwarding, and page language all pass; 0.1.7-rc.1 additionally passed the full e2e suite 20/20 and the curl gate 15/15; earlier versions are untested). The supported range is declared in `package.json` under `peerDependencies`: floor `>=0.1.5-rc.2`, no upper bound (marked optional — provided by the host dsh, never auto-installed by the package manager). From dsh 0.1.7-rc.1 the installer and loader enforce this range: an older dsh below the floor is refused (an exact-version exemption is available via `dsh plugin allow-version`), while even older dsh builds that predate the check load normally. The gateway reads the upstream BrowserAuth secret and UI locale through the official `credentials` and `settings` services; sub-path reverse proxies use dsh 0.1.7's document-relative routes (on 0.1.6 a sub-path still needs root-path prefixes forwarded manually — see [NGINX deployment](docs/en/NGINX-DEPLOYMENT.md)). `webServer.tapIndex`, the `dsh.bundle` patch, `settings.section`, the `credentials` record, and the BrowserAuth cookie format were checked against source; WebSockets, streaming uploads, and sub-path forwarding are expected to work through the gateway (these seams are unchanged). The plugin page icon and title/description resources are a 0.1.7 capability; 0.1.6 ignores those files and the plugin still loads.
+This project supports dsh **`>=0.1.5-rc.2` (no upper bound)**, declared under `package.json` `peerDependencies` (marked optional — provided by the host dsh, never auto-installed by the package manager). From dsh 0.1.7-rc.1 the installer and loader enforce this range: an older dsh below the floor is refused (an exact-version exemption is available via `dsh plugin allow-version`), while dsh builds that predate the check load normally. Every version in the range has been verified on isolated instances (auth gate, initial-password login, onboarding password set, panel API, upstream BrowserAuth forwarding, and page language), the most recent run additionally passing the full e2e suite 20/20 and the curl gate 15/15; versions below the floor are untested. The gateway reads the upstream BrowserAuth secret and UI locale through the official `credentials` and `settings` services; sub-path reverse proxies use dsh 0.1.7's document-relative routes (on earlier versions a sub-path still needs root-path prefixes forwarded manually — see [NGINX deployment](docs/en/NGINX-DEPLOYMENT.md)). `webServer.tapIndex`, the `dsh.bundle` patch, `settings.section`, the `credentials` record, and the BrowserAuth cookie format were checked against source; WebSockets, streaming uploads, and sub-path forwarding are expected to work through the gateway (these seams are unchanged). The plugin page icon and title/description resources are a 0.1.7+ capability; earlier versions ignore those files and the plugin still loads.
 
 ## Installation and Uninstallation
 
@@ -34,7 +34,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - Supports installation from GitHub / local directory — see [docs/en/INSTALL.md](docs/en/INSTALL.md);
 - Forgot your password? Use `dsh-auth-gateway-reset` to reset (restart prints a new initial password to the console);
-- **Breaking changes (before you upgrade)**: the dsh version floor is the peer range `>=0.1.5-rc.2` (no upper bound; enforced only from dsh 0.1.7-rc.1, ignored by older dsh — every verified version below is inside the range). The following three apply regardless of dsh version: (1) only `$DSH_HOME/auth-gateway/` is recognized now — the legacy `auth-gate/` and `login-plugin/` directories are no longer migrated automatically, so rename yours into place while dsh is stopped first, otherwise the gateway starts as a fresh install (prints a new initial password) and the old data stays untouched in place; (2) leftover `otpEnabled`/`otpRequired` fields in your profile patch are removed and now fail config validation, refusing to load the plugin — delete them from the patch; (3) an unsealed legacy plaintext OTP record fails to read with `otp-secret-corrupted` — delete `auth-gateway/otp.json` together with `otp-master.key` and re-bind 2FA;
 - Deployment guide: [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)
 
 ## Features
@@ -45,7 +44,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **Login audit**: login success / failure / logout / password change and brute-force alerts (lockouts / rate limits) are logged via `ctx.logger.info`/`warn` (with source IP and failure reason — never any credentials) and **persisted** to `$DSH_HOME/auth-gateway/log/audit.log` (JSONL, rotated daily, 90-day retention), forming a complete audit trail;
 - **Layered brute-force protection**: per-source lockout on password failures (default 5 failures / 5 min) + global rate limit (default 60 attempts/min) + per-source OTP/backup-code limit (default 10/min); scrypt runs asynchronously on the libuv thread pool, so login floods never block the event loop;
 - **Session management**: in-memory 256-bit tokens (30 days), HttpOnly + SameSite=Strict cookies; changing the password or disabling OTP revokes all sessions;
-- **About card**: the settings panel shows the running version and a repository link (read from the local `package.json`, works offline) plus a **check for updates** button — automatic checks are **off by default**, so a fresh install makes no outbound request; pressing the button is what makes the gateway query the public npm registry once for the `latest` tag (the plugin's only outbound request, see the [security model](docs/en/SECURITY.md)). An unreachable registry shows "update check unavailable" and never disturbs auth or forwarding;
 - **Compliant shape**: a host-only plugin (zero build, zero runtime dependencies) plus an optional client half (settings panel, source-built); the bulk goes through official dsh extension points (`ctx.effect`, `webServer.tapIndex`, `ctx.slots`) — with one recorded security exception: LAN trust (minimal interception of the connection registration so the Models settings page works on domain/reverse-proxy access; see [TROUBLESHOOTING §1](docs/en/TROUBLESHOOTING.md)).
 
 ## What this plugin does not do
@@ -57,12 +55,14 @@ The following requirements **cannot truly be delivered on a single instance** �
 
 ## How it works
 
-```
-Browser ──> dsh-auth-gateway gateway (external port, inside the dsh process)
-               │  every request passes the auth check first (O(1) session table)
-               ├─ unauthenticated ─> /api/*: 401 ｜ pages: 302 /login ｜ WS: rejected
-               ├─ 2FA not passed ─> /otp/verify
-               └─ authenticated ─> forward (Host/Origin rewritten to loopback) ──> dsh webserver (127.0.0.1:internal port)
+```mermaid
+flowchart LR
+    B[Browser] --> G["dsh-auth-gateway gateway<br/>external port · inside the dsh process"]
+    G --> C{"Auth check<br/>O(1) session table"}
+    C -->|unauthenticated| U["/api/* → 401<br/>pages → 302 /login<br/>WS upgrade → rejected"]
+    C -->|2FA not passed| O["/otp/verify"]
+    C -->|authenticated| F["Forward<br/>Host/Origin rewritten to loopback"]
+    F --> W["dsh webserver<br/>127.0.0.1:internal port"]
 ```
 
 - The gateway's lifecycle is bound to dsh: it starts/stops with dsh, no separate process;

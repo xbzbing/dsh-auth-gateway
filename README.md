@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作」（*"There is no logout operation"*），并声明「认证不意味着支持网络部署、TLS、转发头解释或代理配置」（*"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-本项目支持 dsh `0.1.5-rc.2`、`0.1.6-alpha.2`、`0.1.7-alpha.1`、`0.1.7-alpha.2` 与 `0.1.7-rc.1`（均经隔离实例实测：认证门禁、初始密码登录、引导设密、面板 API、上游 BrowserAuth 转发与语言偏好全部通过，0.1.7-rc.1 另经 e2e 20/20 与 curl 门禁 15/15；更早版本未验证）。版本范围经 `package.json` 的 `peerDependencies` 声明：下限 `>=0.1.5-rc.2`、无上限（标为 optional——由宿主 dsh 提供，包管理器不自动安装）；dsh 0.1.7-rc.1 起安装与加载时强制校验该范围，低于下限的 dsh 会拒绝加载（可 `dsh plugin allow-version` 按精确版本显式豁免），更早的 dsh 不做此校验、照常加载。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好；子路径反代使用 dsh 0.1.7 的文档相对路由（0.1.6 子路径需自行转发根路径前缀，见 [NGINX 部署](docs/zh/NGINX-DEPLOYMENT.md)）。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。插件管理页的 icon 与标题/描述展示资源为 0.1.7 能力，0.1.6 忽略这些文件、不影响加载。
+本项目支持 dsh **`>=0.1.5-rc.2`（不设上限）**，范围经 `package.json` 的 `peerDependencies` 声明（标为 optional——由宿主 dsh 提供，包管理器不自动安装）；dsh 0.1.7-rc.1 起安装与加载时强制校验该范围，低于下限的 dsh 会拒绝加载（可 `dsh plugin allow-version` 按精确版本显式豁免），更早的 dsh 不做此校验、照常加载。范围内版本均经隔离实例实测通过（认证门禁、初始密码登录、引导设密、面板 API、上游 BrowserAuth 转发与语言偏好），最近一次实测另含 e2e 20/20 与 curl 门禁 15/15，下限以下未验证。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好；子路径反代使用 dsh 0.1.7 起的文档相对路由（更早版本需自行转发根路径前缀，见 [NGINX 部署](docs/zh/NGINX-DEPLOYMENT.md)）。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。插件管理页的 icon 与标题/描述展示资源为 0.1.7 起的能力，更早版本忽略这些文件、不影响加载。
 
 ## 安装和卸载
 
@@ -34,7 +34,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - 支持从 GitHub / 本地目录安装，见 [docs/zh/INSTALL.md](docs/zh/INSTALL.md)；
 - 忘记密码用 `dsh-auth-gateway-reset` 重置（重启后控制台打印新初始密码）；
-- **破坏性变化（升级须知）**：dsh 版本门槛即 peer 下限 `>=0.1.5-rc.2`（无上限，仅 dsh 0.1.7-rc.1 起强制校验、更早 dsh 忽略；下列实测版本全部在范围内）。以下三点与 dsh 版本无关：① 凭据目录只认 `$DSH_HOME/auth-gateway/`，旧目录 `auth-gate/`、`login-plugin/` 不再自动迁移——升级前先停机把旧目录改名过来，否则视为全新安装（重新打印初始密码），旧数据原地保留；② profile patch 残留的 `otpEnabled`/`otpRequired` 字段已删除，会让配置校验失败、插件拒绝加载，请从 patch 中移除；③ 未密封的旧版明文 OTP 记录读取时报 `otp-secret-corrupted`——删除 `auth-gateway/otp.json` 与 `otp-master.key` 后重新绑定 2FA；
 - 部署指南：[docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md)
 
 ## 功能特性
@@ -45,7 +44,6 @@ dsh plugin --profile web remove dsh-auth-gateway
 - **登录审计**：登录成功 / 失败 / 登出 / 改密与暴力破解告警（锁定/限流）均输出审计日志（`ctx.logger.info`/`warn`，含来源 IP 与失败原因，不记录任何凭据），并**持久化落盘** `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天），形成完整可审计闭环；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
-- **关于卡片**：设置面板显示当前版本号与仓库链接（读取本机 `package.json`，离线可用），并可用「检查更新」按钮主动查询新版本——**自动检查默认关闭**，全新安装不会发起任何对外请求；点击按钮才会让网关向公共 npm registry 查询一次 `latest` 标签（这是本插件唯一的对外请求，见 [安全模型](docs/zh/SECURITY.md)）。registry 不可达时显示「暂时无法检查更新」，绝不干扰认证与转发；
 - **合规形态**：host-only 插件（零构建、零运行时依赖）+ 可选 client 半（设置面板，源码构建），主体全部经 dsh 官方扩展点（`ctx.effect`、`webServer.tapIndex`、`ctx.slots`）；唯有一项记录在案的安全例外——LAN trust（为域名/反代访问下模型设置页可用而对 connection 注册做最小介入，见 [TROUBLESHOOTING §1](docs/zh/TROUBLESHOOTING.md)）。
 
 ## 本插件不做的事情
@@ -57,12 +55,14 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 ## 工作原理
 
-```
-浏览器 ──> dsh-auth-gateway 网关（对外端口，运行在 dsh 进程内）
-               │  每个请求先过认证检查（会话表 O(1)）
-               ├─ 未认证 ─> /api/*: 401 ｜ 页面: 302 /login ｜ WS: 拒绝
-               ├─ 未通过 2FA ─> /otp/verify
-               └─ 已认证 ─> 转发（Host/Origin 改写为回环）──> dsh webserver（127.0.0.1:内部端口）
+```mermaid
+flowchart LR
+    B[浏览器] --> G["dsh-auth-gateway 网关<br/>对外端口 · 运行在 dsh 进程内"]
+    G --> C{"认证检查<br/>会话表 O(1)"}
+    C -->|未认证| U["/api/* → 401<br/>页面 → 302 /login<br/>WS 升级 → 拒绝"]
+    C -->|未通过 2FA| O["/otp/verify"]
+    C -->|已认证| F["转发<br/>Host/Origin 改写为回环"]
+    F --> W["dsh webserver<br/>127.0.0.1:内部端口"]
 ```
 
 - 网关生命周期与 dsh 绑定：随 dsh 启动/退出，无独立进程；

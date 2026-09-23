@@ -83,9 +83,7 @@ test('web-runtime row: printUrl off, openBrowser/trustedHosts flow through webSt
   const block = patchLines.slice(webRuntime, patchLines.indexOf('- insert:'))
   assert.ok(block.join('\n').includes('printUrl: false'), 'misleading internal URL line must be off')
   assert.ok(block.join('\n').includes('surfaceContext: true'))
-  // openBrowser must be restated: the web-app schema default is TRUE, so a
-  // whole-config replacement without it resurrects the browser popup and
-  // makes `dsh web --no-open` ineffective (observed on dsh 0.1.6-alpha.1).
+  // openBrowser must be restated so `dsh web --no-open` reaches web-runtime.
   assert.ok(block.join('\n').includes('openBrowser: !!js ctx.webStartup.openBrowser'),
     'openBrowser must keep flowing from the CLI flags (schema default is true)')
   // trustedHosts expression must read ctx.webStartup (--trusted-host survives).

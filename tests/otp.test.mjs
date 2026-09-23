@@ -338,8 +338,7 @@ test('invalid-length env master key surfaces as typed otp-master-key-invalid err
   }
 })
 
-test('legacy plaintext secret is still readable (migration)', async () => {
-  // Simulate a pre-encryption record written directly to disk.
+test('unsealed OTP secret is rejected', async () => {
   const record = {
     version: 1,
     enabled: true,
@@ -354,7 +353,7 @@ test('legacy plaintext secret is still readable (migration)', async () => {
   }
   mkdirSync(join(home, 'auth-gateway'), { recursive: true })
   writeFileSync(join(home, 'auth-gateway', 'otp.json'), JSON.stringify(record), { mode: 0o600 })
-  assert.equal(getOTPSecret(), 'LEGACYPLAINTEXTSECRET')
+  assert.throws(() => getOTPSecret(), (err) => err instanceof OTPCryptoError && err.code === OTP_CRYPTO_ERROR.SECRET_CORRUPTED)
 })
 
 test('disableOTP clears OTP data', async () => {
@@ -396,14 +395,14 @@ test('corrupt otp.json fails loud instead of silently disabling 2FA', async () =
 
 let gateway, gatewayPort
 
-async function startGateway(policy, otpConfig) {
+async function startGateway(policy) {
   gateway = new LoginGateway({
     listenHost: '127.0.0.1',
     listenPort: 0,
     upstreamHost: '127.0.0.1',
     upstreamPort: 9999, // Dummy port, not used in these tests
     policy,
-    otp: otpConfig || {},
+    otp: {},
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -457,7 +456,7 @@ async function verifySession(cookie) {
 }
 
 test('replay watermark is clamped to the current step (no future advance)', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   await setPassword('Test1234!')
   await enableOTP() // sealed secret in $DSH_HOME
   const period = 30
@@ -481,7 +480,7 @@ test('replay watermark survives a gateway restart (persisted lastCounter)', asyn
   // writes otp.json (lib/otp-store.js), a fresh gateway re-reads it, and the
   // code that already logged in once must be rejected afterwards — with NO
   // in-memory state carried over.
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   await setPassword('Test1234!')
   await enableOTP({ backupCodeCount: 3 })
 
@@ -496,7 +495,7 @@ test('replay watermark survives a gateway restart (persisted lastCounter)', asyn
   // a real process restart would).
   await stopGateway()
   _resetMasterKeyCache()
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
 
   // The same code must now be refused: whether the 30s step rolled over in
   // between or not, its counter is <= the persisted watermark.
@@ -518,7 +517,7 @@ test('concurrent submissions of the same backup code mint at most one session', 
   // Regression for the TOCTOU race: verify-and-mark spans an async scrypt
   // gap, and two overlapping submissions of the SAME code must not both see
   // `used: false`. VerifyAndUseBackupCode is serialized, so only one wins.
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   await setPassword('Test1234!')
   const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
 
@@ -533,16 +532,16 @@ test('concurrent submissions of the same backup code mint at most one session', 
 })
 
 test('OTP setup page returns 401 when not authenticated', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const res = await request('/otp/setup')
   assert.equal(res.status, 401)
   await stopGateway()
 })
 
-test('OTP setup page is served without any config switch', async () => {
-  // Enabling 2FA is a user action — no otpEnabled deployment switch is
-  // required anymore: a verified session may start the binding flow.
-  await startGateway({}, { otpEnabled: false })
+test('OTP setup page is served to a verified session', async () => {
+  // Enabling 2FA is a user action — no deployment switch gates it: a
+  // verified session may start the binding flow.
+  await startGateway({})
 
   const cookie = await loginCookie()
 
@@ -553,14 +552,14 @@ test('OTP setup page is served without any config switch', async () => {
 })
 
 test('OTP verify page returns 401 when not authenticated', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const res = await request('/otp/verify')
   assert.equal(res.status, 401)
   await stopGateway()
 })
 
 test('OTP verify returns 400 when OTP not enabled', async () => {
-  await startGateway({}, { otpEnabled: false })
+  await startGateway({})
 
   const cookie = await loginCookie()
 
@@ -571,21 +570,21 @@ test('OTP verify returns 400 when OTP not enabled', async () => {
 })
 
 test('OTP enable returns 401 when not authenticated', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const res = await request('/otp/enable', { method: 'POST', body: {} })
   assert.equal(res.status, 401)
   await stopGateway()
 })
 
 test('OTP disable returns 401 when not authenticated', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const res = await request('/otp/disable', { method: 'POST', body: { password: 'test' } })
   assert.equal(res.status, 401)
   await stopGateway()
 })
 
 test('OTP disable requires a second-factor credential when OTP is enabled', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
   await verifySession(cookie)
@@ -606,7 +605,7 @@ test('OTP disable requires a second-factor credential when OTP is enabled', asyn
 })
 
 test('OTP disable succeeds with a valid TOTP code', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
   await verifySession(cookie)
@@ -625,7 +624,7 @@ test('OTP disable accepts the code of the CURRENT time step, even after login us
   // watermark die with it), so the watermark must not reject the very code
   // the user just used to log in within the same 30s step — otherwise the
   // panel reports a confusing invalid-otp until the step rolls over.
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const cookie = await loginCookie()
   const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
   await verifySession(cookie) // consumes the current step's counter
@@ -640,7 +639,7 @@ test('OTP disable accepts the code of the CURRENT time step, even after login us
 })
 
 test('OTP disable succeeds with an unused backup code', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const cookie = await loginCookie()
   const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
   await verifySession(cookie)
@@ -654,7 +653,7 @@ test('OTP disable succeeds with an unused backup code', async () => {
 test('OTP disable audits failures and counts wrong-password guesses toward the lockout', async () => {
   // Mirrors /login/change: a held session must not enable unlimited
   // old-password guessing via the disable endpoint either.
-  await startGateway({ maxLoginFailures: 3, lockMinutes: 5 }, {})
+  await startGateway({ maxLoginFailures: 3, lockMinutes: 5 })
   const events = []
   gateway.onAuthEvent = (payload) => events.push(payload)
   const cookie = await loginCookie()
@@ -677,7 +676,7 @@ test('OTP disable audits failures and counts wrong-password guesses toward the l
 })
 
 test('OTP disable emits an otp-disabled audit event on success', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const events = []
   gateway.onAuthEvent = (payload) => events.push(payload)
   const cookie = await loginCookie()
@@ -692,7 +691,7 @@ test('OTP disable emits an otp-disabled audit event on success', async () => {
 })
 
 test('login accepts a backup code when 2FA is active (lost authenticator)', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   await setPassword('Test1234!')
   const { backupCodes } = await enableOTP({ backupCodeCount: 3 })
 
@@ -741,7 +740,7 @@ test('login failures are indistinguishable: wrong password vs wrong OTP return t
   // password was right. A wrong code therefore surfaces the SAME code as a
   // wrong password, so an attacker probing password candidates cannot use the
   // error to confirm a hit.
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   await setPassword('Test1234!')
   await enableOTP({ backupCodeCount: 3 })
   const activeSecret = getOTPSecret()
@@ -764,7 +763,7 @@ test('login failures are indistinguishable: wrong password vs wrong OTP return t
 })
 
 test('OTP verification is rate-limited per client address', async () => {
-  await startGateway({ maxOtpAttemptsPerMinute: 3 }, { otpEnabled: true })
+  await startGateway({ maxOtpAttemptsPerMinute: 3 })
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
 
@@ -781,7 +780,7 @@ test('OTP verification is rate-limited per client address', async () => {
 })
 
 test('OTP verification shares the global attempt budget', async () => {
-  await startGateway({ maxGlobalAuthAttemptsPerMinute: 5, maxOtpAttemptsPerMinute: 100 }, { otpEnabled: true })
+  await startGateway({ maxGlobalAuthAttemptsPerMinute: 5, maxOtpAttemptsPerMinute: 100 })
   const cookie = await loginCookie() // consumes 1 of the global budget
   await enableOTP({ backupCodeCount: 3 })
 
@@ -797,7 +796,7 @@ test('OTP verification shares the global attempt budget', async () => {
 })
 
 test('OTP failures lock the client address like login failures', async () => {
-  await startGateway({ maxLoginFailures: 3, lockMinutes: 5, maxOtpAttemptsPerMinute: 100 }, { otpEnabled: true })
+  await startGateway({ maxLoginFailures: 3, lockMinutes: 5, maxOtpAttemptsPerMinute: 100 })
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
 
@@ -813,7 +812,7 @@ test('OTP failures lock the client address like login failures', async () => {
 })
 
 test('a TOTP code cannot be replayed within its time window', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
 
@@ -827,7 +826,7 @@ test('a TOTP code cannot be replayed within its time window', async () => {
 })
 
 test('unverified sessions cannot modify config or manage OTP when 2FA is active', async () => {
-  await startGateway({}, { otpEnabled: true })
+  await startGateway({})
   // Login happens BEFORE OTP is enabled → the session is not OTP-verified.
   const cookie = await loginCookie()
   await enableOTP({ backupCodeCount: 3 })
@@ -864,7 +863,7 @@ test('unverified sessions cannot modify config or manage OTP when 2FA is active'
 })
 
 test('enabling OTP via the HTTP flow revokes every session and requires re-login', async () => {
-  await startGateway({}, { otpEnabled: false }) // no config switch needed
+  await startGateway({})
   const cookie = await loginCookie()
 
   // Full HTTP binding flow: enable stages a secret, verify-setup activates it.

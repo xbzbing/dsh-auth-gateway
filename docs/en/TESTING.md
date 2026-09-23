@@ -50,16 +50,20 @@ BASE=http://127.0.0.1:8002 PASSWORD=your-password ./scripts/verify.sh
 
 Covers: unauthenticated 401/302, full settings/login/change/logout flow, authenticated forwarding, **unauthenticated WebSocket upgrade rejection**, old-session revocation after a password change. **It really changes the password** (the final password is `PASSWORD-new`).
 
-## Local smoke (no dsh environment)
+## Isolated instance (temporary DSH_HOME)
+
+This plugin is developed against a local dsh environment; tests run on an isolated instance with `DSH_HOME` in a temp directory (create the profile under the same `DSH_HOME`, then delete that directory):
 
 ```bash
-node scripts/smoke.mjs    # mock ctx + fake upstream, quick gateway-behavior verification
+rm -rf /tmp/dsh-gw-home
+DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
+DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # initial password printed to the console
 ```
 
 ## Screenshots (README demo images)
 
 ```bash
-# Needs an instance with otpEnabled (an overlay patch example is in the script header), then:
+# Use a fresh instance, then:
 node scripts/screenshots.mjs    # outputs to docs/assets/*.png
 ```
 

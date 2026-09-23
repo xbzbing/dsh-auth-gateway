@@ -3,11 +3,9 @@
  *
  * Usage: BASE=http://127.0.0.1:8002 INITIAL_PASSWORD=... node scripts/screenshots.mjs
  *
- * Requires a running instance with OTP enabled in the composition. The overlay
- * that does that ships with this script (it restates every bundle-patch field,
- * because `config:` is a whole-object replacement):
+ * Requires a running throwaway instance:
  *
- *   DSH_HOME=/tmp/shots-home dsh --profile shots --patch scripts/screenshots.patch.yml --port 8002
+ *   DSH_HOME=/tmp/shots-home dsh --profile shots --port 8002
  *
  * Use a throwaway DSH_HOME: INITIAL_PASSWORD only exists on a fresh deployment,
  * and the script really does change the password and enable OTP — running it
@@ -34,11 +32,7 @@ const INITIAL = process.env.INITIAL_PASSWORD
 const OUT = new URL('../docs/assets/', import.meta.url).pathname
 mkdirSync(OUT, { recursive: true })
 
-// Locate the Chromium executable dynamically (scripts/chromium.mjs): the
-// cache directory name embeds the playwright revision and changes on every
-// upgrade, so a hard-coded path would break on the next install. (This also
-// replaces the old Linux-only probe, which referenced fs.readdirSync without
-// importing fs and only understood chrome-linux layouts.)
+// Locate the Chromium executable dynamically.
 const executablePath = resolveChromiumPath({ playwrightExecutable: chromium.executablePath() })
 if (!executablePath) {
   console.error('no chromium found: set CHROMIUM_PATH, run `npx playwright install chromium`,'
@@ -145,15 +139,19 @@ try {
   done('OTP setup page (QR + secret)', 'otp-setup.png')
 
   // ── 6. enable OTP via the API (compute a real TOTP code) ─────────────
-  const enable = await (await page.evaluate(async () => (await fetch('/otp/enable', { method: 'POST' })).json()))
+  // Fetches run inside the /otp/setup document: resolve against the gateway
+  // basePath, never the document directory (relative 'otp/enable' from
+  // /otp/setup would hit /otp/otp/enable).
+  const enable = await page.evaluate(async (base) =>
+    (await fetch(base + '/otp/enable', { method: 'POST' })).json(), BASE)
   const code = generateTOTP(enable.secret)
-  const verify = await page.evaluate(async (otp) => {
-    const r = await fetch('/otp/verify-setup', {
+  const verify = await page.evaluate(async ({ base, otp }) => {
+    const r = await fetch(base + '/otp/verify-setup', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ otp }),
     })
     return r.json()
-  }, code)
+  }, { base: BASE, otp: code })
   if (!verify.ok) throw new Error('OTP enable failed: ' + JSON.stringify(verify))
 
   // ── 7. enabling OTP revoked every session: the login page now carries ──

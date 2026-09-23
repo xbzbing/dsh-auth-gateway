@@ -3,46 +3,30 @@
  * (dsh preference > Accept-Language > zh) and the bilingual page rendering.
  */
 
-import { test, beforeEach, afterEach } from 'node:test'
+import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { localePreference, acceptLanguagePrimary, pageLocale } from '../lib/locale.js'
 import { loginPageHtml } from '../lib/login-page.js'
 import { onboardingPageHtml, onboardingPasswordPageHtml } from '../lib/onboarding-page.js'
 import { otpSetupPage, otpVerifyPage } from '../lib/otp-page.js'
 
-let home
-
-beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'dsh-auth-gate-locale-test-'))
-  process.env.DSH_HOME = home
-})
-
-afterEach(() => {
-  delete process.env.DSH_HOME
-  rmSync(home, { recursive: true, force: true })
-})
-
 // ── language resolution ─────────────────────────────────────────────────
 
-test('localePreference reads locale.preference from $DSH_HOME/settings.yaml', () => {
-  assert.equal(localePreference(), undefined, 'no settings file -> undefined')
-
-  writeFileSync(join(home, 'settings.yaml'), 'locale:\n  preference: en\n')
-  assert.equal(localePreference(), 'en')
-
-  writeFileSync(join(home, 'settings.yaml'), 'locale:\n  preference: "zh"\n')
-  assert.equal(localePreference(), 'zh')
-
-  // Unknown values are ignored (fall back to Accept-Language/zh).
-  writeFileSync(join(home, 'settings.yaml'), 'locale:\n  preference: ja\n')
-  assert.equal(localePreference(), undefined)
-
-  // Other namespaces never count.
-  writeFileSync(join(home, 'settings.yaml'), 'ui-theme:\n  preference: dark\n')
-  assert.equal(localePreference(), undefined)
+test('localePreference reads the locale settings namespace', () => {
+  assert.equal(localePreference(), undefined, 'missing settings service -> undefined')
+  assert.equal(localePreference({ describe: () => [] }), undefined, 'missing locale namespace -> undefined')
+  assert.equal(localePreference({
+    describe: () => [{ ns: 'locale', value: { preference: 'en' } }],
+  }), 'en')
+  assert.equal(localePreference({
+    describe: () => [{ ns: 'locale', value: { preference: 'zh' } }],
+  }), 'zh')
+  assert.equal(localePreference({
+    describe: () => [{ ns: 'locale', value: { preference: 'ja' } }],
+  }), undefined, 'unsupported locale is ignored')
+  assert.equal(localePreference({
+    describe: () => { throw new Error('settings unavailable') },
+  }), undefined, 'settings errors do not interrupt page rendering')
 })
 
 test('acceptLanguagePrimary picks the highest q-value primary subtag', () => {

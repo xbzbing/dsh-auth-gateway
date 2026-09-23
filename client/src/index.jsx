@@ -500,11 +500,8 @@ function UserSettingsPanel({ api, t }) {
         // tests/client-contract.test.mjs.
         const cfg = data.config?.['dsh-auth-gateway'] || {}
         setOtpEnabled(cfg.otpEnabled || false)
-        // Deployment switch (composition config), distinct from the active
-        // state above: when false, enabling OTP from the panel is impossible
-        // (the server answers otp-not-enabled) and the card explains why.
         setDigits(cfg.otpDigits || 6)
-        // Three-state cookie Secure policy; absent (older gateway) means auto.
+        // Three-state cookie Secure policy; absent means auto.
         const mode = normalizeMode(cfg.cookieSecure)
         setCookieSecure(mode)
         setCookieSecureSource(cfg.cookieSecureSource === 'panel' ? 'panel' : 'deployment')
@@ -1036,17 +1033,6 @@ function installLanTrust(ctx) {
   })
 }
 
-// settings.section has no icon field; the shell renders its own fallback.
-// We register the section the standard way (ctx.slots.inject) and leave the
-// chrome alone — no DOM probing, no style injection.
-
-/**
- * Gateway basePath ('' for root, '/dsh' for sub-path deployments), published
- * as a global by the host plugin's tapIndex injection (index.js). All panel
- * API calls and redirects must go through it so they survive reverse-proxy
- * sub-path deployments — root-absolute paths would bypass the /dsh/ prefix
- * and never reach the gateway.
- */
 const BASE = (typeof window !== 'undefined' && window.__dshAuthGatewayBasePath__) || ''
 
 function apply(ctx) {
@@ -1087,19 +1073,6 @@ function apply(ctx) {
     logout: async () => (await fetch(BASE + '/login/logout', { method: 'POST' })).json(),
   }
   const injected = () => ({ api })
-  // Nav position. SlotCore keeps a list slot's entries sorted by
-  // (priority, order) with a STABLE sort, and the settings shell re-sorts the
-  // same list by `order` alone — so an `order` that EQUALS a shipped entry's is
-  // resolved by plugin load order, not by "official first". That is not
-  // theoretical: agent-presets ships `order: 20` too, and a tie made this
-  // section land before 「Agent 预设」 on one composition and after it on
-  // another. dsh ships general 0, models 10, plugins 15, agent-presets 20, so a
-  // third-party section must sort strictly above all of them. 100 is the value
-  // dsh's own contributed-entry example uses — see `order: 100` in
-  // @deepseek-ai/dsh-cordis-client-runner/lib/client.js, and the
-  // `settings.section` declaration in
-  // @deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts;
-  // both ship inside the installed dsh, so a reader can actually check them.
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section', id: 'user-settings', order: 100,
     label: () => t('nav'),

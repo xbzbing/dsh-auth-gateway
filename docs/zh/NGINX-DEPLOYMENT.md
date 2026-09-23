@@ -24,10 +24,10 @@
 |---|---|---|---|
 | A. 裸金属直连 | 内网/可信网络 | `/` | 最低 |
 | **B. 子域名部署** | **与其他应用共存（推荐）** | **`/`** | **低** |
-| C. 子路径部署 | 同域名、无法加子域 | `/dsh` | 高（根路径资源冲突） |
+| C. 子路径部署 | 同域名、无法加子域 | `/dsh` | 中（需代理剥离前缀） |
 | D. Docker nginx | nginx 在容器中 | `/` | 中 |
 
-**推荐方案：子域名（拓扑 B）**。DSH 是根路径应用——前端 JS 硬编码了 `/assets/...`、`/api/...`、`/plugins/...` 等绝对 URL。`basePath` 只影响网关的路由和跳转，不改变这些路径。子路径部署（拓扑 C）需要 nginx 把每一个根路径前缀都转发到网关，每次 DSH 新增插件都要更新 nginx 配置。**子域名彻底隔离，零冲突，配置最简。**
+**推荐方案：子域名（拓扑 B）**。dsh 0.1.7 起页面使用文档相对路由，子路径部署（拓扑 C）只需 nginx 剥离 `/dsh/` 前缀并给网关配置 `basePath`，不再维护根路径白名单；子域名则连前缀处理都不需要，与其他应用彻底隔离，配置最简。
 
 ---
 
@@ -131,7 +131,9 @@ server {
 
 **适用**：同一域名下还跑着其他 Web 应用，且**无法添加子域名**。dsh 需要挂在子路径（如 `https://example.com/dsh/`）。
 
-> **⚠️ 为什么推荐子域名而非子路径**：DSH 是根路径应用——前端 JS 硬编码了 `/assets/...`、`/api/`、`/plugins/`、`/sidebar/`、`/_dsh/`、`/events/` 等**根路径**绝对 URL。子路径部署时，这些路径不会自动带上 `/dsh/` 前缀，需要 nginx 逐个转发到网关。每次 DSH 新增插件（新的根路径前缀），都要更新 nginx 配置。**子域名（拓扑 B）彻底隔离，零维护。**
+> **0.1.7 起**：dsh 页面通过 `<base href="./">` 和文档相对路由（`api/...`、`plugins/...`）保留挂载前缀。nginx 只需把 `/dsh/` 前缀剥离后转发到网关，不再维护 `/api/`、`/plugins/`、`/assets/` 等根路径白名单。
+>
+> **0.1.7 以下（0.1.5-rc.2 / 0.1.6）**：页面经 `<base href="/">` 按根路径解析 URL，需自行把根路径前缀（`/api/`、`/plugins/`、`/assets/` 等）转发到网关（网关的 `basePath` 逻辑会正确处理这些请求）。
 
 ### 网关侧：配置 `basePath`
 
@@ -185,7 +187,7 @@ server {
     ssl_certificate     /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-    # dsh 主入口：/dsh/ → 网关根路径（去掉前缀）
+    # dsh 主入口及全部文档相对资源：/dsh/ → 网关根路径（去掉前缀）
     location /dsh/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_http_version 1.1;
@@ -204,38 +206,10 @@ server {
         return 301 /dsh/;
     }
 
-    # dsh 页面引用的根路径资源（HTML 里是 /assets/...、/api/... 等绝对 URL）
-    # 必须同样转发到网关（网关 basePath 逻辑会正确处理这些根路径请求）
-    location ~ ^/(api|plugins|sidebar|_dsh)(/|$) {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;           # WebSocket 必需：
-        proxy_set_header Connection $connection_upgrade;  # /api/remote.mux 走的就是根路径
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location ~ ^/assets/(index-|vendor-) {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-    }
-    location = /manifest.webmanifest {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-    }
-    location = /favicon.svg {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-    }
 }
 ```
 
-> **关于 dsh 页面内引用的根路径资源**：dsh 生成的 HTML 会引用 `/assets/...`、`/api/...`、`/plugins/...` 等**根路径**绝对 URL（不走 `/dsh/` 前缀）。这些路径必须由 nginx 转发到网关（见上面的 `location ~ ^/(api|plugins|sidebar|_dsh)` 等块），网关的 `basePath` 逻辑会正确处理它们。
->
-> **插件的「认证设置」面板无需额外转发**：面板的 API 请求与跳转由插件在页面注入的 basePath 全局量驱动（自动带 `/dsh/` 前缀），经上面的 `location /dsh/` 块即可到达网关，不依赖根路径转发清单。
->
-> **与同域其他应用冲突时**：如果该域名下还有其他应用占用 `/api/`、`/assets/` 等路径，需要把 dsh 的根路径转发块放到**更具体的匹配**（如 `location ~ ^/(api|plugins|sidebar|_dsh)` 用前缀区分），或改用独立子域名（如 `dsh.example.com`）根路径部署，避免与现有应用冲突。
+> dsh 0.1.7 起页面资源和 API 都相对当前文档目录解析；`location /dsh/` 已覆盖入口、插件 bundle、API、WebSocket 和静态资源，不需要额外根路径转发。
 
 ### WebSocket 与 SSE 子路径
 

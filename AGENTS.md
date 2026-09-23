@@ -12,11 +12,11 @@ lib/
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
   gateway-panel-api.js 设置面板 API（/login-api/*，含 cookieSecure 运行时覆盖）
   forward.js    HTTP/WS 转发管道：Host/Origin 回环改写、upgrade 双向管道、lanAddresses
-  upstream-auth.js dsh ≥ 0.1.2 上游 BrowserAuth cookie 铸造（credentials record 读密钥 + 缓存）
+  upstream-auth.js 上游 BrowserAuth cookie 铸造（credentials record 读密钥 + 缓存）
   rate-limit.js 三层防爆破状态机（全局限流 / 按地址锁定 / OTP 窗口）
   auth.js       内存会话表（256-bit token）+ Cookie 编解码
   audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/log/audit.log，按天轮转、保留 90 天）
-  locale.js     页面语言解析（settings.yaml preference > Accept-Language > zh）
+  locale.js     页面语言解析（settings preference > Accept-Language > zh）
   errors.js     页面错误文案总字典（中英；errorsFor 按页选取 + 场景覆盖）
   store.js      密码存储（异步 scrypt，$DSH_HOME/auth-gateway/password.json）
   otp-store.js  OTP 记录（mtime+size 缓存；secret AES-256-GCM 密封落盘）
@@ -25,12 +25,13 @@ lib/
   *-page.js     自包含 HTML 页面（login / onboarding / otp），共享脚手架在 page-shell.js
   policy.js     密码强度策略（服务端权威，客户端仅提前反馈）
   config.js     Standard Schema v1 配置校验
-  paths.js      $DSH_HOME 路径解析与旧目录迁移（auth-gate/login-plugin → auth-gateway）
+  paths.js      $DSH_HOME 路径解析
   version.js    自身版本/仓库读取（package.json）+ SemVer 子集比较
   update-check.js 新版本检查：唯一的对外请求（npm registry latest），默认不自动发起、仅手动按钮或 updateCheck=true 触发；TTL 缓存、绝不抛错
   lan-trust-script.js 认证后 LAN trust bootstrap（透传代理仅拦截 connection 注册，见下方安全例外）
 client/         设置面板（slot settings.section）；src/index.jsx 源码，index.js+.map 为入库构建产物
-scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；smoke.mjs 冒烟；
+locale/          插件管理页展示用的标题/描述字典（zh.json / en.json）；icon.svg 为插件图标（package.json 的 icon 字段），dsh 0.1.7 起不执行插件代码即可读取
+scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图
 tests/          node:test 单测（文件清单见 package.json 的 test script）
 docs/           zh/ 与 en/ 双语文档目录
@@ -56,10 +57,10 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
 - **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
 - **回环钉扎是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。
-- **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。
+- **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。展示资源（`locale/*.json`、`icon.svg`）同样按 deploy.sh 的 `RESOURCE_FILES` 显式列表同步，并需在 package.json 的 `files` 中声明才随 npm 包分发。
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。
 - **客户端面板经注入的 basePath 全局量构造 API 路径**（`window.__dshAuthGatewayBasePath__`，由 index.js tapIndex 写入）：面板内禁止根绝对路径 fetch/跳转，否则子路径部署失效。
-- **`settings.section` 的 `order` 必须严格大于官方全部 section 的最大值**（dsh 0.1.6 现为 general 0 / models 10 / plugins 15 / agent-presets 20 / unarchive-sessions 25，本插件取 100）：slot 列表按 `order` 稳定排序，与官方取值相等时位置由插件加载顺序决定，会随组合在「Agent 预设」前后漂移——第三方面板必须落在所有官方菜单之后。
+- **`settings.section` 的 `order` 必须严格大于官方全部 section 的最大值**：slot 列表按 `order` 稳定排序，与官方取值相等时位置由插件加载顺序决定；第三方面板必须落在所有官方菜单之后。
 - **登录失败只返回统一错误码** `invalid-credentials`（防凭据枚举）；受保护流程（OTP 绑定/禁用）才允许细分错误码。页面文案一律走 lib/errors.js 字典，不硬编码。
 - **安全状态变更必须留审计**：登录/登出/改密/OTP 启停经 `onAuthEvent` 输出（只含 kind/ip/reason，绝不带凭据），并与暴力破解告警（`onSecurityEvent`）一同落盘 `audit.log`（lib/audit-log.js）；错误密码计入与登录共享的按地址锁定。
 - **凭据落盘模式**：原子写（temp + rename）、文件 0600 / 目录 0700；scrypt 只用异步 API；OTP secret 先 AES-256-GCM 密封再写盘，主密钥缺失时显式报错、绝不静默重生成。
@@ -73,4 +74,10 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 
 ## 实机验证
 
-`scripts/verify.sh`（curl 门禁）与 `scripts/e2e.mjs`（Playwright）需要运行中的实例（`BASE=... PASSWORD=... ./scripts/verify.sh`），且**都会真实修改密码**。无 dsh 环境用 `node scripts/smoke.mjs`（mock ctx + 假上游，端口 3180/3181，避开真实 3080/3081）。
+`scripts/verify.sh`（curl 门禁）与 `scripts/e2e.mjs`（Playwright）需要运行中的实例（`BASE=... PASSWORD=... ./scripts/verify.sh`），且**都会真实修改密码**。本插件只能在本地 dsh 环境开发；测试用隔离实例——`DSH_HOME` 指到临时目录，profile 也建在同一 `DSH_HOME` 下，用完删除：
+
+```sh
+rm -rf /tmp/dsh-gw-home
+DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
+DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台
+```

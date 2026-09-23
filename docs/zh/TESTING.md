@@ -57,6 +57,10 @@ BASE=http://127.0.0.1:8002 PASSWORD=your-password ./scripts/verify.sh
 ```bash
 rm -rf /tmp/dsh-gw-home
 DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
+# webStartup/webServer 由 @deepseek-ai/dsh-web-app 提供，必须补进 bundles 且排在插件之前：
+# bundles 数组序即 bundle patch 叠加序，插件要把内部 webserver 钉到 N+1，必须覆盖 web-app 的 webserver 行
+DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/package.json',j=require(f);j.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-auth-gateway'];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台
 ```
 

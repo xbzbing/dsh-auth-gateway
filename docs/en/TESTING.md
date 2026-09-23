@@ -57,6 +57,11 @@ This plugin is developed against a local dsh environment; tests run on an isolat
 ```bash
 rm -rf /tmp/dsh-gw-home
 DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
+# webStartup/webServer come from @deepseek-ai/dsh-web-app: add it to bundles BEFORE the
+# plugin — the array order is the bundle-patch stacking order, and the plugin pins the
+# internal webserver to N+1 by overriding web-app's webserver row
+DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/package.json',j=require(f);j.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-auth-gateway'];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # initial password printed to the console
 ```
 

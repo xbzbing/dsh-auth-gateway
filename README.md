@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作」（*"There is no logout operation"*），并声明「认证不意味着支持网络部署、TLS、转发头解释或代理配置」（*"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-本项目支持 dsh `0.1.5-rc.2`、`0.1.6-alpha.2`、`0.1.7-alpha.1`、`0.1.7-alpha.2` 与 `0.1.7-rc.1`（均经隔离实例实测：认证门禁、初始密码登录、引导设密、面板 API、上游 BrowserAuth 转发与语言偏好全部通过，0.1.7-rc.1 另经 e2e 20/20 与 curl 门禁 15/15；更早版本未验证）。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好；子路径反代使用 dsh 0.1.7 的文档相对路由（0.1.6 子路径需自行转发根路径前缀，见 [NGINX 部署](docs/zh/NGINX-DEPLOYMENT.md)）。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。插件管理页的 icon 与标题/描述展示资源为 0.1.7 能力，0.1.6 忽略这些文件、不影响加载。
+本项目支持 dsh `0.1.5-rc.2`、`0.1.6-alpha.2`、`0.1.7-alpha.1`、`0.1.7-alpha.2` 与 `0.1.7-rc.1`（均经隔离实例实测：认证门禁、初始密码登录、引导设密、面板 API、上游 BrowserAuth 转发与语言偏好全部通过，0.1.7-rc.1 另经 e2e 20/20 与 curl 门禁 15/15；更早版本未验证）。版本范围经 `package.json` 的 `peerDependencies` 声明：下限 `>=0.1.5-rc.2`、无上限（标为 optional——由宿主 dsh 提供，包管理器不自动安装）；dsh 0.1.7-rc.1 起安装与加载时强制校验该范围，低于下限的 dsh 会拒绝加载（可 `dsh plugin allow-version` 按精确版本显式豁免），更早的 dsh 不做此校验、照常加载。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好；子路径反代使用 dsh 0.1.7 的文档相对路由（0.1.6 子路径需自行转发根路径前缀，见 [NGINX 部署](docs/zh/NGINX-DEPLOYMENT.md)）。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。插件管理页的 icon 与标题/描述展示资源为 0.1.7 能力，0.1.6 忽略这些文件、不影响加载。
 
 ## 安装和卸载
 
@@ -34,7 +34,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - 支持从 GitHub / 本地目录安装，见 [docs/zh/INSTALL.md](docs/zh/INSTALL.md)；
 - 忘记密码用 `dsh-auth-gateway-reset` 重置（重启后控制台打印新初始密码）；
-- **破坏性变化（升级须知）**：无新增 dsh 版本门槛（0.1.5-rc.2、0.1.6-alpha.2、0.1.7-alpha.1、0.1.7-alpha.2 与 0.1.7-rc.1 均实测可加载）。以下三点与 dsh 版本无关：① 凭据目录只认 `$DSH_HOME/auth-gateway/`，旧目录 `auth-gate/`、`login-plugin/` 不再自动迁移——升级前先停机把旧目录改名过来，否则视为全新安装（重新打印初始密码），旧数据原地保留；② profile patch 残留的 `otpEnabled`/`otpRequired` 字段已删除，会让配置校验失败、插件拒绝加载，请从 patch 中移除；③ 未密封的旧版明文 OTP 记录读取时报 `otp-secret-corrupted`——删除 `auth-gateway/otp.json` 与 `otp-master.key` 后重新绑定 2FA；
+- **破坏性变化（升级须知）**：dsh 版本门槛即 peer 下限 `>=0.1.5-rc.2`（无上限，仅 dsh 0.1.7-rc.1 起强制校验、更早 dsh 忽略；下列实测版本全部在范围内）。以下三点与 dsh 版本无关：① 凭据目录只认 `$DSH_HOME/auth-gateway/`，旧目录 `auth-gate/`、`login-plugin/` 不再自动迁移——升级前先停机把旧目录改名过来，否则视为全新安装（重新打印初始密码），旧数据原地保留；② profile patch 残留的 `otpEnabled`/`otpRequired` 字段已删除，会让配置校验失败、插件拒绝加载，请从 patch 中移除；③ 未密封的旧版明文 OTP 记录读取时报 `otp-secret-corrupted`——删除 `auth-gateway/otp.json` 与 `otp-master.key` 后重新绑定 2FA；
 - 部署指南：[docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md)
 
 ## 功能特性

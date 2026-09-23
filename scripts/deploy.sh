@@ -60,7 +60,16 @@ CLIENT_FILES=(
   client/index.js
   client/index.js.map
 )
-ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" cordis.patch.yml package.json)
+# Plugin-manager display resources (dsh 0.1.7 reads these WITHOUT evaluating
+# plugin code): the package.json `icon` and the locale/*.json title/description
+# dictionaries. They live outside lib/ and the client bundle, so they reach an
+# installed copy only through this explicit list.
+RESOURCE_FILES=(
+  icon.svg
+  locale/zh.json
+  locale/en.json
+)
+ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" "${RESOURCE_FILES[@]}" cordis.patch.yml package.json)
 
 errors=0
 
@@ -114,6 +123,7 @@ for f in "${ALL_FILES[@]}"; do
   if [[ ! -f "$SRC/$f" ]]; then
     echo "  ✗ 源文件不存在: $f" >&2; exit 1
   fi
+  mkdir -p "$(dirname "$DST/$f")"
   cp "$SRC/$f" "$DST/$f"
   echo "  ✓ $f"
 done

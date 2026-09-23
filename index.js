@@ -19,6 +19,7 @@ import { buildLanTrustScript } from './lib/lan-trust-script.js'
 import { createCachedSecretReader } from './lib/upstream-auth.js'
 import { readPackageMeta } from './lib/version.js'
 import { createUpdateChecker } from './lib/update-check.js'
+import { localePreference } from './lib/locale.js'
 
 export const name = 'dsh-auth-gateway'
 
@@ -26,12 +27,10 @@ export { Config }
 
 /**
  * The gateway needs the real web server running (its port is the upstream).
- * `credentials` is the official record service: on dsh ≥ 0.1.2 the internal
- * webserver enforces BrowserAuth, and its signing secret lives in the
- * `client-connection/browser-session` record — the same record dsh's own
- * BrowserAuth reads and writes through this service.
+ * `credentials` is the official record service for the upstream
+ * `client-connection/browser-session` signing secret.
  */
-export const inject = ['webServer', 'credentials']
+export const inject = ['webServer', 'credentials', 'settings']
 
 /** The credential record dsh persists its upstream browser-session secret in. */
 const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
@@ -44,15 +43,10 @@ const COOKIE_SECURE_RECORD = 'dsh-auth-gateway/cookie-secure'
  * createCachedSecretReader in lib/upstream-auth.js for the caching and
  * retry semantics). `secret` is the synchronous reader handed down to the
  * forwarder; `warm` is awaited before the gateway listens so the first
- * forwarded request can never race ahead of the cache. On dsh ≤ 0.1.1 the
- * record service lacks readRecord → undefined source → verbatim forwarding,
- * byte-for-byte the pre-0.1.2 behavior.
+ * forwarded request can never race ahead of the cache.
  * @param {import('@deepseek-ai/cordis').Context} ctx
  */
 function upstreamSecretReader(ctx) {
-  if (typeof ctx.credentials?.readRecord !== 'function') {
-    return { secret: () => undefined, warm: () => Promise.resolve() }
-  }
   return createCachedSecretReader({
     key: UPSTREAM_RECORD_KEY,
     readRecord: (key) => ctx.credentials.readRecord(key),
@@ -70,16 +64,10 @@ function upstreamSecretReader(ctx) {
  * Build the credential-record persistence half of the cookieSecure override
  * (the settings panel writes it via POST /login-api/cookie-secure). The
  * record lives in our own scope (`dsh-auth-gateway/cookie-secure`, a grant
- * payload in our format — the seam treats it as opaque). Absent on dsh
- * surfaces without the record service (≤ 0.1.1) → the panel stays read-only.
+ * payload in our format — the seam treats it as opaque).
  * @param {import('@deepseek-ai/cordis').Context} ctx
  */
 function cookieSecureOverrideStore(ctx) {
-  if (typeof ctx.credentials?.readRecord !== 'function'
-    || typeof ctx.credentials?.modifyRecord !== 'function'
-    || typeof ctx.credentials?.deleteRecord !== 'function') {
-    return undefined
-  }
   return {
     read: async () => {
       try {
@@ -114,9 +102,7 @@ export async function apply(ctx, config) {
   // credential record; read BEFORE the gateway listens so the first login
   // already applies it (empty record → the composition value rules).
   const cookieSecureOverrideStoreInstance = cookieSecureOverrideStore(ctx)
-  const cookieSecureOverride = cookieSecureOverrideStoreInstance === undefined
-    ? null
-    : await cookieSecureOverrideStoreInstance.read()
+  const cookieSecureOverride = await cookieSecureOverrideStoreInstance.read()
   // Running version + repository, read from the package.json shipped beside
   // this module: the settings panel displays them and the update check
   // compares against them. Read once per apply — a deploy replaces both the
@@ -125,10 +111,12 @@ export async function apply(ctx, config) {
   // Populate the upstream browser-auth secret cache BEFORE the gateway
   // listens: the first forwarded request must never race ahead of the read
   // (fire-and-forget warm-up could cost one visible upstream 401). A failed
-  // or absent read still resolves — no secret means verbatim forwarding.
+  // or absent read still resolves; without a secret the upstream answers
+  // 401 until the record appears.
   await upstream.warm()
   const gateway = createGateway(config, {
     upstreamSecretReader: upstream.secret,
+    localePreference: () => localePreference(ctx.settings),
     versionInfo: packageMeta,
     cookieSecureOverride,
     cookieSecureOverrideStore: cookieSecureOverrideStoreInstance,
@@ -329,9 +317,7 @@ export async function apply(ctx, config) {
   ctx.logger.info('[dsh-auth-gateway] gateway listening on http://%s:%s -> http://%s:%s',
     gateway.listenHost, gateway.listenPort, gateway.upstreamHost, gateway.upstreamPort)
 
-  // Log the ACTUAL OTP state (binding is a user action since 0.3.0; the
-  // deprecated otpEnabled/otpRequired config fields no longer drive it, so
-  // logging them would misreport deployments that bound 2FA from the panel).
+  // Log the actual OTP state once the gateway is serving.
   try {
     if (hasOTP() && getOTPStatus().enabled) {
       ctx.logger.info('[dsh-auth-gateway] OTP 已激活，登录需密码 + 验证码')

@@ -8,7 +8,8 @@
     ".": "./index.js",
     "./client": "./client/index.js",
     "./client/src/*": "./client/src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "index.js",
@@ -18,7 +19,9 @@
     "scripts/uninstall.mjs",
     "scripts/reset.mjs",
     "README.md",
-    "README.en.md"
+    "README.en.md",
+    "locale",
+    "icon.svg"
   ],
   "bin": {
     "dsh-auth-gateway-uninstall": "scripts/uninstall.mjs",
@@ -45,6 +48,7 @@
       ]
     }
   },
+  "icon": "./icon.svg",
   "license": "MIT",
   "repository": {
     "type": "git",

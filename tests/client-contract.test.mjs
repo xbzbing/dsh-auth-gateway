@@ -159,16 +159,12 @@ test('client apply() registers dictionaries and the settings.section slot', () =
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.locale, 'dsh-auth-gateway', 'slot must declare its locale namespace')
 
-  // Nav position: the settings nav sorts sections ascending by `order` with a
-  // STABLE sort, so an order EQUAL to a shipped section's collapses to plugin
-  // load order — the entry then flips between "last" and "before Agent 预设"
-  // depending on the composition instead of following the "official menus
-  // first" rule. dsh ships general 0, models 10, plugins 15, agent-presets 20
-  // (0.1.6 added the archived-sessions section at 25): sorting strictly above
-  // that maximum is what pins this section after every shipped one.
-  assert.equal(typeof registered.order, 'number', 'section must declare a numeric order')
-  assert.ok(registered.order > 25,
-    `settings.section order must sort after every shipped section (highest is 25 as of dsh 0.1.6), got ${registered.order}`)
+  // Highest official section in dsh 0.1.7 is agent-presets at 20 (source:
+  // packages/client/ui-*/src/client/index.ts — account -10, general 0,
+  // models 10, plugins 15, agent-presets 20); a third-party section must
+  // sort strictly above every shipped one.
+  assert.ok(registered.order > 20,
+    `settings.section order must sort after official sections, got ${registered.order}`)
 
   // The registration follows the standard settings.section seam only —
   // no DOM probing, no style injection (the shell renders its own icon).

@@ -50,16 +50,20 @@ BASE=http://127.0.0.1:8002 PASSWORD=your-password ./scripts/verify.sh
 
 覆盖：未认证 401/302、设置/登录/改密/登出全流程、已认证转发、**未认证 WebSocket 升级拒绝**、改密后旧会话吊销。**会真实修改密码**（最终密码为 `PASSWORD-new`）。
 
-## 本地冒烟（无 dsh 环境）
+## 隔离实例（临时 DSH_HOME）
+
+本插件只能在本地 dsh 环境开发；测试用隔离实例，`DSH_HOME` 建到临时目录（profile 必须建在同一 `DSH_HOME` 下，用完删除该目录）：
 
 ```bash
-node scripts/smoke.mjs    # mock ctx + 假上游，快速验证网关行为
+rm -rf /tmp/dsh-gw-home
+DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
+DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台
 ```
 
 ## 界面截图（README 演示图）
 
 ```bash
-# 需要带 otpEnabled 的实例（overlay patch 示例见脚本注释），然后：
+# 使用全新实例，然后：
 node scripts/screenshots.mjs    # 输出到 docs/assets/*.png
 ```
 

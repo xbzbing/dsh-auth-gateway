@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作，也没有针对反向代理/网关的处理」（*"There is no logout operation or reverse-proxy-specific handling"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
 
-本项目已支持最新的 dsh 0.1.6-alpha.2 版本。dsh 0.1.2 起内部 webserver 新增了内置浏览器认证（BrowserAuth）：网关经官方 `credentials` 服务读取 upstream 会话密钥，为回环转发自动铸造 upstream cookie，对浏览器与部署方式透明（机制详见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）。0.1.5 与 0.1.6 系列均已验证兼容：网关所依赖的全部扩展点（`webServer.tapIndex`、`dsh.bundle` patch、`settings.section` slot、`credentials` record 与 BrowserAuth cookie 格式）在 0.1.6-alpha.2 均未变动（settings 面板新增官方 section 至 order 25，本插件 100 依然严格最大），WS 无限重连与文件上传流式转发均可正常通过网关；0.1.6 起 profile 配置 HMR 默认开启（`dsh-hmr`），部署后插件自身变更仍按既有流程生效。
+本项目支持 dsh `0.1.7-alpha.1`。网关通过官方 `credentials` 与 `settings` 服务读取上游 BrowserAuth 密钥和语言偏好，并使用 dsh 0.1.7 的文档相对路由支持子路径反代：浏览器资源、API 和 WebSocket 都保留挂载前缀，网关再剥离 `basePath` 转发到回环上游。`webServer.tapIndex`、`dsh.bundle` patch、`settings.section`、`credentials` record 与 BrowserAuth cookie 格式均经源码核对；WebSocket、流式上传和子路径转发可通过网关工作。
 
 ## 安装和卸载
 
@@ -34,6 +34,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - 支持从 GitHub / 本地目录安装，见 [docs/zh/INSTALL.md](docs/zh/INSTALL.md)；
 - 忘记密码用 `dsh-auth-gateway-reset` 重置（重启后控制台打印新初始密码）；
+- **升级前提与破坏性变化**：本版本要求 **dsh ≥ 0.1.7**（注入官方 `settings` 服务读取语言偏好，且不再为旧版缺失 `credentials` 服务做降级——旧版 dsh 上插件将无法加载）。此外：① 凭据目录只认 `$DSH_HOME/auth-gateway/`，旧目录 `auth-gate/`、`login-plugin/` 不再自动迁移——升级前先停机把旧目录改名过来，否则视为全新安装（重新打印初始密码），旧数据原地保留；② profile patch 残留的 `otpEnabled`/`otpRequired` 字段已删除，会让配置校验失败、插件拒绝加载，请从 patch 中移除；③ 未密封的旧版明文 OTP 记录读取时报 `otp-secret-corrupted`——删除 `auth-gateway/otp.json` 与 `otp-master.key` 后重新绑定 2FA；
 - 部署指南：[docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md)
 
 ## 功能特性
@@ -103,14 +104,12 @@ dsh plugin --profile web remove dsh-auth-gateway
 | `listenHost` / `listenPort` | `0.0.0.0` / `3080` | 网关对外监听地址与端口 |
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
 | `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。字符集限 `A-Za-z0-9._~/-`，拒绝 `..`、`//`、引号、空白、尖括号（该值会内嵌进页面脚本与链接，故按白名单校验；不合规配置会在加载时被拒绝）。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
-| `cookieSecure` | `auto` | 会话 Cookie 是否携带 `Secure` 属性。`auto`（默认，向后兼容）：请求经 TLS（反向代理终结并透传 `X-Forwarded-Proto: https`，或网关自身建立 TLS）时自动附加——前置 HTTPS 后无需改配置即启用；`true`：强制附加（反代已终结 TLS 但未透传协议头的部署）；`false`：显式关闭（仅建议可信内网）。注意：Secure 只在 HTTPS 链路生效——纯 HTTP 下强制开启会使浏览器拒绝保存 Cookie、登录立即失效（显式失败，而非静默降级）。**面板可直接修改**（「认证设置 → Cookie 安全 → 保存/恢复为部署配置」）：面板覆盖持久化于凭据记录（记录写接口实测于 dsh 0.1.5-rc.2+；更早版本缺失时面板自动降级为只读），优先于部署配置，直至恢复
+| `cookieSecure` | `auto` | 会话 Cookie 是否携带 `Secure` 属性。`auto`：请求经 TLS（反向代理透传 `X-Forwarded-Proto: https`）时自动附加；`true`：强制附加；`false`：显式关闭。纯 HTTP 下强制开启会使浏览器拒绝 Cookie。**面板可直接修改**：覆盖值持久化于凭据记录，优先于部署配置，直至恢复 |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |
 | `maxGlobalAuthAttemptsPerMinute` | `60` | 全局登录尝试速率上限 |
 | `maxOtpAttemptsPerMinute` | `10` | 单来源 OTP/备份码验证速率上限 |
-| `otpEnabled`（已废弃） | `false` | 不再作为启用开关——2FA 由用户登录后在「认证设置」中绑定激活；字段保留仅为兼容旧配置 |
-| `otpRequired` | `false` | 2FA 激活后强制每次登录验证（无需任何配置） |
 | `otpIssuer` / `otpPeriod` / `otpDigits` / `otpWindow` | `dsh-auth-gateway` / `30` / `6` / `1` | TOTP 参数（显示名、周期、位数、窗口） |
 | `backupCodeCount` / `backupCodeLength` | `10` / `8` | 备份代码数量与长度 |
 | `updateCheck` | `false` | 打开「认证设置 → 关于」时**自动**检查新版本。默认关闭：全新安装不发起任何对外请求。置 `true` 后在面板打开时自动查询一次公共 npm registry 的 `latest`（本插件唯一的对外请求，成功缓存 6h / 失败 15min，超时 3s，不含任何凭据）。**无论此项如何**，面板上的「检查更新」按钮都可手动发起一次检查 |

@@ -20,7 +20,7 @@ test('undefined/null config gets defaults', () => {
       basePath: '/',
       listenHost: '0.0.0.0', listenPort: 3080, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
-      otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
+      otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
       cookieSecure: 'auto',
     },
@@ -35,11 +35,17 @@ test('partial config keeps defaults for omitted fields', () => {
       basePath: '/',
       listenHost: '0.0.0.0', listenPort: 4000, upstreamHost: '127.0.0.1', upstreamPort: 3081,
       minPasswordLength: 8, requireMixedCase: true, requireSpecial: true, maxLoginFailures: 5, lockMinutes: 5, maxGlobalAuthAttemptsPerMinute: 60, maxOtpAttemptsPerMinute: 10,
-      otpEnabled: false, otpRequired: false, otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
+      otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
       cookieSecure: 'auto',
     },
   })
+})
+
+test('unknown configuration fields are rejected', () => {
+  const result = validate({ otpEnabled: true })
+  assert.ok(result.issues)
+  assert.equal(result.issues[0].path[0], 'otpEnabled')
 })
 
 test('updateCheck must be a boolean and is OFF by default', () => {
@@ -111,20 +117,10 @@ test('policy fields are validated', () => {
 })
 
 test('OTP fields are validated', () => {
-  // otpEnabled
-  assert.equal(validate({ otpEnabled: true }).value.otpEnabled, true)
-  assert.ok(validate({ otpEnabled: 'yes' }).issues)
-  
-  // otpRequired
-  assert.equal(validate({ otpRequired: true }).value.otpRequired, true)
-  assert.ok(validate({ otpRequired: 'yes' }).issues)
-  
   // otpIssuer
   assert.equal(validate({ otpIssuer: 'my-app' }).value.otpIssuer, 'my-app')
   assert.ok(validate({ otpIssuer: '' }).issues)
   assert.ok(validate({ otpIssuer: 123 }).issues)
-  
-  // otpPeriod
   assert.equal(validate({ otpPeriod: 60 }).value.otpPeriod, 60)
   assert.ok(validate({ otpPeriod: 5 }).issues, 'min 10')
   assert.ok(validate({ otpPeriod: 150 }).issues, 'max 120')
@@ -168,8 +164,7 @@ test('schema defaults match createGateway defaults (no silent divergence)', asyn
     'maxGlobalAuthAttemptsPerMinute', 'maxOtpAttemptsPerMinute',
   ]
   const otpKeys = [
-    'otpEnabled', 'otpRequired', 'otpIssuer', 'otpPeriod',
-    'otpDigits', 'otpWindow', 'backupCodeCount', 'backupCodeLength',
+    'otpIssuer', 'otpPeriod', 'otpDigits', 'otpWindow', 'backupCodeCount', 'backupCodeLength',
   ]
   for (const key of policyKeys) {
     assert.equal(schema[key], gw.policy[key], `policy default mismatch: ${key}`)

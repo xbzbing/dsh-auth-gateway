@@ -26,6 +26,7 @@ test('module satisfies the Cordis plugin contract', () => {
   assert.ok(Array.isArray(plugin.inject), 'inject must be declared')
   assert.ok(plugin.inject.includes('webServer'), 'webServer must be injected')
   assert.ok(plugin.inject.includes('credentials'), 'credentials must be injected (upstream browser-auth secret source)')
+  assert.ok(plugin.inject.includes('settings'), 'settings must be injected (page language source)')
   assert.equal(plugin.Config['~standard'].version, 1, 'Config must be a Standard Schema v1 validator')
 })
 
@@ -107,7 +108,24 @@ test('index transform publishes the configured basePath for sub-path deployments
   }
 })
 
-async function captureIndexTransform(extraConfig = {}) {
+test('gateway pages follow the settings service locale through the plugin wiring', async () => {
+  // No Accept-Language header: only a correct index.js → localePreference →
+  // page-render chain can produce the English page.
+  const capture = await captureIndexTransform({}, {
+    describe: () => [{ ns: 'locale', value: { preference: 'en' } }],
+  })
+  try {
+    const res = await fetch(`http://127.0.0.1:${capture.listenPort}/login`)
+    const body = await res.text()
+    assert.equal(res.status, 200)
+    assert.ok(body.includes('Sign in'), 'settings-service preference must reach page rendering')
+    assert.ok(!body.includes('请输入访问密码'), 'preference: en must override the zh fallback')
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+async function captureIndexTransform(extraConfig = {}, settings = { describe: () => [] }) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-contract-'))
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -124,6 +142,17 @@ async function captureIndexTransform(extraConfig = {}) {
         return () => {}
       },
     },
+    // The official record service (upstream browser-session secret + the
+    // cookieSecure panel override). An empty store exercises the mint path
+    // with no secret known.
+    credentials: {
+      readRecord: async () => undefined,
+      modifyRecord: async () => {},
+      deleteRecord: async () => {},
+    },
+    // The official settings service; tests pass one exposing a locale
+    // preference to exercise the page-language wiring end to end.
+    settings,
     logger: {
       warn(format, ...args) {
         warnings.push([format, ...args].join(' '))
@@ -157,7 +186,7 @@ async function captureIndexTransform(extraConfig = {}) {
   }
 
   assert.equal(taps.length, 1, 'plugin installs exactly one index transform')
-  return { transform: taps[0], warnings, cleanup }
+  return { transform: taps[0], warnings, listenPort, cleanup }
 
   async function cleanup() {
     for (const dispose of disposers.reverse()) {

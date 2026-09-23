@@ -36,7 +36,6 @@ client（可选，源码构建）
 scripts / tests
 ├── scripts/deploy.sh         # 部署流水线：语法检查 → 全量测试 → 同步到 DSH 安装目录 → 安装后验证（--restart 可选重启）
 ├── scripts/e2e.mjs           # Playwright 端到端（真实 dsh web：登录/2FA/改密全流程）
-├── scripts/smoke.mjs         # mock Cordis ctx + 假上游的冒烟服务（供 verify.sh 使用，端口避开 3080/3081）
 ├── scripts/screenshots.mjs   # README 界面截图（docs/assets/*.png）
 ├── scripts/verify.sh         # curl 门禁验证（401/302/WS 拒绝/锁定）
 ├── scripts/reset.mjs         # dsh-auth-gateway-reset：仅删 password.json（双语输出）
@@ -49,10 +48,10 @@ scripts / tests
 - **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
 - **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（randomUUID 与 authenticated LAN trust 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
 - **basePath 子路径部署**：网关路由先剥离 `basePath` 前缀（带边界检查，`/dsh2/foo` 不会被误当作 `/dsh` 前缀），302 跳转统一拼接前缀，转发上游时再剥离；PWA 元数据（`manifest.webmanifest` / `favicon.svg`）与静态资产（`/assets/*`）免认证放行（浏览器子资源请求，无敏感信息）；
-- **客户端 trust 时序**：client 插件经 inject 声明依赖 `connection`，在 apply 时对 LAN hostname 把 `handle.isLoopback` 改写为恒真 getter——早于任何消费者的持久化决策生效。全程只用官方扩展点，不触碰 DSH 模块加载器；
-- **设置面板导航顺序**：注册 `settings.section` 时 `order` 必须**严格大于官方全部 section 的最大值**（dsh 现为 `general` 0 / `models` 10 / `plugins` 15 / `agent-presets` 20，本插件取 100，即 dsh 文档给贡献项示例的取值）。slot 列表按 `order` 稳定排序，取值与官方相等时位置退化为插件加载顺序，会随组合在「Agent 预设」前后漂移；`tests/client-contract.test.mjs` 已断言该不变量；
+- **客户端 trust 时序**：index 注入脚本在 connection 注册时翻转 `isLoopback`，早于 settings 持久化决策生效；这是项目记录的安全例外；
+- **设置面板导航顺序**：注册 `settings.section` 时 `order` 必须严格大于官方 section；`tests/client-contract.test.mjs` 断言此不变量；
 - **唯一的对外请求，且默认关闭**：`lib/update-check.js` 向公共 npm registry 查询 `latest` 标签，用于面板的「检查更新」（版本号与仓库链接本身来自本机 `package.json`，离线可见）。自动检查默认**关闭**（`updateCheck: false`），全新安装不联网；触发方式只有两种——用户在「关于」卡片点「检查更新」（`GET /login-api/version?refresh=1`），或部署方把 `updateCheck` 设为 `true` 让面板打开时自动查一次。约束是硬性的：**不在认证或面板的关键路径上**、结果与失败都进内存缓存（成功 6h / 失败 15min，手动重复点击另有 5s 下限）、绝不抛错（失败降级为「无法检查」而非「已是最新」）、过期结果不再当作结论展示（`lastKnown()` 只报 TTL 内的缓存）。详见 SECURITY.md；
-- **页面双语**：`lib/locale.js` 解析渲染语言（`$DSH_HOME/settings.yaml` 的 `locale.preference` > 请求 `Accept-Language` > zh），页面文案按语言选取；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
+- **页面双语**：`lib/locale.js` 读取官方 `settings` 服务的 `locale.preference`，再回退请求 `Accept-Language` 和 zh；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
 - **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gateway/otp-master.key`，见 SECURITY.md）。
 
@@ -91,7 +90,7 @@ client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:
 - `0.5.0`：重置/卸载命令中英双语输出；部署文档中英双语（DEPLOYMENT / NGINX-DEPLOYMENT）；文档维护；
 - `0.4.2`：basePath 子路径部署（路由/跳转/转发剥离 + PWA/静态资产免认证）、登录审计日志、登录失败统一错误码 + 页面错误字典集中化（lib/errors.js）、中英文部署文档；
 - `0.4.1`：认证后 LAN 浏览器设置支持（loopback-trusted，PR #7）；
-- `0.4.0`：OTP 密钥 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `otp-master.key`），兼容旧明文记录；
+- `0.4.0`：OTP 密钥 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `otp-master.key`）；
 - `0.3.1`：从设置面板启用 OTP 无需部署开关；激活时吊销全部会话；
 - `0.3.0`：网关页面跟随 dsh 语言（preference > Accept-Language > zh）、设置面板 i18n、首次部署控制台提示中英对照；
 - `0.2.0`：OTP 双因素认证（TOTP + 备份码 + QR）、多层防爆破、client 设置面板、安全评审修复（重验证、防重放、限流）；

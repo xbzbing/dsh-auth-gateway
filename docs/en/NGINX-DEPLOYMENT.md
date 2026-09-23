@@ -24,10 +24,10 @@ browser ──> gateway:8080        browser ──> nginx:443                 br
 |---|---|---|---|
 | A. Bare metal direct | Intranet / trusted network | `/` | Lowest |
 | **B. Subdomain deployment** | **Coexistence with other apps (recommended)** | **`/`** | **Low** |
-| C. Sub-path deployment | Same domain, cannot add a subdomain | `/dsh` | High (root-path resource conflicts) |
+| C. Sub-path deployment | Same domain, cannot add a subdomain | `/dsh` | Medium (prefix-stripping proxy) |
 | D. Docker nginx | nginx runs in a container | `/` | Medium |
 
-**Recommended: subdomain (topology B)**. DSH is a root-path application — the frontend JS hardcodes absolute URLs like `/assets/...`, `/api/...`, `/plugins/...`. `basePath` only affects the gateway's routing and redirects, not those paths. Sub-path deployment (topology C) requires nginx to forward every root-path prefix to the gateway, and every new DSH plugin means updating the nginx config. **A subdomain isolates everything — zero conflicts, simplest config.**
+**Recommended: subdomain (topology B)**. Since dsh 0.1.7 pages use document-relative routes, sub-path deployment (topology C) only needs nginx to strip the `/dsh/` prefix plus a `basePath` on the gateway — no root-path allowlist to maintain. A subdomain needs no prefix handling at all: it isolates DSH from every other app with the simplest config.
 
 ---
 
@@ -131,7 +131,7 @@ Key points:
 
 **Use when**: other web apps run on the same domain and you **cannot add a subdomain**. dsh must be mounted at a sub-path (e.g. `https://example.com/dsh/`).
 
-> **⚠️ Why subdomain over sub-path**: DSH is a root-path application — the frontend JS hardcodes **root-path** absolute URLs like `/assets/...`, `/api/`, `/plugins/`, `/sidebar/`, `/_dsh/`, `/events/`. With sub-path deployment these paths do not automatically get the `/dsh/` prefix; nginx must forward each one to the gateway. Every new DSH plugin (a new root-path prefix) means updating the nginx config. **A subdomain (topology B) isolates everything — zero maintenance.**
+> **Since 0.1.7**: dsh pages use `<base href="./">` and document-relative routes (`api/...`, `plugins/...`) to preserve the mount prefix. nginx only needs to strip `/dsh/` before forwarding to the gateway; no `/api/`, `/plugins/`, or `/assets/` root-path allowlist is required.
 
 ### Gateway side: configure `basePath`
 
@@ -185,7 +185,7 @@ server {
     ssl_certificate     /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-    # dsh main entry: /dsh/ → gateway root (prefix stripped)
+    # dsh entry and all document-relative resources: /dsh/ → gateway root
     location /dsh/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_http_version 1.1;

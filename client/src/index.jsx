@@ -76,6 +76,8 @@ const NS = 'dsh-auth-gateway'
 const zh = {
   'nav': '认证设置',
   'header.desc': '管理登录密码、双因素认证与登录会话。',
+  'detail.guide.title': '管理认证设置',
+  'detail.guide.body': '密码、双因素认证与 Cookie 安全等操作位于「设置」菜单的「认证设置」：点击侧边栏底部的「设置」打开菜单，再选择「认证设置」。',
   'loading': '加载中...',
   'otp.title': 'OTP 双因素认证',
   'otp.enabled': '已启用',
@@ -174,6 +176,8 @@ const zh = {
 const en = {
   'nav': 'Authentication Settings',
   'header.desc': 'Manage the login password, two-factor authentication and the active session.',
+  'detail.guide.title': 'Manage authentication settings',
+  'detail.guide.body': 'Password, two-factor and Cookie-Security controls live under Authentication Settings in the Settings menu: open Settings from the sidebar foot, then pick Authentication Settings.',
   'loading': 'Loading...',
   'otp.title': 'Two-factor authentication (OTP)',
   'otp.enabled': 'Enabled',
@@ -1079,6 +1083,25 @@ function apply(ctx) {
     locale: NS,
     inject: injected,
   }, UserSettingsPanel))
+  // Plugin detail page: guide to Settings -> Authentication Settings. The
+  // detail page hands registrants only the subject — no shell open handle
+  // exists outside the official launcher/onboarding seats — so the section
+  // explains the path instead of navigating there.
+  const DetailGuide = ({ subject, t: seatT }) => {
+    const pkg = subject?.kind === 'bundle' || subject?.kind === 'row' ? subject.pkg : undefined
+    if (pkg?.name !== 'dsh-auth-gateway') return null
+    const tr = seatT ?? t
+    return (
+      <section style={{ marginTop: '12px' }}>
+        <div style={CARD_TITLE}>{tr('detail.guide.title')}</div>
+        <p style={{ ...DESC, margin: '4px 0 0' }}>{tr('detail.guide.body')}</p>
+      </section>
+    )
+  }
+  ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
+    name: 'plugins.detail.section', id: 'auth-gateway-guide', order: 0,
+    locale: NS,
+  }, DetailGuide))
 }
 
 export { apply, inject }

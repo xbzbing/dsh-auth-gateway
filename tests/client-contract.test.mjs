@@ -8,6 +8,8 @@
  *   - inject declares only services apply() actually uses ('slots')
  *   - apply() registers the "认证设置" settings.section slot with an inject
  *     face delivering the gateway `api` to the component props
+ *   - apply() registers the plugins.detail.section guide, which renders only
+ *     on this plugin's own detail pages
  *   - the component takes no ctx prop (ctx belongs to the apply world only)
  *   - react and slots stay external requires (not inlined)
  *
@@ -137,17 +139,16 @@ test('LAN trust installs a permanent getter on the connection handle (official s
 test('client apply() registers dictionaries and the settings.section slot', () => {
   const handoff = loadBundle()
   const mod = handoff.factory(requireStub)
-  let slotName = null
-  let registered = null
-  let registeredComponent = null
+  const bySlot = {}
+  let currentSlot = null
   let registeredNs = null
   let registeredDicts = null
   const effects = []
   const ctx = {
     effect: (fn, name) => { effects.push({ fn, name }) },
     slots: {
-      inject: (name, fn) => { slotName = name; registered = fn() },
-      register: (def, component) => { registered = { ...def }; registeredComponent = component; return registered },
+      inject: (name, fn) => { currentSlot = name; try { return fn() } finally { currentSlot = null } },
+      register: (def, component) => { bySlot[currentSlot] = { def, component }; return { ...def } },
     },
     locale: {
       register: (ns, dicts) => { registeredNs = ns; registeredDicts = dicts },
@@ -155,7 +156,9 @@ test('client apply() registers dictionaries and the settings.section slot', () =
     },
   }
   mod.apply(ctx)
-  assert.equal(slotName, 'settings.section')
+  assert.ok(bySlot['settings.section'], 'settings.section must be registered')
+  const registered = bySlot['settings.section'].def
+  const registeredComponent = bySlot['settings.section'].component
   assert.equal(registered.id, 'user-settings')
   assert.equal(registered.locale, 'dsh-auth-gateway', 'slot must declare its locale namespace')
 
@@ -193,6 +196,38 @@ test('client apply() registers dictionaries and the settings.section slot', () =
     assert.equal(typeof props.api[method], 'function', `api.${method} must be a function`)
   }
   assert.equal(typeof registeredComponent, 'function', 'register must receive the component')
+})
+
+test('detail-page guidance renders only on this plugin\'s own pages', () => {
+  // The plugin detail page contributes a guide to Settings -> Authentication
+  // Settings through the official plugins.detail.section slot. The entry must
+  // render on this plugin's bundle and row pages and stay off every other
+  // subject (official plugins list their own pages through `item`).
+  const handoff = loadBundle()
+  const mod = handoff.factory(requireStub)
+  const bySlot = {}
+  let currentSlot = null
+  mod.apply({
+    effect: () => {},
+    slots: {
+      inject: (name, fn) => { currentSlot = name; try { return fn() } finally { currentSlot = null } },
+      register: (def, component) => { bySlot[currentSlot] = { def, component }; return { ...def } },
+    },
+    locale: { register: () => {}, bind: () => (key) => '[' + key + ']' },
+  })
+  const guide = bySlot['plugins.detail.section']
+  assert.ok(guide, 'plugins.detail.section must be registered')
+  assert.equal(guide.def.locale, 'dsh-auth-gateway', 'guide declares the locale namespace for the t seat')
+  const render = guide.component
+  assert.ok(render({ subject: { kind: 'bundle', pkg: { name: 'dsh-auth-gateway' } } }) !== null,
+    'renders on our bundle detail page')
+  assert.ok(render({
+    subject: { kind: 'row', pkg: { name: 'dsh-auth-gateway' }, row: { rowId: 'dsh-auth-gateway', moduleName: 'dsh-auth-gateway' } },
+  }) !== null, 'renders on our row detail page')
+  assert.equal(render({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null,
+    'never renders on another plugin\'s page')
+  assert.equal(render({ subject: { kind: 'item', id: 'settings-general' } }), null,
+    'never renders on official plugin pages')
 })
 
 test('component takes no ctx prop and never fetches directly', () => {

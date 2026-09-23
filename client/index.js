@@ -149,6 +149,8 @@ window.__ModuleLoader__.load({
 		var zh = {
 		  "nav": "\u8BA4\u8BC1\u8BBE\u7F6E",
 		  "header.desc": "\u7BA1\u7406\u767B\u5F55\u5BC6\u7801\u3001\u53CC\u56E0\u7D20\u8BA4\u8BC1\u4E0E\u767B\u5F55\u4F1A\u8BDD\u3002",
+		  "detail.guide.title": "\u7BA1\u7406\u8BA4\u8BC1\u8BBE\u7F6E",
+		  "detail.guide.body": "\u5BC6\u7801\u3001\u53CC\u56E0\u7D20\u8BA4\u8BC1\u4E0E Cookie \u5B89\u5168\u7B49\u64CD\u4F5C\u4F4D\u4E8E\u300C\u8BBE\u7F6E\u300D\u83DC\u5355\u7684\u300C\u8BA4\u8BC1\u8BBE\u7F6E\u300D\uFF1A\u70B9\u51FB\u4FA7\u8FB9\u680F\u5E95\u90E8\u7684\u300C\u8BBE\u7F6E\u300D\u6253\u5F00\u83DC\u5355\uFF0C\u518D\u9009\u62E9\u300C\u8BA4\u8BC1\u8BBE\u7F6E\u300D\u3002",
 		  "loading": "\u52A0\u8F7D\u4E2D...",
 		  "otp.title": "OTP \u53CC\u56E0\u7D20\u8BA4\u8BC1",
 		  "otp.enabled": "\u5DF2\u542F\u7528",
@@ -245,6 +247,8 @@ window.__ModuleLoader__.load({
 		var en = {
 		  "nav": "Authentication Settings",
 		  "header.desc": "Manage the login password, two-factor authentication and the active session.",
+		  "detail.guide.title": "Manage authentication settings",
+		  "detail.guide.body": "Password, two-factor and Cookie-Security controls live under Authentication Settings in the Settings menu: open Settings from the sidebar foot, then pick Authentication Settings.",
 		  "loading": "Loading...",
 		  "otp.title": "Two-factor authentication (OTP)",
 		  "otp.enabled": "Enabled",
@@ -1120,6 +1124,21 @@ window.__ModuleLoader__.load({
 		    locale: NS,
 		    inject: injected
 		  }, UserSettingsPanel));
+		  const DetailGuide = ({ subject, t: seatT }) => {
+		    const pkg = subject?.kind === "bundle" || subject?.kind === "row" ? subject.pkg : void 0;
+		    if (pkg?.name !== "dsh-auth-gateway") return null;
+		    const tr = seatT ?? t;
+		    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { style: { marginTop: "12px" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: CARD_TITLE, children: tr("detail.guide.title") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "4px 0 0" }, children: tr("detail.guide.body") })
+		    ] });
+		  };
+		  ctx.slots.inject("plugins.detail.section", () => ctx.slots.register({
+		    name: "plugins.detail.section",
+		    id: "auth-gateway-guide",
+		    order: 0,
+		    locale: NS
+		  }, DetailGuide));
 		}
 
 		return module.exports;

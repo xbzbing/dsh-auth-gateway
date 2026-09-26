@@ -551,6 +551,36 @@ test('OTP setup page is served to a verified session', async () => {
   await stopGateway()
 })
 
+test('both setup entry points answer 409 once 2FA is active', async () => {
+  await startGateway({})
+  const cookie = await loginCookie()
+  await enableOTP({ backupCodeCount: 3 })
+  await verifySession(cookie) // fully verified, so the 409 is the binding — not the session — refusing
+
+  const page = await request('/otp/setup', { cookie })
+  assert.equal(page.status, 409)
+  assert.deepEqual(JSON.parse(page.body), { ok: false, error: 'otp-already-enabled' })
+
+  const enable = await request('/otp/enable', { method: 'POST', body: {}, cookie })
+  assert.equal(enable.status, 409)
+  assert.deepEqual(JSON.parse(enable.body), { ok: false, error: 'otp-already-enabled' })
+  await stopGateway()
+})
+
+test('gate shape: an unverified session on a page path is sent to /otp/verify', async () => {
+  await startGateway({})
+  // Login BEFORE OTP is enabled → the session owes 2FA verification.
+  const cookie = await loginCookie()
+  await enableOTP({ backupCodeCount: 3 })
+
+  // The /api half of this gate is covered elsewhere; the redirect TARGET for
+  // page paths was the unasserted half.
+  const page = await request('/plugins/app.js', { cookie })
+  assert.equal(page.status, 302)
+  assert.equal(page.headers.location, '/otp/verify')
+  await stopGateway()
+})
+
 test('OTP verify page returns 401 when not authenticated', async () => {
   await startGateway({})
   const res = await request('/otp/verify')
@@ -566,6 +596,8 @@ test('OTP verify returns 400 when OTP not enabled', async () => {
   // Try to verify OTP
   const res = await request('/otp/verify', { method: 'POST', body: { otp: '123456' }, cookie })
   assert.equal(res.status, 400)
+  // The code comes from activeOtpSession — pin it, not just the status.
+  assert.deepEqual(JSON.parse(res.body), { ok: false, error: 'otp-not-enabled' })
   await stopGateway()
 })
 

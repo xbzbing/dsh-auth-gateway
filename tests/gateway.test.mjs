@@ -188,6 +188,30 @@ test('unauthenticated: page paths redirect to /login', async () => {
   assert.equal(seenRequests.length, 0)
 })
 
+test('gate shapes: pages are no-store, the refusal 401 stays minimal', async () => {
+  // sendHtml (lib/page-shell.js) serves every gateway page: the header pair
+  // is the contract, not an accident of one handler.
+  const page = await request('/login')
+  assert.equal(page.status, 200)
+  assert.match(page.headers['content-type'], /^text\/html/)
+  assert.equal(page.headers['cache-control'], 'no-store', 'gateway pages must never be cached')
+
+  // #refuse answers with content-type ONLY — no cache-control, deliberately
+  // unlike #json. Pinning the absence keeps a well-meaning "fix" from
+  // silently changing the gate's response shape.
+  const gate = await request('/api/session.list', { method: 'POST', body: {} })
+  assert.equal(gate.status, 401)
+  assert.equal(gate.headers['content-type'], 'application/json; charset=utf-8')
+  assert.equal(gate.headers['cache-control'], undefined)
+})
+
+test('gate shape: only the /api boundary gets JSON — lookalikes redirect', async () => {
+  assert.equal((await request('/api')).status, 401, '/api itself is inside the namespace')
+  const lookalike = await request('/apiff')
+  assert.equal(lookalike.status, 302, '/apiff is a redirect-only path')
+  assert.equal(lookalike.headers.location, '/login')
+})
+
 test('fresh install: /login renders the login page; /login/auth answers uniformly', async () => {
   // No password record exists yet. There is no setup page anymore: /login
   // always renders the auth form, and the first credential comes from the

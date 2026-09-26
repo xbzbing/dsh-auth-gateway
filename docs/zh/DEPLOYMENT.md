@@ -4,9 +4,9 @@
 
 ## dsh 版本兼容性
 
-**已实机验证：dsh `0.1.5-rc.2`（编写本文时最新版）。** 用 `dsh --version` 查看当前安装版本。
+**本插件支持 `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`，均已实机验证。** 用 `dsh --version` 查看当前安装版本。
 
-本插件依赖的扩展点在该版本线上均未变动，因此 0.1.5 线可直接使用：
+本插件依赖的扩展点在该区间内均未变动，因此整条区间可直接使用：
 
 | 依赖的官方扩展点 | 用途 |
 |---|---|
@@ -21,7 +21,7 @@
 - **dsh ≥ 0.1.2**：内部 webserver 启用 BrowserAuth，网关自动铸 cookie 适配（机制见 [SECURITY.md](SECURITY.md)）；
 - **dsh ≤ 0.1.1**：无 BrowserAuth，record 不存在，网关静默退化为逐字转发，行为与旧版一致。
 
-> **升级 dsh 后请注意**：dsh 的 **WebSocket 端点路径会随版本变化**——旧版是 `/api/events.mux`、`/sidebar/ws/*`，当前（0.1.5）只有 `/api/remote.mux`。网关按路径透明转发、**不硬编码任何端点名**，所以插件侧无需改动；但**反向代理若为 WebSocket 维护了路径白名单，dsh 一换路径就会静默失效**（症状：HTTP 正常、登录正常、页面提示连接失败）。反代请把 `Upgrade`/`Connection` 转发放在**兜底 location** 上，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) 与 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
+> **升级 dsh 后请注意**：dsh 的 **WebSocket 端点路径会随版本变化**——旧版是 `/api/events.mux`、`/sidebar/ws/*`，0.1.5 起只有 `/api/remote.mux`。网关按路径透明转发、**不硬编码任何端点名**，所以插件侧无需改动；但**反向代理若为 WebSocket 维护了路径白名单，dsh 一换路径就会静默失效**（症状：HTTP 正常、登录正常、页面提示连接失败）。反代请把 `Upgrade`/`Connection` 转发放在**兜底 location** 上，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) 与 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
 
 ## 端口与监听地址
 

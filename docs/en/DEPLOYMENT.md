@@ -4,9 +4,9 @@
 
 ## dsh version compatibility
 
-**Verified against dsh `0.1.5-rc.2` (the latest release at the time of writing).** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`, all verified live.** Run `dsh --version` to see what you have installed.
 
-Every extension point this plugin relies on is unchanged on that line, so the 0.1.5 series works as-is:
+Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 
 | Official extension point used | Purpose |
 |---|---|
@@ -21,7 +21,7 @@ Version-line behavior:
 - **dsh ≥ 0.1.2**: the internal webserver enforces BrowserAuth; the gateway adapts by minting the cookie automatically (see [SECURITY.md](SECURITY.md));
 - **dsh ≤ 0.1.1**: no BrowserAuth and no such record; the gateway silently degrades to verbatim forwarding, matching the old behavior.
 
-> **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while current releases (0.1.5) only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
+> **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while releases since 0.1.5 only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
 
 ## Ports and listening addresses
 

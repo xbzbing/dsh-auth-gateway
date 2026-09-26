@@ -433,11 +433,15 @@ test('unauthenticated upgrade is destroyed by the gateway before any forwarding'
 test('pre-gate public assets forward WITHOUT the minted upstream cookie', async () => {
   secretKnown = true
   const sessionCookie = await login()
-  // Even with a valid session, /manifest.webmanifest is served by the
-  // pre-gate branch: it must reach the upstream without the bearer.
-  const res = await request('/manifest.webmanifest', { cookie: sessionCookie })
-  assert.equal(res.status, 200)
-  const record = seenRequests.at(-1)
-  assert.equal(record?.url, '/manifest.webmanifest')
-  assert.equal(record?.upstreamCookie, false, 'anonymous-surface requests must not carry the bearer')
+  // Even with a valid session, the pre-gate branch serves these: each must
+  // reach the upstream without the bearer. One entry per upstreamAuth:false
+  // route row — dropping the flag on any of them would ship the fully
+  // privileged bearer to anonymous clients.
+  for (const path of ['/manifest.webmanifest', '/favicon.svg', '/assets/index-abc123.js']) {
+    const res = await request(path, { cookie: sessionCookie })
+    assert.equal(res.status, 200, path)
+    const record = seenRequests.at(-1)
+    assert.equal(record?.url, path)
+    assert.equal(record?.upstreamCookie, false, `${path}: anonymous-surface requests must not carry the bearer`)
+  }
 })

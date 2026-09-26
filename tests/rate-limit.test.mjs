@@ -10,7 +10,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRateLimiter } from '../lib/rate-limit.js'
+import { createRateLimiter, retryAfterSeconds } from '../lib/rate-limit.js'
 
 const T0 = new Date(2025, 7, 20, 10, 0, 0).getTime()
 const MINUTE = 60 * 1000
@@ -20,6 +20,15 @@ function setup(policy = {}) {
   const limiter = createRateLimiter(policy, (payload) => events.push(payload))
   return { limiter, events }
 }
+
+test('retryAfterSeconds counts whole seconds up, and never advertises 0', () => {
+  // Every `too-many-attempts` answer carries this number; the floor of 1 is
+  // what keeps a lockout that is about to lift from saying "retry now".
+  assert.equal(retryAfterSeconds(T0 + 400, T0), 1)
+  assert.equal(retryAfterSeconds(T0 + 1000, T0), 1)
+  assert.equal(retryAfterSeconds(T0 + 1500, T0), 2)
+  assert.equal(retryAfterSeconds(T0 - 5000, T0), 1, 'an expired lock still reports >= 1')
+})
 
 // ── layer 1: global per-minute budget ──────────────────────────────────
 

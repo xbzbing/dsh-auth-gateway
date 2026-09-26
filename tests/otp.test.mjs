@@ -567,6 +567,35 @@ test('both setup entry points answer 409 once 2FA is active', async () => {
   await stopGateway()
 })
 
+test('binding 2FA is audited: the enable and a failed confirmation both leave a trail', async () => {
+  await startGateway({})
+  const events = []
+  gateway.onAuthEvent = (payload) => events.push(payload)
+
+  const cookie = await loginCookie()
+  const staged = JSON.parse(
+    (await request('/otp/enable', { method: 'POST', body: {}, cookie })).body,
+  )
+
+  // A wrong confirmation code → otp-enable-failed + reason (no lockout yet).
+  const wrongCode = String((Number(generateTOTP(staged.secret)) + 1) % 1e6).padStart(6, '0')
+  const bad = await request('/otp/verify-setup', { method: 'POST', cookie, body: { otp: wrongCode } })
+  assert.equal(bad.status, 401)
+  assert.ok(
+    events.some((e) => e.kind === 'otp-enable-failed' && e.reason === 'invalid-otp'),
+    `a failed binding must be audited, got ${JSON.stringify(events)}`,
+  )
+
+  // The real code binds 2FA → otp-enabled, carrying kind + ip and nothing else.
+  const good = await request('/otp/verify-setup', { method: 'POST', cookie, body: { otp: generateTOTP(staged.secret) } })
+  assert.equal(good.status, 200)
+  assert.ok(getOTPStatus().enabled, 'the binding itself must have landed')
+  const enabled = events.find((e) => e.kind === 'otp-enabled')
+  assert.ok(enabled, `otp-enabled must be audited, got ${JSON.stringify(events)}`)
+  assert.deepEqual(Object.keys(enabled).sort(), ['ip', 'kind'], 'audit payload: kind + ip only — never credentials')
+  await stopGateway()
+})
+
 test('gate shape: an unverified session on a page path is sent to /otp/verify', async () => {
   await startGateway({})
   // Login BEFORE OTP is enabled → the session owes 2FA verification.

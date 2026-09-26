@@ -52,7 +52,7 @@ scripts / tests
 - **设置面板导航顺序**：注册 `settings.section` 时 `order` 必须严格大于官方 section；`tests/client-contract.test.mjs` 断言此不变量；
 - **唯一的对外请求，且默认关闭**：`lib/update-check.js` 向公共 npm registry 查询 `latest` 标签，用于面板的「检查更新」（版本号与仓库链接本身来自本机 `package.json`，离线可见）。自动检查默认**关闭**（`updateCheck: false`），全新安装不联网；触发方式只有两种——用户在「关于」卡片点「检查更新」（`GET /login-api/version?refresh=1`），或部署方把 `updateCheck` 设为 `true` 让面板打开时自动查一次。约束是硬性的：**不在认证或面板的关键路径上**、结果与失败都进内存缓存（成功 6h / 失败 15min，手动重复点击另有 5s 下限）、绝不抛错（失败降级为「无法检查」而非「已是最新」）、过期结果不再当作结论展示（`lastKnown()` 只报 TTL 内的缓存）。详见 SECURITY.md；
 - **页面双语**：`lib/locale.js` 读取官方 `settings` 服务的 `locale.preference`，再回退请求 `Accept-Language` 和 zh；错误消息集中在 `lib/errors.js` 一处维护（登录失败统一返回单一 `invalid-credentials` 码，防凭据枚举）；
-- **登录审计**：登录成功/失败/登出/改密经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
+- **登录审计**：登录成功/失败/登出/改密/OTP 启停经 `gateway.onAuthEvent` 回调输出审计日志（`ctx.logger.info`，仅事件种类 + IP + 原因，绝不记录凭据），并与暴力破解告警（`onSecurityEvent`）一同经 lib/audit-log.js 追加写入 `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天；写失败只告警、不影响认证流程）——当前 dsh 运行时的 `ctx.logger` 仅入内存缓冲，该文件是唯一持久审计记录；
 - **存储**：原子写（temp + rename）、0600/0700，与密码同模式；OTP 密钥以 AES-256-GCM 加密存储（主密钥来自 `DSH_AUTH_GATEWAY_MASTER_KEY` 或 `auth-gateway/otp-master.key`，见 SECURITY.md）。
 
 ## 构建

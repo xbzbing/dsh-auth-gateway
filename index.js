@@ -259,6 +259,8 @@ export async function apply(ctx, config) {
       'logout': '登出',
       'password-change': '修改密码成功',
       'password-change-failed': '修改密码失败',
+      'otp-enabled': '启用 OTP 成功',
+      'otp-enable-failed': '启用 OTP 失败',
       'otp-disabled': '禁用 OTP 成功',
       'otp-disable-failed': '禁用 OTP 失败',
     }[kind] ?? kind

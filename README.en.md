@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), yet its design note states explicitly *"There is no logout operation"* and that *"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*, while the CLI still rejects `--host 0.0.0.0` — **dsh never envisioned or supports remote access, and reserved no integration channel for putting another gateway in front of it**. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports `0.1.5-rc.2 <= dsh <= 0.1.7-rc.1`, all verified.
+This project supports `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`, all verified.
 
 ## Installation and Uninstallation
 

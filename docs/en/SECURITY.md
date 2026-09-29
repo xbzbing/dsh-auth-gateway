@@ -4,6 +4,14 @@
 
 This document describes the dsh-auth-gateway threat model, authentication security design, known limitations and recovery paths.
 
+## Architecture overview
+
+<p align="center">
+  <img src="../assets/architecture-en.png" alt="dsh-auth-gateway architecture" width="880">
+</p>
+
+The gateway owns the external port and the internal webserver stays bound to loopback; every HTTP request and WebSocket upgrade passes the auth gate before being forwarded.
+
 ## Threat model
 
 This plugin is designed for **remote-access authentication of dsh web**: the default threat is an attacker who can route to the external port but cannot read the local filesystem. Local users (who can read `$DSH_HOME`) are out of scope — the local trust model, equivalent to "logging into the machine's account grants full access".
@@ -63,7 +71,7 @@ When the key comes from an environment variable, it should live on an encrypted 
 
 ### Forwarding and the fence
 
-Before forwarding, the gateway rewrites `Host`/`Origin` to the loopback address: the internal trust fence's LAN trust list is sampled from the webserver's listening address, and since this plugin pins the webserver to `127.0.0.1`, LAN access would be 403'd internally without the rewrite. The rewrite is safe — the fence's remote-reachability duty has been taken over by the gateway cookie gate (cross-site/DNS-rebinding requests carry no session cookie and are rejected at the gateway).
+Before forwarding, the gateway rewrites `Host`/`Origin` to the loopback address: the internal trust fence's LAN trust list is sampled from the webserver's listening address, and since this plugin binds the webserver to `127.0.0.1`, LAN access would be 403'd internally without the rewrite. The rewrite is safe — the fence's remote-reachability duty has been taken over by the gateway cookie gate (cross-site/DNS-rebinding requests carry no session cookie and are rejected at the gateway).
 
 ### Relationship to the built-in dsh browser authentication (dsh ≥ 0.1.2)
 

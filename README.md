@@ -1,7 +1,7 @@
 # dsh-auth-gateway
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xbzbing/dsh-auth-gateway/main/docs/assets/architecture.png" alt="dsh-auth-gateway 架构图" width="720">
+  <img src="https://raw.githubusercontent.com/xbzbing/dsh-auth-gateway/main/docs/assets/banner.png" alt="dsh-auth-gateway banner" width="880">
 </p>
 
 <p align="center">
@@ -14,9 +14,9 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
-`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作」（*"There is no logout operation"*），并声明「认证不意味着支持网络部署、TLS、转发头解释或代理配置」（*"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关形态补齐官方未提供的远程访问认证面：对外端口由网关独占，内部 webserver 由 bundle patch 钉在回环地址，网关是唯一入口。
+`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但其设计说明明确写道「没有登出操作」（*"There is no logout operation"*），并声明「认证不意味着支持网络部署、TLS、转发头解释或代理配置」（*"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*），CLI 依旧拒绝 `--host 0.0.0.0`——**dsh 从未预想或支持远程访问，也没有为「前端再套一层网关」预留任何集成通道**。本插件以进程内网关的形态补上这层缺失的远程访问认证：对外端口由网关独占，内部 webserver 由 bundle patch 绑定在本地回环，网关是唯一入口。
 
-本项目支持 `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`，均已实测。
+本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.0-rc.1`，均已实测。
 
 ## 安装和卸载
 

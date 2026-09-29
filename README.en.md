@@ -1,7 +1,7 @@
 # dsh-auth-gateway
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xbzbing/dsh-auth-gateway/main/docs/assets/architecture-en.png" alt="dsh-auth-gateway architecture" width="720">
+  <img src="https://raw.githubusercontent.com/xbzbing/dsh-auth-gateway/main/docs/assets/banner-en.png" alt="dsh-auth-gateway banner" width="880">
 </p>
 
 <p align="center">
@@ -14,9 +14,9 @@
 
 A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI: **password auth + TOTP two-factor authentication + layered brute-force protection + session management + login audit**, with **real interception of every request** (HTTP and WebSocket) at the gateway layer — unauthenticated traffic never reaches the backend.
 
-`dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), yet its design note states explicitly *"There is no logout operation"* and that *"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*, while the CLI still rejects `--host 0.0.0.0` — **dsh never envisioned or supports remote access, and reserved no integration channel for putting another gateway in front of it**. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch pins the internal webserver to the loopback address, and the gateway is the only way in.
+`dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), yet its design note states explicitly *"There is no logout operation"* and that *"Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration"*, while the CLI still rejects `--host 0.0.0.0` — **dsh never envisioned or supports remote access, and reserved no integration channel for putting another gateway in front of it**. This plugin fills that role itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch binds the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`, all verified.
+This project supports `0.1.5-rc.2 <= dsh <= 0.2.0-rc.1`, all verified.
 
 ## Installation and Uninstallation
 

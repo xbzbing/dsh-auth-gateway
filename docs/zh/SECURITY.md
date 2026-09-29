@@ -4,6 +4,14 @@
 
 本文档描述 dsh-auth-gateway 的威胁模型、认证安全设计、已知限制与恢复路径。
 
+## 架构总览
+
+<p align="center">
+  <img src="../assets/architecture.png" alt="dsh-auth-gateway 架构图" width="880">
+</p>
+
+网关独占对外端口，内部 webserver 绑定在本地回环；每个 HTTP 请求与 WebSocket 升级先过认证门再转发。
+
 ## 威胁模型
 
 本插件为 **dsh web 的远程访问认证**设计：默认威胁是"能路由到对外端口但无法访问本机文件系统"的攻击者。本机用户（可读取 `$DSH_HOME`）不在防护范围内——本机可信模型，等同"能登录本机账户即拥有全部权限"。
@@ -63,7 +71,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 ### 转发与 fence
 
-网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件将 webserver 钉在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
+网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件把 webserver 绑定在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
 
 ### 与 dsh 内置浏览器认证的关系（dsh ≥ 0.1.2）
 

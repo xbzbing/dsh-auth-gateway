@@ -4,14 +4,14 @@
 
 ## dsh 版本兼容性
 
-**本插件支持 `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`，均已实机验证。** 用 `dsh --version` 查看当前安装版本。
+**本插件支持 `0.1.5-rc.2 <= dsh <= 0.2.0-rc.1`，均已实机验证。** 用 `dsh --version` 查看当前安装版本。
 
 本插件依赖的扩展点在该区间内均未变动，因此整条区间可直接使用：
 
 | 依赖的官方扩展点 | 用途 |
 |---|---|
 | `webServer.tapIndex` | 注入 `randomUUID` polyfill 与 `basePath` 全局量（仅自包含全局量） |
-| `dsh.bundle` patch | 把内部 webserver 钉在 `127.0.0.1:<N+1>`（安全根基，见 [SECURITY.md](SECURITY.md)） |
+| `dsh.bundle` patch | 把内部 webserver 绑定在 `127.0.0.1:<N+1>`（安全根基，见 [SECURITY.md](SECURITY.md)） |
 | `ctx.slots`（`settings.section`） | 客户端「认证设置」面板 |
 | `credentials` 服务 + `client-connection/browser-session` record | 读取上游 BrowserAuth 密钥，为回环一跳铸造同构 cookie |
 | BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`） | 与 dsh 自身的 token 交换同构，上游无法区分 |

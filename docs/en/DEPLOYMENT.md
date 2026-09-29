@@ -4,14 +4,14 @@
 
 ## dsh version compatibility
 
-**This plugin supports `0.1.5-rc.2 <= dsh <= 0.1.7-rc.2`, all verified live.** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.0-rc.1`, all verified live.** Run `dsh --version` to see what you have installed.
 
 Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 
 | Official extension point used | Purpose |
 |---|---|
 | `webServer.tapIndex` | Inject the `randomUUID` polyfill and the `basePath` global (self-contained globals only) |
-| `dsh.bundle` patch | Pin the internal webserver to `127.0.0.1:<N+1>` (the security foundation — see [SECURITY.md](SECURITY.md)) |
+| `dsh.bundle` patch | Bind the internal webserver to `127.0.0.1:<N+1>` (the security foundation — see [SECURITY.md](SECURITY.md)) |
 | `ctx.slots` (`settings.section`) | The client "authentication settings" panel |
 | `credentials` service + the `client-connection/browser-session` record | Read the upstream BrowserAuth secret and mint an identical cookie for the loopback hop |
 | BrowserAuth cookie shape (`dsh-auth-<sha256(authority)>`, `v1.<payload>.<hmac>`) | Indistinguishable from dsh's own token exchange as far as the upstream is concerned |

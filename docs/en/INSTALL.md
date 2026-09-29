@@ -39,7 +39,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 
 ```bash
 # 1) Confirm dsh-auth-gateway appears in the composition tree and the
-#    webserver is pinned to the loopback address
+#    webserver is bound to the loopback address
 dsh web --dump-config | grep -E "dsh-auth-gateway|127.0.0.1"
 
 # 2) Start

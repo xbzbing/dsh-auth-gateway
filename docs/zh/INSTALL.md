@@ -38,7 +38,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 ### 1.4 验证安装
 
 ```bash
-# 1) 确认组合树中出现 dsh-auth-gateway，且 webserver 被钉在回环地址
+# 1) 确认组合树中出现 dsh-auth-gateway，且 webserver 绑定在回环地址
 dsh web --dump-config | grep -E "dsh-auth-gateway|127.0.0.1"
 
 # 2) 启动

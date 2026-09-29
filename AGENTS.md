@@ -1,6 +1,6 @@
 # AGENTS.md
 
-dsh-auth-gateway 是 dsh web 前面的密码 + TOTP 认证网关（Cordis 插件）：网关独占对外端口，bundle patch 把内部 webserver 钉在 `127.0.0.1:<N+1>`，每个 HTTP 请求与 WebSocket 升级先过认证门再转发。ESM（`"type": "module"`）、Node >= 20。改 `lib/` 前先读 [docs/zh/DEVELOPMENT.md](docs/zh/DEVELOPMENT.md)；安全语义见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)。
+dsh-auth-gateway 是 dsh web 前面的密码 + TOTP 认证网关（Cordis 插件）：网关独占对外端口，bundle patch 把内部 webserver 绑定在 `127.0.0.1:<N+1>`，每个 HTTP 请求与 WebSocket 升级先过认证门再转发。ESM（`"type": "module"`）、Node >= 20。改 `lib/` 前先读 [docs/zh/DEVELOPMENT.md](docs/zh/DEVELOPMENT.md)；安全语义见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)。
 
 ## 仓库布局
 
@@ -56,7 +56,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **LAN trust 是本项目唯一记录在案的安全例外**：dsh 把配置平面（settings/credentials RPC）钉死在 loopback，官方注释写明"直到真实认证层存在"（`until a real authentication layer exists`）但从未实现——本项目自行承担该认证层角色，因此允许对 `window.__ModuleLoader__` 做**最小介入**：在 `loader.load` 上套**透传代理**，**仅拦截** `@deepseek-ai/dsh-client-connection` 的注册（其余插件原样通过，否则视为违规）；其 `apply` 包装**不得**赋值 `ctx.provide`（mixin-bound accessor，会污染共享 ReflectService 并让所有 provide 落入 connection 的 fiber scope——这是 0.4.2 破坏 better-sidebar 的机制），只能在共享 `ctx.reflect` 上临时替换未绑定的 `provide` 本体捕获 handle、转发 `originalProvide.call(this, ...)` 保调用者归属，apply 返回后同步翻转 `connection.isLoopback`。实现见 `lib/lan-trust-script.js`；任何放宽（如包装其他插件、触碰 ctx.provide、修改 loader 语义）都属破坏性变更。
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
 - **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
-- **回环钉扎是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。
+- **回环绑定是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。
 - **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。展示资源（`locale/*.json`、`icon.svg`）同样按 deploy.sh 的 `RESOURCE_FILES` 显式列表同步，并需在 package.json 的 `files` 中声明才随 npm 包分发。
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。
 - **客户端面板经注入的 basePath 全局量构造 API 路径**（`window.__dshAuthGatewayBasePath__`，由 index.js tapIndex 写入）：面板内禁止根绝对路径 fetch/跳转，否则子路径部署失效。
@@ -80,7 +80,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 rm -rf /tmp/dsh-gw-home
 DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
 # webStartup/webServer 由 @deepseek-ai/dsh-web-app 提供，必须补进 bundles 且排在插件之前：
-# bundles 数组序即 bundle patch 叠加序，插件要把内部 webserver 钉到 N+1，必须覆盖 web-app 的 webserver 行
+# bundles 数组序即 bundle patch 叠加序，插件要把内部 webserver 绑定到 N+1，必须覆盖 web-app 的 webserver 行
 DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/package.json',j=require(f);j.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-auth-gateway'];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
 DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台

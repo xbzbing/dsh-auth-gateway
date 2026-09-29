@@ -4,7 +4,7 @@
 
 ## dsh version compatibility
 
-**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.0-rc.1`, all verified live.** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.0-rc.2`, all verified live.** Run `dsh --version` to see what you have installed.
 
 Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 

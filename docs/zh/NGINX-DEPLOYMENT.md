@@ -50,6 +50,8 @@ config:
 dsh web --port 8080
 ```
 
+> **不要依赖 dsh 原生 `--public-url` / `--trusted-host`（dsh 0.2.1-alpha.1 新增）**：这两个 flag 是官方为「裸 dsh + 自建反代」场景准备的——向内部 webserver 声明对外地址（`--public-url`）并放行外部 Host（`--trusted-host`）。用本网关对外时不需要、也不应使用它们：网关独占对外端口，已在服务端把 Host/Origin 改写为回环、自行处理 `basePath` 前缀与 TLS 透传，对外地址、前缀剥离、cookie `Secure` 均由网关（及其前面的 nginx）负责。而且网关的 bundle patch 对内部 `web-runtime` 行是整对象替换，`--public-url` 传入的值会被丢弃、形同无效。对外访问请按下文拓扑用 `listenHost` / `basePath` 配合 nginx 配置。
+
 ---
 
 ## 拓扑 A：裸金属直连（无 nginx）

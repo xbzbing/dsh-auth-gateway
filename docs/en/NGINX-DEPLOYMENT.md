@@ -50,6 +50,8 @@ Startup command (external port 8080):
 dsh web --port 8080
 ```
 
+> **Do not rely on dsh's native `--public-url` / `--trusted-host` (added in dsh 0.2.1-alpha.1)**: these flags target the "bare dsh + your own reverse proxy" scenario — they advertise an external address to the internal webserver (`--public-url`) and admit an external Host (`--trusted-host`). When this gateway fronts dsh you neither need nor should use them: the gateway owns the external port, already rewrites Host/Origin to loopback server-side, and handles the `basePath` prefix and TLS pass-through itself, so the advertised address, prefix stripping, and cookie `Secure` are all the gateway's job (together with the nginx in front of it). Besides, the gateway's bundle patch replaces the internal `web-runtime` row as a whole object, so a value passed via `--public-url` is dropped and has no effect. Configure external access through `listenHost` / `basePath` plus nginx as described in the topologies below.
+
 ---
 
 ## Topology A: bare metal direct (no nginx)

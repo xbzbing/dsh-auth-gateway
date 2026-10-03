@@ -58,8 +58,37 @@ function ok(name) {
 }
 
 /**
- * Close whatever first-run dialog is up (the beta notice with 继续, the
- * API-key wizard with 稍后配置) so UI behind it is clickable. Some dsh
+ * Dismiss the product-wide preview notice dsh 0.2.1 greets a first sign-in
+ * with (title 预览版说明, primary action 继续). It is a focus-trapping modal:
+ * until it detaches, every click on the app chrome behind it is swallowed, so
+ * the settings dialog this suite opens next can never be reached. Click its
+ * primary action and wait for THAT dialog to actually leave the DOM, rather
+ * than clicking once and assuming — a durable acknowledgement write settles
+ * asynchronously, and a stale click would let the trap outlive the probe.
+ * Harmless when no such notice is present.
+ *
+ * @param page - the authenticated page.
+ * @returns after the preview notice is gone (or was never shown).
+ */
+async function dismissWelcomeNotice(page) {
+  const DEADLINE = Date.now() + 10000
+  while (Date.now() < DEADLINE) {
+    const present = await page.evaluate(() => {
+      const dlg = [...document.querySelectorAll('[role="dialog"]')]
+        .find((d) => d.isConnected && d.offsetParent !== null && /预览版说明/.test(d.textContent || ''))
+      if (!dlg) return false
+      const btn = [...dlg.querySelectorAll('button')].find((b) => /继续/.test(b.textContent || ''))
+      btn?.click()
+      return true
+    })
+    if (!present) return
+    await page.waitForTimeout(500)
+  }
+}
+
+/**
+ * Close whatever first-run dialog is up (the 0.2.1 preview notice with 继续,
+ * the API-key wizard with 稍后配置) so UI behind it is clickable. Some dsh
  * builds greet a first sign-in with these; harmless when none is present.
  *
  * The queue pops the next dialog a few hundred ms after the previous one
@@ -68,6 +97,7 @@ function ok(name) {
  * after the surface has stayed quiet for a full quiet window.
  */
 async function dismissFirstRunDialogs(page) {
+  await dismissWelcomeNotice(page)
   const QUIET_MS = 3000
   const DEADLINE = Date.now() + 15000
   let quietSince = Date.now()

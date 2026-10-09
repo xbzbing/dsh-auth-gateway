@@ -4,7 +4,7 @@
 
 ## dsh version compatibility
 
-**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.1`, all verified live.** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`, all verified live.** Run `dsh --version` to see what you have installed.
 
 Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 
@@ -40,7 +40,7 @@ Derivation rule: **external port = `--port` (default 3080), internal port = exte
 
 ### Why `--host 0.0.0.0` cannot be used
 
-`dsh web --host 0.0.0.0` is rejected outright by dsh (web-app built-in security restriction, hardcoded in `startup.ts`). This is a dsh code-level limit that configuration cannot lift — and **does not need to be lifted**:
+`dsh web --host 0.0.0.0` is rejected outright by dsh (web-app built-in security restriction, hardcoded in `startup.ts`). Since dsh 0.2.1-alpha.2 this check was tightened from the literal `0.0.0.0` to rejecting every wildcard address (`isWildcardHost`: `0.0.0.0`, `::`, `0`, …), while now accepting a **concrete** IPv4/IPv6 literal to bind one local interface. Either way the gateway has no use for it: this is a dsh code-level limit that configuration cannot lift — and **does not need to be lifted**:
 
 - The internal webserver must listen only on `127.0.0.1` (security-critical: an internal port exposed to the outside bypasses the auth gateway);
 - External listening is handled by the plugin's `listenHost` (default `0.0.0.0`), which does not pass through web-startup validation.

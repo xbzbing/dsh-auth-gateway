@@ -51,6 +51,8 @@ dsh web --port 8080
 ```
 
 > **不要依赖 dsh 原生 `--public-url` / `--trusted-host`（dsh 0.2.1-alpha.1 新增）**：这两个 flag 是官方为「裸 dsh + 自建反代」场景准备的——向内部 webserver 声明对外地址（`--public-url`）并放行外部 Host（`--trusted-host`）。用本网关对外时不需要、也不应使用它们：网关独占对外端口，已在服务端把 Host/Origin 改写为回环、自行处理 `basePath` 前缀与 TLS 透传，对外地址、前缀剥离、cookie `Secure` 均由网关（及其前面的 nginx）负责。而且网关的 bundle patch 对内部 `web-runtime` 行是整对象替换，`--public-url` 传入的值会被丢弃、形同无效。对外访问请按下文拓扑用 `listenHost` / `basePath` 配合 nginx 配置。
+>
+> **dsh 0.2.1-alpha.2 新增的 `--tls-cert` / `--tls-key` 同理用不上**：它们让 dsh 内部 webserver 直接跑原生 HTTPS，而网关的 bundle patch 对 `webserver` 行是整对象替换且**故意不含 `tls`**——内部服务恒为回环明文 HTTP，网关以明文转发该回环一跳。对外的 HTTPS 由网关前面的 nginx 终结（见拓扑 B/C），网关据 `X-Forwarded-Proto` 判定并给 cookie 打 `Secure`。所以装了网关时传 `--tls-cert/--tls-key` 不会产生对外 HTTPS，请勿使用。
 
 ---
 

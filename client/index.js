@@ -908,31 +908,32 @@ window.__ModuleLoader__.load({
 		              )
 		            ] })
 		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "12px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }) }),
-		          !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		            marginTop: "12px",
-		            padding: "10px 14px",
-		            borderRadius: "10px",
-		            fontSize: "13px",
-		            lineHeight: "20px",
-		            background: T.successBg,
-		            color: T.success
-		          }, children: [
-		            notice.text,
-		            notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		              " ",
-		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		                "a",
-		                {
-		                  href: notice.href,
-		                  target: "_blank",
-		                  rel: "noopener noreferrer",
-		                  style: { color: T.success, textDecoration: "underline" },
-		                  children: t("about.releaseNotes")
-		                }
-		              )
-		            ] })
-		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "10px 0 0" }, children: notice.text }))
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: "12px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }),
+		            !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		              padding: "10px 14px",
+		              borderRadius: "10px",
+		              fontSize: "13px",
+		              lineHeight: "20px",
+		              background: T.successBg,
+		              color: T.success
+		            }, children: [
+		              notice.text,
+		              notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		                " ",
+		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		                  "a",
+		                  {
+		                    href: notice.href,
+		                    target: "_blank",
+		                    rel: "noopener noreferrer",
+		                    style: { color: T.success, textDecoration: "underline" },
+		                    children: t("about.releaseNotes")
+		                  }
+		                )
+		              ] })
+		            ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: notice.text }))
+		          ] })
 		        ] })
 		      ] }),
 		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {

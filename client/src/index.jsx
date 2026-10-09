@@ -839,39 +839,42 @@ function UserSettingsPanel({ api, t }) {
               {/* Explicit check. Automatic checks are off by default, so this
                   button is the normal way a user learns about a new release;
                   it is also the only thing that makes the outbound request. */}
-              <div style={{ marginTop: '12px' }}>
+              {/* Button and its result share one row: the derived notice sits
+                  to the right of the check button, wrapping below only when the
+                  row runs out of width. */}
+              <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <Button variant="outline" onClick={checkForUpdates} disabled={checkingUpdate}>
                   {checkingUpdate ? t('about.checking') : t('about.check')}
                 </Button>
+                {/* Result — one derived notice for all four states
+                    (client/src/update-notice.js), so "never checked", "failed"
+                    and the two verdicts cannot drift apart. `null` means nothing
+                    is known, and the card then claims nothing. */}
+                {!checkingUpdate && notice !== null && (
+                  notice.tone === 'banner' ? (
+                    <div style={{
+                      padding: '10px 14px', borderRadius: '10px',
+                      fontSize: '13px', lineHeight: '20px',
+                      background: T.successBg, color: T.success,
+                    }}>
+                      {notice.text}
+                      {notice.href !== '' && (
+                        <>
+                          {' '}
+                          <a
+                            href={notice.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: T.success, textDecoration: 'underline' }}
+                          >{t('about.releaseNotes')}</a>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ ...DESC, margin: 0 }}>{notice.text}</p>
+                  )
+                )}
               </div>
-              {/* Result line — one derived notice for all four states
-                  (client/src/update-notice.js), so "never checked", "failed"
-                  and the two verdicts cannot drift apart. `null` means nothing
-                  is known, and the card then claims nothing. */}
-              {!checkingUpdate && notice !== null && (
-                notice.tone === 'banner' ? (
-                  <div style={{
-                    marginTop: '12px', padding: '10px 14px', borderRadius: '10px',
-                    fontSize: '13px', lineHeight: '20px',
-                    background: T.successBg, color: T.success,
-                  }}>
-                    {notice.text}
-                    {notice.href !== '' && (
-                      <>
-                        {' '}
-                        <a
-                          href={notice.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: T.success, textDecoration: 'underline' }}
-                        >{t('about.releaseNotes')}</a>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <p style={{ ...DESC, margin: '10px 0 0' }}>{notice.text}</p>
-                )
-              )}
             </>
           )}
         </div>

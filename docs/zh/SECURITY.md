@@ -25,6 +25,7 @@
 | 会话劫持（Cookie 窃取） | HttpOnly + SameSite=Strict；禁用 OTP、修改密码等敏感操作要求完整重验证 |
 | DNS-rebinding / 跨站请求 | 网关 Cookie 门禁接管（跨站请求无会话 Cookie 即被拒）；内部 fence 职责移交后，Host/Origin 改写为回环（见下） |
 | LAN 浏览器获得客户端 loopback trust | trust bootstrap 只随内部 DSH index 提供；外部浏览器必须先通过网关完整认证才能取得页面，内部 webserver 仍只监听回环，服务端 privileged fence 保持启用 |
+| 本机浏览器 handoff 打开内部端口 | dsh 的 `openBrowser` 会打开 `http://127.0.0.1:<内部端口>/?token=…`，内部 `frontend-static` 接受该启动令牌并直接铸出会话 cookie——**不经网关密码**。仅本机可达（内部端口只监听回环），属上文本机可信模型，非漏洞；但可避免：启动时加 `--no-open`，或声明 `--public-url` 让 handoff 指向对外 origin（见 [DEPLOYMENT.md](DEPLOYMENT.md)） |
 | 存储泄露（`$DSH_HOME` 文件被读取） | 密码与备份代码为 scrypt 哈希；**OTP 密钥为 AES-256-GCM 加密**（读取需主密钥，见"已知限制"） |
 | 首次部署抢占 | 初始密码由服务器自动生成（console 打印，本机可见）——无"先到先得"窗口；初始密码为一次性凭据，完成引导后失效 |
 

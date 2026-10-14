@@ -47,10 +47,15 @@ config:
 启动命令（对外端口 8080）：
 
 ```bash
-dsh web --port 8080
+dsh web --port 8080 --no-open
 ```
 
-> **不要依赖 dsh 原生 `--public-url` / `--trusted-host`（dsh 0.2.1-alpha.1 新增）**：这两个 flag 是官方为「裸 dsh + 自建反代」场景准备的——向内部 webserver 声明对外地址（`--public-url`）并放行外部 Host（`--trusted-host`）。用本网关对外时不需要、也不应使用它们：网关独占对外端口，已在服务端把 Host/Origin 改写为回环、自行处理 `basePath` 前缀与 TLS 透传，对外地址、前缀剥离、cookie `Secure` 均由网关（及其前面的 nginx）负责。而且网关的 bundle patch 对内部 `web-runtime` 行是整对象替换，`--public-url` 传入的值会被丢弃、形同无效。对外访问请按下文拓扑用 `listenHost` / `basePath` 配合 nginx 配置。
+> **`--public-url` 与 `--trusted-host` 在这里的角色不同（dsh 0.2.1-alpha.1 引入）**：
+>
+> - **`--trusted-host` 用不上**：它放宽的是内部 `/api` 的 Host/Origin 栅栏，而网关已在服务端把 Host/Origin 改写为回环，栅栏职责由网关的 Cookie 门禁接管（见 [SECURITY.md](SECURITY.md)）。装了网关时不要依赖它。
+> - **`--public-url` 受支持，建议按需使用**：网关的 bundle patch 会把该值原样传给内部 `web-runtime` 行。它只决定四个**展示面**——启动打印行、默认浏览器 handoff、智能体运行时上下文（dsh 0.2.1-alpha.3 起新增 `Current DeepSeek Harness Web GUI URL` 行）与 `DSH_WEB_URL`；dsh 官方 help 明确它 **grants no trust**：不参与路由、不改监听地址、不放宽 Host 栅栏、也不决定 cookie `Secure`。不传时这四个面显示内部回环地址 `http://127.0.0.1:<N+1>`，对远程用户是误导——带 `basePath` 前缀的部署尤其应传，否则智能体看到的是无前缀的回环地址。
+>
+> 对外地址、前缀剥离、cookie `Secure` 始终由网关（及其前面的 nginx）负责；`--public-url` 只是让 dsh 把这些展示面说对，不会替你做这些事。
 >
 > **dsh 0.2.1-alpha.2 新增的 `--tls-cert` / `--tls-key` 同理用不上**：它们让 dsh 内部 webserver 直接跑原生 HTTPS，而网关的 bundle patch 对 `webserver` 行是整对象替换且**故意不含 `tls`**——内部服务恒为回环明文 HTTP，网关以明文转发该回环一跳。对外的 HTTPS 由网关前面的 nginx 终结（见拓扑 B/C），网关据 `X-Forwarded-Proto` 判定并给 cookie 打 `Secure`。所以装了网关时传 `--tls-cert/--tls-key` 不会产生对外 HTTPS，请勿使用。
 

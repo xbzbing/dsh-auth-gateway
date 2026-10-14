@@ -42,8 +42,8 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 #    webserver is bound to the loopback address
 dsh web --dump-config | grep -E "dsh-auth-gateway|127.0.0.1"
 
-# 2) Start
-dsh web --port 8080
+# 2) Start (--no-open keeps dsh from opening a browser itself; see DEPLOYMENT.md)
+dsh web --port 8080 --no-open
 ```
 
 On first start the console prints an **initial password** (a prominent notice block, bilingual zh/en). Open `http://<host>:8080` in a browser, log in with the initial password, and the onboarding page guides you to set a personal password.
@@ -109,7 +109,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 ```bash
 # Find the dsh web process and restart it (or restart from its tmux / systemd session)
 kill $(pgrep -f 'dsh web')
-dsh web --port 8080
+dsh web --port 8080 --no-open
 ```
 
 > No credential command is needed when upgrading — password and OTP credential storage is separate from the plugin code, so upgrades do not affect it.

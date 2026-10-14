@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), but it is just a single authority-bound bearer cookie — the design note states plainly *"There is no logout operation"* and that *"Authentication does not configure TLS, forwarding-header interpretation, or proxies"*. dsh 0.2.1 did add a native HTTPS listener (`--tls-cert` / `--tls-key`) and concrete-IP binding for direct deployments (the CLI only rejects wildcard addresses such as `0.0.0.0` and accepts concrete address literals), yet the authentication layer itself still has **no logout, no password or multi-factor auth, no brute-force protection, no login audit, and no integration channel for putting another authentication gateway in front of it**. This plugin fills that missing remote-access authentication itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch binds the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`, all verified.
+This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.3`, all verified.
 
 ## Installation and Uninstallation
 
@@ -24,8 +24,8 @@ This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`, all verified.
 # Install (from npm registry)
 dsh plugin --profile web add dsh-auth-gateway
 
-# Start (external port 8080, internal webserver auto-moves to 8081)
-dsh web --port 8080
+# Start (external port 8080, internal webserver auto-moves to 8081; --no-open stops dsh opening a browser)
+dsh web --port 8080 --no-open
 
 # Uninstall (clean credentials first, then remove)
 ~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall

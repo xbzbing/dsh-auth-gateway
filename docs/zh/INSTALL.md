@@ -41,8 +41,8 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 # 1) 确认组合树中出现 dsh-auth-gateway，且 webserver 绑定在回环地址
 dsh web --dump-config | grep -E "dsh-auth-gateway|127.0.0.1"
 
-# 2) 启动
-dsh web --port 8080
+# 2) 启动（--no-open 让 dsh 不要自动打开浏览器，详见 DEPLOYMENT.md）
+dsh web --port 8080 --no-open
 ```
 
 首次启动时控制台会打印**初始密码**（醒目提示块，中英对照）。浏览器访问 `http://<host>:8080`，用初始密码登录后进入引导页设置个人密码。
@@ -108,7 +108,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 ```bash
 # 找到 dsh web 进程并重启（若在 tmux / systemd 中则从对应会话重启）
 kill $(pgrep -f 'dsh web')
-dsh web --port 8080
+dsh web --port 8080 --no-open
 ```
 
 > 升级不需要运行凭据命令——密码与 OTP 凭据存储与插件代码分离，升级不会影响。

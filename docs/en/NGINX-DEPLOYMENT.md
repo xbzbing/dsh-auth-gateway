@@ -47,10 +47,15 @@ config:
 Startup command (external port 8080):
 
 ```bash
-dsh web --port 8080
+dsh web --port 8080 --no-open
 ```
 
-> **Do not rely on dsh's native `--public-url` / `--trusted-host` (added in dsh 0.2.1-alpha.1)**: these flags target the "bare dsh + your own reverse proxy" scenario — they advertise an external address to the internal webserver (`--public-url`) and admit an external Host (`--trusted-host`). When this gateway fronts dsh you neither need nor should use them: the gateway owns the external port, already rewrites Host/Origin to loopback server-side, and handles the `basePath` prefix and TLS pass-through itself, so the advertised address, prefix stripping, and cookie `Secure` are all the gateway's job (together with the nginx in front of it). Besides, the gateway's bundle patch replaces the internal `web-runtime` row as a whole object, so a value passed via `--public-url` is dropped and has no effect. Configure external access through `listenHost` / `basePath` plus nginx as described in the topologies below.
+> **`--public-url` and `--trusted-host` play different roles here (both added in dsh 0.2.1-alpha.1)**:
+>
+> - **`--trusted-host` is useless**: it widens the internal `/api` Host/Origin fence, but the gateway already rewrites Host/Origin to loopback server-side, so the fence's job is taken over by the gateway's cookie gate (see [SECURITY.md](SECURITY.md)). Do not rely on it with the gateway installed.
+> - **`--public-url` is supported and worth passing when it applies**: the gateway's bundle patch forwards the value verbatim to the internal `web-runtime` row. It decides four **presentation surfaces only** — the startup URL line, the default-browser handoff, the agent's runtime context (the `Current DeepSeek Harness Web GUI URL` line added in dsh 0.2.1-alpha.3), and `DSH_WEB_URL`; dsh's own help states it **grants no trust**: it takes no part in routing, does not change the listen address, does not widen the Host fence, and does not decide cookie `Secure`. When omitted, those four surfaces name the internal loopback address `http://127.0.0.1:<N+1>`, which misleads any remote user — a `basePath`-prefixed deployment should especially pass it, or the agent sees an unprefixed loopback address.
+>
+> Either way, the external address, prefix stripping, and cookie `Secure` remain the gateway's job (together with the nginx in front of it); `--public-url` only makes dsh state those presentation surfaces correctly, it does none of that work for you.
 >
 > **dsh 0.2.1-alpha.2's new `--tls-cert` / `--tls-key` are equally useless here**: they make dsh's internal webserver serve native HTTPS, but the gateway's bundle patch replaces the `webserver` row as a whole object and **deliberately omits `tls`** — the internal server stays loopback plain HTTP, and the gateway forwards that loopback hop in the clear. External HTTPS is terminated by the nginx in front of the gateway (see topologies B/C); the gateway reads `X-Forwarded-Proto` and marks the cookie `Secure` accordingly. So passing `--tls-cert/--tls-key` with the gateway installed produces no external HTTPS — do not use them.
 

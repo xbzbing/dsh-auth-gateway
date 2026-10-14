@@ -4,7 +4,7 @@
 
 ## dsh version compatibility
 
-**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`, all verified live.** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.3`, all verified live.** Run `dsh --version` to see what you have installed.
 
 Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 
@@ -14,11 +14,12 @@ Every extension point this plugin relies on is unchanged across that range, so t
 | `dsh.bundle` patch | Bind the internal webserver to `127.0.0.1:<N+1>` (the security foundation — see [SECURITY.md](SECURITY.md)) |
 | `ctx.slots` (`settings.section`) | The client "authentication settings" panel |
 | `credentials` service + the `client-connection/browser-session` record | Read the upstream BrowserAuth secret and mint an identical cookie for the loopback hop |
-| BrowserAuth cookie shape (`dsh-auth-<sha256(authority)>`, `v1.<payload>.<hmac>`) | Indistinguishable from dsh's own token exchange as far as the upstream is concerned |
+| BrowserAuth cookie shape (`dsh-auth-<sha256(authority)>`, `v1.<payload>.<hmac>`) | Indistinguishable from dsh's own browser-session cookie (the `v1` minted by its index route) as far as the upstream is concerned |
 
 Version-line behavior:
 
 - **dsh ≥ 0.1.2**: the internal webserver enforces BrowserAuth; the gateway adapts by minting the cookie automatically (see [SECURITY.md](SECURITY.md));
+- **dsh ≥ 0.2.1-alpha.3**: BrowserAuth adds a `v2` cookie (an API operator carrying an `id`, minted by the new `/connect` launch-token exchange for API clients such as the SDKs and the desktop app); **the browser session is still `v1`**, and the gateway mints exactly `v1`, so the upstream keeps accepting it. The same release adds `remoteAccess` RBAC, but it constrains **non-owner** principals only: a browser request (holding the `v1` cookie) is always admitted as `owner`, so the gateway path is unaffected;
 - **dsh ≤ 0.1.1**: no BrowserAuth and no such record; the gateway silently degrades to verbatim forwarding, matching the old behavior.
 
 > **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while releases since 0.1.5 only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
@@ -30,13 +31,20 @@ Version-line behavior:
 The bundle patch follows `ctx.webStartup` (the same mechanism as web-app's own webserver row); the port is controlled by the CLI flag:
 
 ```bash
-dsh web --port 8080    # external URL 8080, internal webserver auto-moves to 8081
-dsh web                # default: external 3080, internal 3081
+dsh web --port 8080 --no-open    # external URL 8080, internal webserver auto-moves to 8081
+dsh web --no-open                # default: external 3080, internal 3081
 ```
 
 Derivation rule: **external port = `--port` (default 3080), internal port = external + 1**. Port range 1–65534 (the internal port must stay valid after +1, otherwise config validation fails at startup).
 
 > `--port 0` (OS-assigned) is not supported: the gateway needs a fixed internal port to forward to.
+
+### Always pass `--no-open`
+
+The gateway prints its own external URL, so dsh does not need to open a browser too. Without `--no-open`, dsh's browser handoff opens the **internal** webserver address and appends the launch token to the URL (`appRootUrl()` → `authenticatedUrl()` → `openBrowser()`):
+
+- Without `--public-url` it opens `http://127.0.0.1:<internal port>/?token=…`, and `frontend-static`'s index accepts that token and mints a dsh session cookie outright — **that tab never passes the gateway password**. It only works locally (the internal port listens on loopback alone) and is part of the local-trust model recorded in [SECURITY.md](SECURITY.md), not a vulnerability — but there is no reason to create it. The console also gains a `dsh web: opening the default browser; pass --no-open to disable` line beside the gateway's own.
+- With `--public-url` it opens the external origin instead, the request hits the gateway's auth gate first, and that local bypass disappears.
 
 ### Why `--host 0.0.0.0` cannot be used
 

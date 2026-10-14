@@ -4,7 +4,7 @@
 
 ## dsh 版本兼容性
 
-**本插件支持 `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`，均已实机验证。** 用 `dsh --version` 查看当前安装版本。
+**本插件支持 `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.3`，均已实机验证。** 用 `dsh --version` 查看当前安装版本。
 
 本插件依赖的扩展点在该区间内均未变动，因此整条区间可直接使用：
 
@@ -14,11 +14,12 @@
 | `dsh.bundle` patch | 把内部 webserver 绑定在 `127.0.0.1:<N+1>`（安全根基，见 [SECURITY.md](SECURITY.md)） |
 | `ctx.slots`（`settings.section`） | 客户端「认证设置」面板 |
 | `credentials` 服务 + `client-connection/browser-session` record | 读取上游 BrowserAuth 密钥，为回环一跳铸造同构 cookie |
-| BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`） | 与 dsh 自身的 token 交换同构，上游无法区分 |
+| BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`） | 与 dsh 自身的浏览器会话 cookie（index 路由铸造的 `v1`）同构，上游无法区分 |
 
 版本线行为：
 
 - **dsh ≥ 0.1.2**：内部 webserver 启用 BrowserAuth，网关自动铸 cookie 适配（机制见 [SECURITY.md](SECURITY.md)）；
+- **dsh ≥ 0.2.1-alpha.3**：BrowserAuth 增加 `v2` cookie（带 `id` 的 API operator，由新增的 `/connect` 启动令牌交换铸造，供 SDK / 桌面端等 API 客户端使用）；**浏览器会话仍是 `v1`**，网关铸造的正是 `v1`，上游照旧接受。同版本起 dsh 新增 `remoteAccess` RBAC，但它只约束**非 owner** principal，而浏览器请求（持有 `v1` cookie）一律以 `owner` 通过，因此网关路径不受影响；
 - **dsh ≤ 0.1.1**：无 BrowserAuth，record 不存在，网关静默退化为逐字转发，行为与旧版一致。
 
 > **升级 dsh 后请注意**：dsh 的 **WebSocket 端点路径会随版本变化**——旧版是 `/api/events.mux`、`/sidebar/ws/*`，0.1.5 起只有 `/api/remote.mux`。网关按路径透明转发、**不硬编码任何端点名**，所以插件侧无需改动；但**反向代理若为 WebSocket 维护了路径白名单，dsh 一换路径就会静默失效**（症状：HTTP 正常、登录正常、页面提示连接失败）。反代请把 `Upgrade`/`Connection` 转发放在**兜底 location** 上，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) 与 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
@@ -30,13 +31,20 @@
 bundle patch 跟随 `ctx.webStartup`（与 web-app 自身 webserver 行同一机制），端口由命令行 flag 控制：
 
 ```bash
-dsh web --port 8080    # 对外 URL 8080，内部 webserver 自动挪到 8081
-dsh web                # 默认：对外 3080，内部 3081
+dsh web --port 8080 --no-open    # 对外 URL 8080，内部 webserver 自动挪到 8081
+dsh web --no-open                # 默认：对外 3080，内部 3081
 ```
 
 推导规则：**对外端口 = `--port`（默认 3080），内部端口 = 对外 + 1**。端口范围 1–65534（内部端口 +1 后仍须合法，否则配置校验在启动时报错）。
 
 > 不支持 `--port 0`（OS 自动分配）：网关需要固定的内部端口才能转发。
+
+### 建议始终加 `--no-open`
+
+网关自己会打印对外 URL，不需要 dsh 再去打开浏览器。不加 `--no-open` 时 dsh 的浏览器 handoff 打开的是**内部** webserver 地址，并把启动令牌拼进 URL（`appRootUrl()` → `authenticatedUrl()` → `openBrowser()`）：
+
+- 未传 `--public-url` 时打开的是 `http://127.0.0.1:<内部端口>/?token=…`，而 `frontend-static` 的 index 接受该令牌并直接铸出 dsh 会话 cookie——**这个标签页完全不经网关密码**。它只对本机有效（内部端口只监听回环），属于 [SECURITY.md](SECURITY.md) 记录在案的本机可信模型，不是漏洞，但没必要主动制造；同时控制台会多出一行 `dsh web: opening the default browser; pass --no-open to disable`，与网关那行并存。
+- 传了 `--public-url` 后打开的是对外 origin，请求先撞上网关认证门，这条本机旁路随之消失。
 
 ### 为什么不能用 `--host 0.0.0.0`
 

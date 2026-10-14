@@ -16,7 +16,7 @@
 
 `dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但它只是一枚绑定 authority 的 bearer cookie——设计说明写明「没有登出操作」（*"There is no logout operation"*），且「认证不配置 TLS、转发头解释或代理」（*"Authentication does not configure TLS, forwarding-header interpretation, or proxies"*）。dsh 0.2.1 虽为直连场景补上了原生 HTTPS（`--tls-cert` / `--tls-key`）与具体 IP 绑定（CLI 仅拒绝 `0.0.0.0` 等通配地址，接受具体地址字面量），但认证层本身依旧**没有登出、没有密码 / 多因素、没有防爆破、没有登录审计，也没有为「前面再套一层认证网关」预留任何集成通道**。本插件以进程内网关的形态补上这层缺失的远程访问认证：对外端口由网关独占，内部 webserver 由 bundle patch 绑定在本地回环，网关是唯一入口。
 
-本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.2`，均已实测。
+本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.3`，均已实测。
 
 ## 安装和卸载
 
@@ -24,8 +24,8 @@
 # 安装（从 npm registry）
 dsh plugin --profile web add dsh-auth-gateway
 
-# 启动（对外端口 8080，内部 webserver 自动挪到 8081）
-dsh web --port 8080
+# 启动（对外端口 8080，内部 webserver 自动挪到 8081；--no-open 让 dsh 不自己开浏览器）
+dsh web --port 8080 --no-open
 
 # 卸载（先清凭据，再移除插件）
 ~/.dsh/profiles/web/node_modules/.bin/dsh-auth-gateway-uninstall

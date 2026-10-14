@@ -88,13 +88,19 @@ async function dismissWelcomeNotice(page) {
 
 /**
  * Close whatever first-run dialog is up (the 0.2.1 preview notice with 继续,
- * the API-key wizard with 稍后配置) so UI behind it is clickable. Some dsh
- * builds greet a first sign-in with these; harmless when none is present.
+ * the API-key wizard with 稍后配置, the 0.2.1-alpha.3 account prompt) so UI
+ * behind it is clickable. Some dsh builds greet a first sign-in with these;
+ * harmless when none is present.
  *
  * The queue pops the next dialog a few hundred ms after the previous one
  * closes, so a single quiet probe can slip through the gap and a later pop
  * would then cover the settings dialog this suite opens next. Only return
  * after the surface has stayed quiet for a full quiet window.
+ *
+ * The account prompt needs its own branch: it offers only 添加 API Key / 登录
+ * (no skip button) and its mask blocks every later click, so it is dismissed
+ * through its own close control. Its title is the only stable handle — the
+ * button labels are the very actions the prompt advertises.
  */
 async function dismissFirstRunDialogs(page) {
   await dismissWelcomeNotice(page)
@@ -102,16 +108,23 @@ async function dismissFirstRunDialogs(page) {
   const DEADLINE = Date.now() + 15000
   let quietSince = Date.now()
   while (Date.now() < DEADLINE) {
-    const label = await page.evaluate(() => {
+    const dismissed = await page.evaluate(() => {
       const dlg = [...document.querySelectorAll('[role="dialog"]')]
         .find((d) => d.isConnected && d.offsetParent !== null)
-      if (!dlg) return null
-      const btn = [...dlg.querySelectorAll('button')]
+      if (!dlg) return false
+      const skip = [...dlg.querySelectorAll('button')]
         .find((b) => /继续|稍后配置/.test(b.textContent || ''))
-      return btn ? btn.textContent.trim() : null
+      if (skip) {
+        skip.click()
+        return true
+      }
+      if (!/开始使用|Get started/.test(dlg.textContent || '')) return false
+      const close = dlg.querySelector('button[aria-label="关闭"], button[aria-label="Close"]')
+      if (close === null) return false
+      close.click()
+      return true
     })
-    if (label) {
-      await page.click(`[role="dialog"] button:has-text("${label}")`, { force: true }).catch(() => {})
+    if (dismissed) {
       quietSince = Date.now()
       await page.waitForTimeout(400)
     } else {
@@ -119,6 +132,26 @@ async function dismissFirstRunDialogs(page) {
       await page.waitForTimeout(300)
     }
   }
+}
+
+/**
+ * Open the dsh settings dialog. dsh 0.2.1-alpha.3 moved the entry into the
+ * sidebar account menu (the web account-sign-in change in ui-settings-account
+ * rewrote AccountMenu); earlier builds exposed a standalone 设置 button. The
+ * menu renders through a portal, so its rows are matched by role, and the
+ * settings row is the only one whose label carries 设置.
+ * @param page - the logged-in page.
+ */
+async function openSettings(page) {
+  const menu = page.locator('button[aria-label="账号菜单"]')
+  if (await menu.count() > 0) {
+    await menu.first().click()
+    await page.click('button[role="menuitem"]:has-text("设置")')
+  } else {
+    await page.click('button:has-text("设置")', { force: true })
+  }
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
+  await page.waitForTimeout(600)
 }
 
 const browser = await chromium.launch({ executablePath, headless: true })
@@ -224,9 +257,7 @@ try {
   // review R1). A real click-through pins the whole button chain: api
   // method, POST route, hint copy, source flip, restore button lifecycle.
   await dismissFirstRunDialogs(page)
-  await page.click('button:has-text("设置")', { force: true })
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
-  await page.waitForTimeout(600)
+  await openSettings(page)
   await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
   await page.waitForSelector('text=Cookie 安全', { timeout: 10000 })
   await page.waitForTimeout(500)
@@ -338,9 +369,7 @@ try {
   })
 
   await dismissFirstRunDialogs(page)
-  await page.click('button:has-text("设置")', { force: true })
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
-  await page.waitForTimeout(600)
+  await openSettings(page)
   await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
   await page.waitForSelector('text=双因素认证', { timeout: 10000 })
   await page.waitForTimeout(500)
@@ -392,9 +421,7 @@ try {
 
   // ── 5b. disable OTP again (restore the password-only deployment state) ──
   await dismissFirstRunDialogs(page)
-  await page.click('button:has-text("设置")', { force: true })
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
-  await page.waitForTimeout(600)
+  await openSettings(page)
   await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
   await page.waitForSelector('text=双因素认证', { timeout: 10000 })
   await page.waitForTimeout(500)

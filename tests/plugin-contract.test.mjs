@@ -125,7 +125,36 @@ test('gateway pages follow the settings service locale through the plugin wiring
   }
 })
 
-async function captureIndexTransform(extraConfig = {}, settings = { describe: () => [] }) {
+test('the console URL line prefers an operator-declared --public-url', async () => {
+  // The bundle patch forwards ctx.webStartup.publicUrl to web-app, which feeds
+  // the same value into its runtime context and DSH_WEB_URL. The gateway's own
+  // line must agree with them, or the console and the agent disagree about
+  // where this deployment lives.
+  const logged = []
+  const capture = await captureIndexTransform({}, { describe: () => [] },
+    { webStartup: { publicUrl: 'https://dsh.example.com/dsh/' }, logSink: logged })
+  try {
+    assert.ok(logged.some((line) => line.includes('https://dsh.example.com/dsh/')),
+      `the declared public URL must be printed, got: ${logged.join(' | ')}`)
+    assert.ok(!logged.some((line) => line.startsWith('dsh web: http://127.0.0.1:')),
+      'the loopback URL must not be printed when a public URL is declared')
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+test('the console URL line falls back to the loopback address without --public-url', async () => {
+  const logged = []
+  const capture = await captureIndexTransform({}, { describe: () => [] }, { logSink: logged })
+  try {
+    assert.ok(logged.some((line) => line.startsWith(`dsh web: http://127.0.0.1:${capture.listenPort}`)),
+      `the loopback URL must be printed, got: ${logged.join(' | ')}`)
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+async function captureIndexTransform(extraConfig = {}, settings = { describe: () => [] }, { webStartup, logSink } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-contract-'))
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -134,7 +163,11 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
   const taps = []
   const disposers = []
   const warnings = []
+  // Services a real Cordis Context resolves through get(); the plugin reads
+  // webStartup that way (the patch row declares inject: [webStartup]).
+  const services = { settings, ...webStartup === undefined ? {} : { webStartup } }
   const ctx = {
+    get: (name) => services[name],
     webServer: {
       host: '127.0.0.1',
       tapIndex(transform) {
@@ -169,7 +202,8 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
 
   const listenPort = await availablePort()
   const originalLog = console.log
-  console.log = () => {}
+  // Quiet by default; a caller that wants the startup lines passes logSink.
+  console.log = logSink === undefined ? () => {} : (...args) => { logSink.push(args.join(' ')) }
   try {
     await mod.apply(ctx, {
       listenHost: '127.0.0.1',

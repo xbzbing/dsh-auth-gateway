@@ -309,13 +309,18 @@ export async function apply(ctx, config) {
 
   // The real URL line. dsh's own line prints the INTERNAL webserver address
   // (loopback-only by design), which would mislead; this one names the
-  // gateway — the address everyone should open. LAN hints only when the
-  // gateway actually listens on all interfaces.
+  // gateway — the address everyone should open. An operator-declared
+  // `--public-url` wins: it is the canonical external root, and it is also
+  // what dsh feeds into its runtime context and DSH_WEB_URL, so the console
+  // must not disagree with them. LAN hints only when the gateway actually
+  // listens on all interfaces.
+  const declaredUrl = ctx.get('webStartup')?.publicUrl
+  const localUrl = `http://127.0.0.1:${gateway.listenPort}`
   const lan = lanAddresses()
   const lanHint = gateway.listenHost === '0.0.0.0' && lan.length > 0
     ? ` (LAN: http://${lan[0]}:${gateway.listenPort})`
     : ''
-  console.log(`dsh web: http://127.0.0.1:${gateway.listenPort}${lanHint}`)
+  console.log(`dsh web: ${declaredUrl ?? localUrl}${lanHint}`)
   ctx.logger.info('[dsh-auth-gateway] gateway listening on http://%s:%s -> http://%s:%s',
     gateway.listenHost, gateway.listenPort, gateway.upstreamHost, gateway.upstreamPort)
 

@@ -76,7 +76,7 @@ Before forwarding, the gateway rewrites `Host`/`Origin` to the loopback address:
 
 ### Anonymous upstream handshake paths
 
-One path **does not pass the authentication gate**: `publicPaths` (default `/oauth/callback`, exact match, GET only). The reason is not convenience — this path **can only arrive anonymously**. The "sign in with a DeepSeek account" flow shipped in dsh 0.2.1-alpha.3 ends with the open platform navigating the browser back to `http://localhost:<port>/oauth/callback`. That is a **cross-site** navigation from `platform.deepseek.com`, and the browser does not attach the gateway's `SameSite=Strict` session cookie to it (which is also why "relax Strict to Lax" is the worse fix: it would put the session cookie onto every cross-site top-level navigation).
+One **upstream handshake** path **does not pass the authentication gate**: `publicPaths` (default `/oauth/callback`, exact match, GET only). The reason is not convenience — this path **can only arrive anonymously**. The "sign in with a DeepSeek account" flow shipped in dsh 0.2.1-alpha.3 ends with the open platform navigating the browser back to `http://localhost:<port>/oauth/callback`. That is a **cross-site** navigation from `platform.deepseek.com`, and the browser does not attach the gateway's `SameSite=Strict` session cookie to it (which is also why "relax Strict to Lax" is the worse fix: it would put the session cookie onto every cross-site top-level navigation).
 
 The boundaries of this exemption (all locked by tests):
 

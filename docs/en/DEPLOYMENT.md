@@ -4,7 +4,7 @@
 
 ## dsh version compatibility
 
-**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-alpha.3`, all verified live.** Run `dsh --version` to see what you have installed.
+**This plugin supports `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`, all verified live.** Run `dsh --version` to see what you have installed.
 
 Every extension point this plugin relies on is unchanged across that range, so the whole range works as-is:
 
@@ -20,7 +20,7 @@ Version-line behavior:
 
 - **dsh ≥ 0.1.2**: the internal webserver enforces BrowserAuth; the gateway adapts by minting the cookie automatically (see [SECURITY.md](SECURITY.md));
 - **dsh ≥ 0.2.1-alpha.3**: BrowserAuth adds a `v2` cookie (an API operator carrying an `id`, minted by the new `/connect` launch-token exchange for API clients such as the SDKs and the desktop app); **the browser session is still `v1`**, and the gateway mints exactly `v1`, so the upstream keeps accepting it. The same release adds `remoteAccess` RBAC, but it constrains **non-owner** principals only: a browser request (holding the `v1` cookie) is always admitted as `owner`, so the gateway path is unaffected;
-- **dsh ≥ 0.2.1-alpha.4 (account sign-in)**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, which can never carry the gateway session cookie — it always arrives anonymously, so it needs the `publicPaths` exemption (the default value already includes it). Set it to `[]` and account login stalls at "waiting for sign-in" until it times out, after which the platform keeps answering "authorization failed" (`ALREADY_CONSUMED` — the `authorize_id` was already consumed when it was approved). Boundaries: [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths);
+- **dsh ≥ 0.2.1-alpha.3 (account sign-in)**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, which can never carry the gateway session cookie — it always arrives anonymously, so it needs the `publicPaths` exemption (the default value already includes it). Set it to `[]` and account login stalls at "waiting for sign-in" until it times out, after which the platform keeps answering "authorization failed" (`ALREADY_CONSUMED` — the `authorize_id` was already consumed when it was approved). Boundaries: [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths);
 - **dsh ≤ 0.1.1**: no BrowserAuth and no such record; the gateway silently degrades to verbatim forwarding, matching the old behavior.
 
 > **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while releases since 0.1.5 only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.

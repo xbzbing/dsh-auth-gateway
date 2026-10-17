@@ -76,7 +76,7 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 ### 匿名可达的上游握手路径
 
-有一条路径**不经过认证门**：`publicPaths`（默认 `/oauth/callback`，精确匹配、仅 GET）。原因不是图省事，而是它**只能匿名到达**——dsh 0.2.1 起提供的「登录 DeepSeek 账号」，最后由开放平台把浏览器**顶层导航**回 `http://localhost:<端口>/oauth/callback`。这是从 `platform.deepseek.com` 发起的**跨站**导航，浏览器不会携带网关的 `SameSite=Strict` 会话 Cookie（也因此，靠"把 Strict 放宽成 Lax"之类改 Cookie 的方式解决，会把会话 Cookie 一并暴露在跨站顶层导航上，面更大）。
+有一条路径**不经过认证门**：`publicPaths`（默认 `/oauth/callback`，精确匹配、仅 GET）。原因不是图省事，而是它**只能匿名到达**——dsh 0.2.1-alpha.3 起提供的「登录 DeepSeek 账号」，最后由开放平台把浏览器**顶层导航**回 `http://localhost:<端口>/oauth/callback`。这是从 `platform.deepseek.com` 发起的**跨站**导航，浏览器不会携带网关的 `SameSite=Strict` 会话 Cookie（也因此，靠"把 Strict 放宽成 Lax"之类改 Cookie 的方式解决，会把会话 Cookie 一并暴露在跨站顶层导航上，面更大）。
 
 这条放行的边界（全部由测试锁定）：
 

@@ -41,9 +41,10 @@ const NEW_PASSWORD = `${PASSWORD}-2`
 
 // Locate the Chromium executable dynamically (scripts/chromium.mjs):
 // CHROMIUM_PATH wins, then the installed playwright's own registry, then a
-// scan of the ms-playwright cache. The cache directory name embeds the
-// playwright revision (-1105, -1243, …) and changes on every upgrade — a
-// hard-coded path here would break on the next `npx playwright install`.
+// scan of the ms-playwright cache derived from the environment, then a system
+// chromium probed on PATH. The cache directory name embeds the playwright
+// revision (-1105, -1243, …) and changes on every upgrade — a hard-coded path
+// here would break on the next `npx playwright install`.
 const executablePath = resolveChromiumPath({ playwrightExecutable: chromium.executablePath() })
 if (!executablePath) {
   console.error('no chromium found: set CHROMIUM_PATH, run `npx playwright install chromium`,'

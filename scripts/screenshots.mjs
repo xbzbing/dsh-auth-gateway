@@ -16,8 +16,9 @@
  * password), then captures: onboarding, settings menu, authentication panel,
  * OTP setup page, login page (with OTP field), 2FA login success.
  *
- * CHROMIUM_PATH overrides browser discovery (the built-in probe only knows
- * Linux layouts, so macOS needs it explicitly).
+ * CHROMIUM_PATH overrides browser discovery; otherwise scripts/chromium.mjs
+ * probes playwright's own registry, the ms-playwright cache derived from the
+ * environment, and finally a system chromium found on PATH.
  */
 
 import { chromium } from 'playwright'

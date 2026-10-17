@@ -334,6 +334,7 @@ location / {
 2. **TLS 由 nginx 终结**：网关保持明文 HTTP 即可，不要在网关端口上重复加 TLS；
 3. **WebSocket/SSE 长连接**：`Upgrade`/`Connection` 头与 `proxy_read_timeout`/`proxy_send_timeout` 三件套必须配齐，且 `Upgrade`/`Connection` 要设在**兜底 location** 上（用 `map $http_upgrade $connection_upgrade`，不要写死 `"upgrade"`、也不要按路径挑白名单），否则事件流 / 终端会被 60s 掐断，或 WebSocket 握手直接降级失败（浏览器表现为 `ERR_INCOMPLETE_CHUNKED_ENCODING` 或 `WebSocket connection to '.../api/remote.mux' failed`）；map 的普通请求分支必须取 `keep-alive`（`close` 会引发间歇性空 400，见 [TROUBLESHOOTING.md 第 8 节](TROUBLESHOOTING.md)）；
 4. **直连与代理不要混用**：浏览器端要么全部走域名 + 代理，要么全部直连网关端口。混用时（如页面从 `https://dsh.example.com` 打开、却直连 `http://203.0.113.10:8080`）会因跨 scheme / 跨端口被 dsh 插件的同源校验拒绝（403 `origin-rejected`）——这是预期保护，不是故障。
+5. **账号登录只在本机回环入口可用**：上游要求浏览器 origin 是带显式非零端口的回环 http（`http://127.0.0.1:<端口>` / `localhost`），因此域名、路径反代、LAN IP 等非回环入口下，点「登录 DeepSeek 账号」会**立即**失败（`account: protocol`）——这与 `publicPaths` 无关（那只管回调那一段）。需要账号登录时用 SSH 本地转发（`ssh -L 8080:127.0.0.1:8080 <主机>`）后经回环入口访问；纯域名部署改用 API Key 通道，详见 [TROUBLESHOOTING.md 第 10 节](TROUBLESHOOTING.md)。
 
 ---
 

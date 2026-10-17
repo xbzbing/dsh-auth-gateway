@@ -18,6 +18,15 @@
 
 本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`，均已实测。
 
+> **已知缺陷**：**远程访问（域名 / 反向代理 / 局域网 IP 等非回环 http 入口）下无法登录 DeepSeek 账号**——点左下角「登录 DeepSeek 账号」会立即报「登录失败」，**其余功能均正常**（会话、模型、工具、设置面板等）。这是 dsh 上游对登录 origin 的硬约束（要求带显式非零端口的回环 http），与本插件无关；判别与证据见 [docs/zh/TROUBLESHOOTING.md](docs/zh/TROUBLESHOOTING.md) 第 10 节。
+>
+> **手动解决方式**（详细操作见 [docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md) 的「远程访问下登录 DeepSeek 账号」一节）：
+>
+> 1. **本机回环访问**：浏览器与 dsh 同机时，直接打开 `http://127.0.0.1:<网关端口>`；
+> 2. **SSH 本地端口转发**：浏览器在异地时执行 `ssh -L 8080:127.0.0.1:<网关 listenPort> <部署机>`（冒号前是本机端口，任选空闲端口），再浏览 `http://127.0.0.1:8080`；
+> 3. **其它回环转发方式**：任何能把 `http://127.0.0.1:<显式端口>` 映射到远端网关的隧道 / 端口转发工具（VS Code、`kubectl port-forward`、`gost` 等）；
+> 4. **改用 API Key 通道**：在账号弹窗里点「添加 API Key」，纯域名 / 反代部署下的既定替代方案。
+
 ## 安装和卸载
 
 ```bash
@@ -105,7 +114,7 @@ flowchart LR
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
 | `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。字符集限 `A-Za-z0-9._~/-`，拒绝 `..`、`//`、引号、空白、尖括号（该值会内嵌进页面脚本与链接，故按白名单校验；不合规配置会在加载时被拒绝）。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
 | `cookieSecure` | `auto` | 会话 Cookie 是否携带 `Secure` 属性。`auto`：请求经 TLS（反向代理透传 `X-Forwarded-Proto: https`）时自动附加；`true`：强制附加；`false`：显式关闭。纯 HTTP 下强制开启会使浏览器拒绝 Cookie。**面板可直接修改**：覆盖值持久化于凭据记录，优先于部署配置，直至恢复 |
-| `publicPaths` | `['/oauth/callback']` | **匿名可达的上游握手路径**（精确匹配、仅 GET）。默认值就是 dsh 账号登录的回调：平台以跨站顶层导航回跳过来，浏览器不会带上网关会话 Cookie，落在门后该功能就永久不可用。只接受精确绝对路径（不接受通配符、查询串），字符集同 `basePath`（`A-Za-z0-9._~/-`）；数组或逗号分隔字符串均可，重复项自动去重；保留路径（`/` 与其别名 `/index.html`、`/api*`、`/connect`、网关自有页面与已公开静态资产）会在加载期被拒绝。设为 `[]` 关闭放行。条目按 **basePath 剥离后**的路径匹配（与上游注册路径同坐标系），子路径部署**不要**带 basePath 前缀。取舍与边界见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径) |
+| `publicPaths` | `['/oauth/callback']` | **匿名可达的上游握手路径**（精确匹配、仅 GET）。默认值就是 dsh 账号登录的回调：平台以跨站顶层导航回跳过来，浏览器不会带上网关会话 Cookie，落在门后该功能就永久不可用。只接受精确绝对路径（不接受通配符、查询串），字符集同 `basePath`（`A-Za-z0-9._~/-`）；数组或逗号分隔字符串均可，重复项自动去重；保留路径（`/` 与其别名 `/index.html`、`/api*`、`/connect`、网关自有页面与已公开静态资产）会在加载期被拒绝。设为 `[]` 关闭放行。条目按 **basePath 剥离后**的路径匹配（与上游注册路径同坐标系），子路径部署**不要**带 basePath 前缀。取舍与边界见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径)；该项只影响**回调那一段**——非回环 origin（域名 / 反代）下账号登录在**发起**阶段即被上游拒绝（`account: protocol`），与本项取值无关，见 [TROUBLESHOOTING §10](docs/zh/TROUBLESHOOTING.md) |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |
@@ -136,6 +145,7 @@ flowchart LR
 - **@adra2n** — 实现 OTP 双因素认证（[PR #1](https://github.com/xbzbing/dsh-auth-gateway/pull/1)），并添加 OTP 密钥 AES-256-GCM 静态加密存储与解密路径错误分类（[PR #6](https://github.com/xbzbing/dsh-auth-gateway/pull/6)）；
 - **@meowtech** — 报告并初步实现了 dsh 新版本（rc8+ 配置平面收归 loopback）下 LAN 浏览器设置不可用问题的修复（[PR #7](https://github.com/xbzbing/dsh-auth-gateway/pull/7)）；该实现（loader 包装 + provide 劫持）随后被证实会破坏共存插件，本仓库已改用最小介入方案重写。
 - **@LuckVd** — 修复 dsh ≥ 0.1.2 上游浏览器认证（BrowserAuth）导致的转发 401（[PR #12](https://github.com/xbzbing/dsh-auth-gateway/pull/12)）：经官方 `credentials` 通道读取密钥并为回环一跳铸造同构 cookie，经评审补齐官方通道读取、轮换即时重铸、部署清单与双语文档后合入。
+- **@pjj1234** — 实现 dsh 账号登录「OAuth 回调路径匿名放行」（[PR #29](https://github.com/xbzbing/dsh-auth-gateway/pull/29)）：新增 `publicPaths` 配置（默认放行 `GET /oauth/callback`），平台跨站回跳的回调不再被认证门挡下，修掉「账号登录停在『等待登录』、之后平台一直返回『授权失败』（`ALREADY_CONSUMED`）」（见 [docs/zh/TROUBLESHOOTING.md](docs/zh/TROUBLESHOOTING.md) 第 9 节）；合入时由本仓库补全 basePath 匹配语义与「不铸上游 bearer」的测试和文档。
 
 ## 验证概览
 

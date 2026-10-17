@@ -20,10 +20,33 @@ Version-line behavior:
 
 - **dsh ≥ 0.1.2**: the internal webserver enforces BrowserAuth; the gateway adapts by minting the cookie automatically (see [SECURITY.md](SECURITY.md));
 - **dsh ≥ 0.2.1-alpha.3**: BrowserAuth adds a `v2` cookie (an API operator carrying an `id`, minted by the new `/connect` launch-token exchange for API clients such as the SDKs and the desktop app); **the browser session is still `v1`**, and the gateway mints exactly `v1`, so the upstream keeps accepting it. The same release adds `remoteAccess` RBAC, but it constrains **non-owner** principals only: a browser request (holding the `v1` cookie) is always admitted as `owner`, so the gateway path is unaffected;
-- **dsh ≥ 0.2.1-alpha.3 (account sign-in)**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, which can never carry the gateway session cookie — it always arrives anonymously, so it needs the `publicPaths` exemption (the default value already includes it). Set it to `[]` and account login stalls at "waiting for sign-in" until it times out, after which the platform keeps answering "authorization failed" (`ALREADY_CONSUMED` — the `authorize_id` was already consumed when it was approved). Boundaries: [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths);
+- **dsh ≥ 0.2.1-alpha.3 (account sign-in)**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, which can never carry the gateway session cookie — it always arrives anonymously, so it needs the `publicPaths` exemption (the default value already includes it). Set it to `[]` and account login stalls at "waiting for sign-in" until it times out, after which the platform keeps answering "authorization failed" (`ALREADY_CONSUMED` — the `authorize_id` was already consumed when it was approved). **There is also a precondition**: account sign-in requires the **browser origin** itself to be a loopback http origin with an explicit non-zero port (the upstream `loginOrigin` constraint) — on a domain / https reverse-proxy entry, clicking "sign in with a DeepSeek account" fails immediately with "Could not sign in" (`account: protocol`), which is unrelated to `publicPaths` and cannot be fixed by changing it; for triage and fixes see [TROUBLESHOOTING.md §10](TROUBLESHOOTING.md). Boundaries: [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths);
 - **dsh ≤ 0.1.1**: no BrowserAuth and no such record; the gateway silently degrades to verbatim forwarding, matching the old behavior.
 
 > **After upgrading dsh, note this**: dsh's **WebSocket endpoint path changes across versions** — older releases used `/api/events.mux` and `/sidebar/ws/*`, while releases since 0.1.5 only have `/api/remote.mux`. The gateway forwards by path transparently and **hardcodes no endpoint name**, so the plugin needs no change — but **if your reverse proxy keeps a WebSocket path allowlist, it fails silently the moment dsh renames the path** (symptom: HTTP works, login works, the page reports a connection failure). Forward `Upgrade`/`Connection` on the **catch-all location**; see [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §7.
+
+## Signing in to a DeepSeek account over remote access
+
+**This is an upstream dsh limitation, not a gateway fault**: when a sign-in starts, the upstream requires the **browser origin** to be a loopback http origin with an explicit non-zero port (`http://localhost:<port>`, `http://127.0.0.1:<port>` or `http://[::1]:<port>`). Any non-loopback entry — domain, https reverse proxy, LAN IP — is rejected before the open platform is contacted: clicking "sign in with a DeepSeek account" in the bottom-left fails **immediately** with "Could not sign in / Could not complete the operation. Try again." (`account: protocol`). Apart from that, **everything works normally over remote access**. Triage and evidence: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) §10.
+
+Manual workarounds (pick one):
+
+1. **Loopback access on the same machine** — simplest when the browser runs next to dsh: open `http://127.0.0.1:<gateway port>` (with `dsh web --port 8080` that is `http://127.0.0.1:8080`). The scheme must be `http` (`https://127.0.0.1:...` is refused as well) and the port must be explicit.
+2. **SSH local port forward** — when the browser is on another machine, map the remote gateway onto a local loopback port:
+
+   ```bash
+   # run on the machine with the browser:
+   #   the first 8080 = local port, any free port will do;
+   #   the second port = the gateway listenPort (the N of `dsh web --port N`, default 3080)
+   ssh -L 8080:127.0.0.1:<gateway listenPort> <host>
+   ```
+
+   Then browse `http://127.0.0.1:8080` (the **local** port) and authenticate at the gateway login page first (password, then OTP if enabled). The cross-site sign-in callback also returns to `http://127.0.0.1:8080/oauth/callback` on the browser's side, travels the same tunnel back to the gateway, and is forwarded upstream by `publicPaths` (exempt by default) — so the whole flow works. Note: if the deployment pins `cookieSecure: true` (e.g. the proxy terminates TLS without forwarding the protocol header, or the attribute is pinned for determinism), a plain-http loopback entry cannot store the session cookie per the documented rule — use the default `auto` for that entry when you need account sign-in (see "Network and security recommendations").
+
+3. **Any other loopback forward** — any tunnel / port-forward tool that maps a loopback `http://127.0.0.1:<explicit port>` to the remote gateway is equivalent (VS Code / JetBrains port forwarding, `kubectl port-forward`, `gost`, …). The only constraint: the browser's origin must be `http://{localhost|127.0.0.1|[::1]}:<non-zero port>`.
+4. **Use the API Key route instead** — skip account sign-in and click "Add API Key" in the sign-in dialog (or configure an API key the way dsh normally does). On a domain-only / reverse-proxy deployment this is the established substitute — see [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths).
+
+> The desktop app (`dsh-hub-desktop`) is bound by the same rule: it uses the service address origin, which is rejected on a remote domain just like in a browser. To use account sign-in, point it at a loopback entry (workarounds 1–3).
 
 ## Ports and listening addresses
 

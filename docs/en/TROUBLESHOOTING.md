@@ -209,7 +209,7 @@ map $http_upgrade $connection_upgrade {
 
 ## 9. Account sign-in stalls at "waiting for sign-in", then the platform keeps answering "authorization failed" (`ALREADY_CONSUMED`)
 
-**Symptom**: after clicking "sign in with a DeepSeek account" the browser goes to the platform and authorization succeeds, but the return to localhost stalls at "waiting for sign-in" until it times out; retries then get "authorization failed" from the platform, and the dsh log shows `ALREADY_CONSUMED`.
+**Symptom**: after clicking "sign in with a DeepSeek account" the browser goes to the platform and authorization succeeds, but the return to localhost stalls at "waiting for sign-in" until it times out; retries then get "authorization failed" from the platform, and the dsh log shows `ALREADY_CONSUMED`. (If the click fails **immediately** with "Could not sign in" and "waiting for sign-in" never appears, that is a different cause — see §10.)
 
 **Cause**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, and such a navigation does **not** carry the gateway's `SameSite=Strict` session cookie — the request always arrives anonymously. Without a `publicPaths` exemption the gateway treats it as an ordinary page path and answers 302 to `/login`, so dsh never receives the `code` (no `auth_exchange` ever happens), while the platform's `authorize_id` was already consumed when it was approved — every later retry only gets `ALREADY_CONSUMED`.
 
@@ -223,3 +223,45 @@ map $http_upgrade $connection_upgrade {
 3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect.
 
 **Fix**: correct `publicPaths` and **start a fresh sign-in** — a consumed `authorize_id` cannot be reused.
+
+## 10. On a domain / reverse-proxy deployment "Sign in with a DeepSeek account" fails immediately (unlike the §9 "waiting for sign-in")
+
+**Symptom**: reaching dsh through a domain / reverse proxy (or any non-loopback http entry), clicking "sign in with a DeepSeek account" turns the dialog into "Could not sign in / Could not complete the operation. Try again." **immediately** — the browser never navigates to `platform.deepseek.com`, and "waiting for sign-in" never appears; retries always fail the same way, and the dsh log shows **no** `ALREADY_CONSUMED` (the platform was never contacted).
+
+**Root cause** (dsh upstream design, not a gateway fault): when starting an account sign-in the upstream insists that the **browser origin** be a loopback http origin with an explicit non-zero port (one of `localhost`, `127.0.0.1`, `[::1]`, with no path/query/hash); a domain origin (including an https reverse proxy) is rejected by the very first check:
+
+1. The web client passes the page's `window.location.origin` as `callbackOrigin` to `account/startSignIn` (`@deepseek-ai/dsh-client-ui-settings-account/lib/client.js:4671`; the desktop half uses the origin of `transport.streamBaseUrl`) — behind a domain that is the external origin such as `https://dsh.example.com`; the client then treats `ok === false` as a login failure (`:4672`, `:4681`);
+2. The upstream `loginOrigin()` accepts only that loopback shape: the regex lives at `@deepseek-ai/dsh-deepseek-account-platform/lib/index.js:318`, the hostname allowlist at `:319-322`, and anything else throws `PlatformAuthError("protocol")` (`:323`). The call site is at the top of `startSignIn` (`:826`), far ahead of `auth_init` (`:1019`) — **the request never reaches the open platform**, and no `authorize_id` is ever consumed. The message format is `account: ${code}` (`:13-19`), which surfaces in the RPC envelope as `message: "account: protocol"`;
+3. The upstream README itself states under "Known Limitations": *"Only local access and SSH local forwarding through HTTP localhost, 127.0.0.1, or [::1] with an explicit port are supported; non-loopback reverse proxies are unsupported."*;
+4. **No switch can relax it**: among all 13 fields of the account-platform config (`lib/index.js:500-518`), `allowLoopbackHttp` only affects `platformOrigin` and `rewriteBrowserOrigin` only rewrites the platform return address; `loginOrigin` reads no config or environment variable;
+5. On this path the **gateway is not at fault**: `publicPaths` only exempts the **inbound** `GET /oauth/callback` (the §9 chain — boundaries in [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths)), while `callbackOrigin` is computed inside the browser and uploaded as an RPC **request-body** parameter — the Host/Origin rewrite in `lib/forward.js` touches forwarded headers only and cannot reach the body.
+
+**Quick check** (any one of these settles it):
+
+1. Browser DevTools → Network, filter `startSignIn`: `POST /api/account/startSignIn` returns **200 immediately** (17 ms measured), with a tiny body (~174 B plaintext with the client's UUID `rpcId`, 146 B measured with a short probe `rpcId`; browsers send `Accept-Encoding: gzip`, and once the **upstream** gzips it that is the 153-157 B seen in the access log (174 B uncompressed)), where the envelope carries `result.ok:false` and `error.message` equal to **`account: protocol`**:
+
+   ```json
+   {"type":"server-response","rpcId":"…","result":{"ok":false,"error":{"code":"gateway/internal","message":"account: protocol","details":{}}}}
+   ```
+
+   If the response contains an `authorizeUrl` or the UI reaches "waiting for sign-in", a platform request did happen — that is the §9 scenario;
+2. The nginx / reverse-proxy access log shows the same shape: a burst of `POST /api/account/startSignIn` → 200, 153-157 B, with **zero** `/oauth/callback` hits in the same window (those 153-157 B are the transfer bytes after the **upstream** gzips the response — about 174 B uncompressed, i.e. the body length in DevTools' Response tab, while its Size column shows the gzipped size);
+3. Loopback control: after an SSH tunnel, open the page at `http://127.0.0.1:<gateway port>` and click again → "waiting for sign-in" appears, proving the gateway forwarding is fine and the browser origin is the only variable.
+
+**How this differs from §9**:
+
+| | §9 | This section |
+|---|---|---|
+| Where it gets stuck | The platform authorized, but the callback never reaches dsh | The sign-in request never leaves (the upstream refuses before `auth_init`) |
+| Symptom | Stuck at "waiting for sign-in" → timeout → `ALREADY_CONSUMED` | Immediate "Could not sign in", no platform request at all |
+| Browser origin | Loopback (`http://localhost:<port>`) | Domain / https reverse proxy / LAN IP, i.e. non-loopback |
+| Gateway-side variable | Whether `publicPaths` exempts `/oauth/callback` | Unrelated to `publicPaths` (the failure is one step earlier) |
+| Fix | Correct `publicPaths`, then start a fresh sign-in | Use a loopback entry (SSH -L), or switch to the API Key route |
+
+**What to do** (recommendations):
+
+1. **Use a loopback entry after an SSH local forward**: `ssh -L 8080:127.0.0.1:8080 <host>`, then browse `http://127.0.0.1:8080` (replace 8080 with the gateway `listenPort`). The **explicit non-zero port is mandatory** — `http://127.0.0.1` (no port) is refused as well;
+2. **On a domain-only / reverse-proxy deployment, switch to the API Key route** (panel → "Add API Key"): account sign-in is unavailable in that topology — an upstream origin hard limit, not a configuration problem;
+3. **Do not** widen `publicPaths`, relax cookies or disable the gate for this symptom — none of them is on this causal chain.
+
+> This section is based on dsh 0.2.1-rc.2 (the highest `next`-line release; the `latest` tag is actually the older 0.2.0-rc.2). Across all 13 published `@deepseek-ai/dsh-deepseek-account-platform` versions the body of `loginOrigin` is byte-identical — upgrading or downgrading dsh does not change this behavior.

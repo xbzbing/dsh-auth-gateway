@@ -364,11 +364,12 @@ location / {
 2. **Terminate TLS at nginx**: keep the gateway on plain HTTP; do not add TLS on the gateway port;
 3. **WebSocket/SSE long connections**: the `Upgrade`/`Connection` headers plus `proxy_read_timeout`/`proxy_send_timeout` trio must all be in place, and `Upgrade`/`Connection` belong on the **catch-all location** (use `map $http_upgrade $connection_upgrade`; do not hardcode `"upgrade"` and do not allowlist paths), otherwise event streams / terminals get cut at 60s, or the WebSocket handshake degrades and fails outright (browsers show `ERR_INCOMPLETE_CHUNKED_ENCODING` or `WebSocket connection to '.../api/remote.mux' failed`); the map's ordinary-request branch must be `keep-alive` (`close` causes intermittent empty 400s, see [TROUBLESHOOTING.md §8](TROUBLESHOOTING.md));
 4. **Do not mix direct and proxied access**: the browser should go entirely through the domain + proxy, or entirely direct to the gateway port. Mixing (e.g. page opened from `https://dsh.example.com` but resources fetched direct from `http://203.0.113.10:8080`) gets rejected by the dsh plugin's same-origin check (403 `origin-rejected`) due to the cross-scheme / cross-port mismatch — that is expected protection, not a fault.
+5. **Account sign-in works only from a local loopback entry**: the upstream requires the browser origin to be a loopback http origin with an explicit non-zero port (`http://127.0.0.1:<port>` / `localhost`), so on a domain, path-based reverse proxy or LAN IP entry, clicking "sign in with a DeepSeek account" fails **immediately** (`account: protocol`) — unrelated to `publicPaths` (which only covers the callback leg). To use account sign-in, forward a local port over SSH (`ssh -L 8080:127.0.0.1:8080 <host>`) and use the loopback entry; a domain-only deployment should switch to the API Key route — see [TROUBLESHOOTING.md §10](TROUBLESHOOTING.md).
 
 ---
 
 ## Related documents
 
 - [INSTALL.md](INSTALL.md) — install, update, uninstall
-- [DEPLOYMENT.md](DEPLOYMENT.md)（简体中文）｜ [简体中文](../zh/DEPLOYMENT.md) (English) — port derivation, LAN deployment, troubleshooting
+- [DEPLOYMENT.md](DEPLOYMENT.md) (English) ｜ [简体中文](../zh/DEPLOYMENT.md) — port derivation, LAN deployment, troubleshooting
 - [SECURITY.md](SECURITY.md) — threat model and OTP security design

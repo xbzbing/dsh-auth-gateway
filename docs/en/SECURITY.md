@@ -84,9 +84,11 @@ The boundaries of this exemption (all locked by tests):
 - **Entries are matched against the basePath-stripped path**: the same coordinate system as the upstream's registered route, so a sub-path deployment (e.g. `basePath: '/dsh'`) must **not** prefix them — `/dsh/oauth/callback` would never match and the exemption would fail silently (account login stuck at "waiting for sign-in", with no warning at all);
 - **No upstream bearer**: the forward explicitly does not mint the upstream BrowserAuth cookie — the same rule as public static assets (anonymous traffic must not carry a fully-privileged cookie). The upstream enforces that gate itself on exactly three surfaces — index, `/api` and `/connect`; **other named routes are ungated by default**, and this callback endpoint is not among them;
 - **The upstream owns the security**: dsh validates the callback with `state` + PKCE and only accepts a one-shot `authorize_id` it issued itself and that is still within its lifetime. The gateway validates nothing, keeps no state for the path, and mints no session for it;
-- **It can be turned off**: `publicPaths: []` closes the exemption entirely, at the cost of making dsh account login unusable (such a deployment stays on the API key route).
+- **It can be turned off**: `publicPaths: []` closes the exemption entirely, at the cost of making dsh account login unusable on that deployment (it stays on the API key route); note that account sign-in has an additional precondition — the browser origin must be a loopback http origin with an explicit port — so non-loopback entries were never in scope (see below).
 
 In other words, the promise "unauthenticated traffic cannot reach the backend" narrows here to: **unauthenticated traffic can only reach an upstream-owned handshake endpoint**. That is a deliberate trade-off — without the exemption the feature is permanently unusable, and the exempted surface is one enumerable, auditable exact path.
+
+Exempting this callback is only a **necessary, not sufficient** condition for account sign-in: when **starting** a sign-in the upstream additionally requires the browser origin to be a loopback http origin with an explicit non-zero port (`loginOrigin`), so on a domain / reverse-proxy entry the sign-in request is refused before `auth_init` (`account: protocol`) regardless of `publicPaths`. For triage and fixes see [TROUBLESHOOTING.md §10](TROUBLESHOOTING.md).
 
 ### Relationship to the built-in dsh browser authentication (dsh ≥ 0.1.2)
 

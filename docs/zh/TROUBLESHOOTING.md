@@ -208,7 +208,7 @@ map $http_upgrade $connection_upgrade {
 
 ## 9. 账号登录停在「等待登录」，之后平台一直返回「授权失败」（`ALREADY_CONSUMED`）
 
-**症状**：点「登录 DeepSeek 账号」后浏览器跳去平台并完成授权，但回到本机时停在「等待登录」直到超时；此后重试时平台直接返回「授权失败」，dsh 日志里能看到 `ALREADY_CONSUMED`。
+**症状**：点「登录 DeepSeek 账号」后浏览器跳去平台并完成授权，但回到本机时停在「等待登录」直到超时；此后重试时平台直接返回「授权失败」，dsh 日志里能看到 `ALREADY_CONSUMED`。（若点击后**立即**报「登录失败」、根本没有进入「等待登录」，那是另一种成因，见第 10 节。）
 
 **成因**：账号登录的回调由开放平台以**跨站顶层导航**回跳 `http://localhost:<端口>/oauth/callback`，这类导航**不会**携带网关 `SameSite=Strict` 的会话 Cookie，请求必然匿名到达。若该路径没有被 `publicPaths` 放行，网关会按普通页面路径 302 到 `/login`，dsh 永远拿不到 `code`（`auth_exchange` 从未发生），而平台侧的 `authorize_id` 已在批准时被消费——之后每次重试都只会得到 `ALREADY_CONSUMED`。
 
@@ -222,3 +222,45 @@ map $http_upgrade $connection_upgrade {
 3. 用匿名探针确认放行生效：请求 `http://<网关地址>:<端口>/oauth/callback?code=x&state=y`——**没有账号登录在途**时应由上游返回 404（说明请求已穿过网关到达上游）；若得到 302 到 `/login`，说明这条放行没生效。
 
 **处置**：修正 `publicPaths` 后**重新发起一次登录**——已被消费的 `authorize_id` 无法复用。
+
+## 10. 反代/域名部署下点「登录 DeepSeek 账号」立即报「登录失败」（并非第 9 节的「等待登录」）
+
+**症状**：经域名/反向代理（或任何非回环 http 入口）访问 dsh，点左下角「登录 DeepSeek 账号」后对话框**立即**变成「登录失败 / 操作未完成，请重试。」——浏览器**不会**跳去 `platform.deepseek.com`，也不会出现「等待登录」；重试恒定失败，dsh 日志里**没有** `ALREADY_CONSUMED`（平台侧从未被请求过）。
+
+**根因**（dsh 上游设计，非网关故障）：发起账号登录时，上游强制要求**浏览器 origin** 是带显式非零端口的回环 http（`localhost`、`127.0.0.1`、`[::1]` 之一，且无 path/query/hash）；域名 origin（含 https 反代）在第一段校验即被拒：
+
+1. Web 端把页面的 `window.location.origin` 作为 `callbackOrigin` 传给 `account/startSignIn`（`@deepseek-ai/dsh-client-ui-settings-account/lib/client.js:4671`；桌面端取 `transport.streamBaseUrl` 的 origin）——远程访问下它就是 `https://dsh.example.com` 这类对外 origin；客户端随后按 `ok === false` 置为登录失败（`:4672`、`:4681`）；
+2. 上游 `loginOrigin()` 只接受上述回环形态：正则在 `@deepseek-ai/dsh-deepseek-account-platform/lib/index.js:318`，hostname 白名单在 `:319-322`，不合即抛 `PlatformAuthError("protocol")`（`:323`）；调用点在 `startSignIn` 开头 `:826`，远早于 `auth_init`（`:1019`）——**请求根本到不了开放平台**，也不存在被消费的 `authorize_id`。错误消息格式为 `account: ${code}`（`:13-19`），落到 RPC 信封即 `message: "account: protocol"`；
+3. 上游自己的 README「Known Limitations」写明：*"Only local access and SSH local forwarding through HTTP localhost, 127.0.0.1, or [::1] with an explicit port are supported; non-loopback reverse proxies are unsupported."*；
+4. **没有任何开关能放宽**：account-platform 配置的全部 13 个字段（`lib/index.js:500-518`）里，`allowLoopbackHttp` 只作用于 `platformOrigin`、`rewriteBrowserOrigin` 只改平台回跳地址；`loginOrigin` 不读任何配置或环境变量；
+5. 这条链路上**网关没有问题**：`publicPaths` 只放行**入站** `GET /oauth/callback`（第 9 节那条链，边界见 [SECURITY.md](SECURITY.md#匿名可达的上游握手路径)），而 `callbackOrigin` 是浏览器内计算、经 RPC **请求体**上传的参数——`lib/forward.js` 的 Host/Origin 改写只作用于转发头，够不到请求体。
+
+**快速判定**（命中一条即可定性）：
+
+1. 浏览器 DevTools → Network 筛 `startSignIn`：`POST /api/account/startSignIn` **立即**（实测 17 ms）返回 **200**，响应体很小（客户端 UUID `rpcId` 时明文约 174 B，短 `rpcId` 探针实测 146 B；浏览器会带 `Accept-Encoding: gzip`，该信封经**上游** gzip 后即访问日志里的 153-157 B（未压缩 174 B）），信封里 `result.ok:false`、`error.message` 为 **`account: protocol`**：
+
+   ```json
+   {"type":"server-response","rpcId":"…","result":{"ok":false,"error":{"code":"gateway/internal","message":"account: protocol","details":{}}}}
+   ```
+
+   若响应里出现 `authorizeUrl`、界面进入「等待登录」，说明已发起平台请求——那是第 9 节的场景；
+2. nginx/反代访问日志同一形态：同一时间窗内成批 `POST /api/account/startSignIn` → 200、153-157 B，而同期 `/oauth/callback` 命中数为 0（该 153-157 B 是**上游** gzip 后的传输字节、未压缩约 174 B，即 DevTools Response 里的正文长度；Size 列显示的才是 gzip 后的传输大小）；
+3. 回环对照：SSH 转发后经 `http://127.0.0.1:<网关端口>` 打开页面再点登录 → 进入「等待登录」，反证网关转发正常，唯一变量是浏览器 origin。
+
+**与第 9 节的分工**：
+
+| | 第 9 节 | 本节 |
+|---|---|---|
+| 卡在哪一步 | 平台已授权，回调到不了 dsh | 登录请求发不出去（上游在 `auth_init` 之前拒绝） |
+| 症状 | 停在「等待登录」→ 超时 → `ALREADY_CONSUMED` | 立即「登录失败」，无任何平台请求 |
+| 浏览器 origin | 回环（`http://localhost:<端口>`） | 域名 / https 反代 / LAN IP 等非回环 |
+| 网关侧变量 | `publicPaths` 是否放行 `/oauth/callback` | 与 `publicPaths` 无关（失败在更早一步） |
+| 处置 | 修正 `publicPaths` 后重新发起登录 | 换回环入口（SSH -L），或改走 API Key |
+
+**处置**（建议做法）：
+
+1. **SSH 本地转发后用回环入口登录**：`ssh -L 8080:127.0.0.1:8080 <部署机>`，再浏览 `http://127.0.0.1:8080`（8080 换成网关 `listenPort`）。必须带**显式非零端口**——`http://127.0.0.1`（无端口）同样被拒；
+2. **纯域名/反代部署改用 API Key 通道**（面板「添加 API Key」）：该拓扑下账号登录不可用，这是上游 origin 硬约束，不是配置问题；
+3. **不要**为这个症状放宽 `publicPaths`、放宽 Cookie 或关闭认证门——它们都不在这条因果链上。
+
+> 本节结论基于 dsh 0.2.1-rc.2（`next` 线最高版；`latest` tag 反而是更旧的 0.2.0-rc.2）。已发布的全部 13 个 `@deepseek-ai/dsh-deepseek-account-platform` 版本中，`loginOrigin` 函数体字节级一致——升级或降级 dsh 都不会改变这一行为。

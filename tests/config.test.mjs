@@ -201,6 +201,30 @@ test('publicPaths: exact absolute paths only, duplicates collapse, [] turns the 
   }
 })
 
+test('publicPaths: gateway-owned and already-public paths are reserved (fail loud, not silently shadowed)', () => {
+  // An entry for any of these either does nothing — the built-in route wins the
+  // first-match lookup, so the exemption is silently ineffective — or breaks a
+  // documented contract: a bare '/' hands the index to anonymous traffic,
+  // '/api*' the RPC namespace the gateway promises to answer 401 for, and
+  // '/connect' the launch-token exchange that mints a session. Refusing them
+  // at load keeps the exempted surface enumerable and auditable.
+  for (const reserved of [
+    '/', '/api', '/api/remote.mux', '/connect', '/login', '/login/auth', '/login-api/settings',
+    '/otp/setup', '/onboarding', '/onboarding/password', '/assets/index-abc.js',
+    '/manifest.webmanifest', '/favicon.svg',
+  ]) {
+    const result = validate({ publicPaths: [reserved] })
+    assert.ok(result.issues, `publicPaths ${JSON.stringify(reserved)} must be rejected as reserved`)
+    assert.equal(result.issues[0].path[0], 'publicPaths')
+  }
+  // Lookalikes are not reserved: the check is segment-boundary aware, so a path
+  // that merely starts with the same letters stays configurable.
+  for (const allowed of ['/oauth/callback', '/apix', '/loginx', '/assets-extra/thing', '/onboarding-extra']) {
+    assert.deepEqual(validate({ publicPaths: [allowed] }).value.publicPaths, [allowed],
+      `publicPaths ${JSON.stringify(allowed)} must stay configurable`)
+  }
+})
+
 test('basePath accepts normal sub-paths and rejects breakout characters', () => {
   for (const good of ['/', '/dsh', '/dsh/v2', '/a-b_c.d~e', '/api/x']) {
     const result = validate({ basePath: good })

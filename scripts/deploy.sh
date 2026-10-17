@@ -74,7 +74,7 @@ ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" "${RESOURCE_FILES[@]}" cordis.p
 errors=0
 
 # ── 1. Pre-deploy 检查（在 workspace 源码上跑） ──────────────────────────
-echo "▸ [1/4] 语法检查（workspace 源码）"
+echo "▸ [1/5] 语法检查（workspace 源码）"
 for f in "${JS_FILES[@]}"; do
   if node --check "$SRC/$f" 2>/dev/null; then
     echo "  ✓ $f"
@@ -89,8 +89,21 @@ if ((errors > 0)); then
   echo; echo "✗ 语法错误，中止部署。" >&2; exit 1
 fi
 
+# Type gate: lib/ is plain JS checked by JSDoc types (tsconfig.json). A deploy
+# that skips it can install a copy whose annotations contradict the code, which
+# is exactly the drift `npm run check` exists to catch.
 echo
-echo "▸ [2/4] 单元测试"
+echo "▸ [2/5] 类型检查（tsc --noEmit --checkJs）"
+if npm run typecheck >/dev/null 2>&1; then
+  echo "  ✓ index.js / lib 无类型错误"
+else
+  echo "  ✗ 类型检查未通过，中止部署。" >&2
+  echo "  运行 npm run typecheck 查看详情" >&2
+  exit 1
+fi
+
+echo
+echo "▸ [3/5] 单元测试"
 cd "$SRC"
 if npm test 2>&1 | tail -1; then
   echo "  ✓ 测试通过"
@@ -107,7 +120,7 @@ fi
 # build:check rebuilds the bundle and fails on any diff against the committed
 # artifact, which is exactly the discipline the repo requires.
 echo
-echo "▸ [3/4] client bundle 新鲜度（build:check）"
+echo "▸ [4/5] client bundle 新鲜度（build:check）"
 if npm run build:check >/dev/null 2>&1; then
   echo "  ✓ client/index.js 与 client/src 一致"
 else
@@ -118,7 +131,7 @@ fi
 
 # ── 2. 复制 ──────────────────────────────────────────────────────────────
 echo
-echo "▸ [4/4] 同步 → $DST"
+echo "▸ [5/5] 同步 → $DST"
 for f in "${ALL_FILES[@]}"; do
   if [[ ! -f "$SRC/$f" ]]; then
     echo "  ✗ 源文件不存在: $f" >&2; exit 1

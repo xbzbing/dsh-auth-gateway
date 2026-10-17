@@ -45,10 +45,12 @@ docs/           zh/ 与 en/ 双语文档目录
 ```sh
 npm test              # 全量测试；测试文件在 package.json 显式列出——
                       # 新增 tests/*.mjs 必须手动加入该列表，否则不会被执行
-npm run check         # node --check lib/*.js + npm test（无 linter/typecheck）
+npm run typecheck     # tsc --noEmit --checkJs：index.js + lib/*.js 的 JSDoc 类型检查
+                      # （tsconfig.json；宿主服务类型见 types/dsh-host.d.ts）
+npm run check         # node --check lib/*.js + npm run typecheck + npm test
 npm run build:client  # esbuild 构建 client bundle（改动 client/src/ 后必须运行）
 npm run build:check   # 重建并断言产物与源码一致
-npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR（默认 ~/.dsh/profiles/web）→ 安装后验证
+npm run deploy        # 语法检查 → 类型检查 → 测试 → 同步到 $DSH_PROFILE_DIR（默认 ~/.dsh/profiles/web）→ 安装后验证
 ```
 
 单文件语法检查用 `node --check <file>`；实机端到端见下方「实机验证」。
@@ -58,6 +60,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **一切变更必须符合 dsh/Cordis 规范（最高优先级）**：只用官方扩展点——`ctx.effect`、`ctx.inject`、`ctx.slots`、`ctx.emit`、`webServer.tapIndex`（仅限自包含全局量注入）、`dsh.bundle` patch、client 插件 inject 声明。禁止触碰宿主运行时内部：不包装/替换 `window.__ModuleLoader__` 的任何方法，不包装第三方模块的 factory/apply/provide，不做全局 DOM 探测与样式注入。跨插件冲突或对 dsh 升级敏感的实现，一律视为规范违规并重构。
 - **LAN trust 是本项目唯一记录在案的安全例外**：dsh 把配置平面（settings/credentials RPC）钉死在 loopback，官方注释写明"直到真实认证层存在"（`until a real authentication layer exists`）但从未实现——本项目自行承担该认证层角色，因此允许对 `window.__ModuleLoader__` 做**最小介入**：在 `loader.load` 上套**透传代理**，**仅拦截** `@deepseek-ai/dsh-client-connection` 的注册（其余插件原样通过，否则视为违规）；其 `apply` 包装**不得**赋值 `ctx.provide`（mixin-bound accessor，会污染共享 ReflectService 并让所有 provide 落入 connection 的 fiber scope——这是 0.4.2 破坏 better-sidebar 的机制），只能在共享 `ctx.reflect` 上临时替换未绑定的 `provide` 本体捕获 handle、转发 `originalProvide.call(this, ...)` 保调用者归属，apply 返回后同步翻转 `connection.isLoopback`。实现见 `lib/lan-trust-script.js`；任何放宽（如包装其他插件、触碰 ctx.provide、修改 loader 语义）都属破坏性变更。
 - **零运行时依赖**：host 代码只用 Node 内置模块；client 构建产物只允许 external 引用 dsh 运行时模块。新依赖需要证明现有手段不可行。
+- **类型检查由 JSDoc 驱动，宿主服务类型就地声明**：`npm run typecheck`（tsconfig.json，allowJs + checkJs + noEmit，strict 关闭）检查 `index.js` 与 `lib/*.js`，**注释即类型**——改函数签名时同步写准 `@param`/`@returns`，否则新代码不受保护。dsh 提供的服务（`ctx.webServer` / `ctx.credentials` / `ctx.settings`）只在 `types/dsh-host.d.ts` 里按**最小结构类型**声明，本仓库不引 dsh 包作 devDependency（避免把安装耦合到某个 dsh 预发布版本）；该文件是**手工同步**的，宿主 API 变更时按 `dsh-*/lib/types/*.d.ts` 更新，漏改只会表现为调用点的类型报错、不影响运行时。注意 `types/*.d.ts` 里做模块增补必须让文件成为模块（有顶层 `export {}`），否则 `declare module` 会变成环境模块声明、**替换**而非增补宿主类型。
 - **依赖只从公共 npm registry 解析**：package-lock.json 的 `resolved` 必须指向 `https://registry.npmjs.org/`，禁止内网镜像；提交前检查 lock 文件无内网 registry 残留。
 - **回环绑定是安全根基**：webserver 必须保持 `127.0.0.1`（cordis.patch.yml），对外暴露由网关 `listenHost` 承担；任何放宽都是破坏性变更。
 - **匿名可达的**上游**路径只有 `publicPaths` 声明的那些**（默认 `/oauth/callback`：dsh 账号登录回调，见 [docs/zh/SECURITY.md](docs/zh/SECURITY.md)）：只接受精确绝对路径且仅 GET，禁止通配符，保留路径（`/`、`/api*`、`/connect`、网关自有页面与已公开静态资产）在加载期直接报错；新增或放宽任何匿名上游路径都必须同步双语文档的边界说明，并在 `tests/gateway.test.mjs` 锁定「同路径非 GET / 相似路径仍被门禁拦住」。既有匿名面（`/assets/*`、`/favicon.svg`、`/manifest.webmanifest` 与网关自服务的 `/login*`、`/login-api/*`、`/otp/*`、`/onboarding*`）是既定口径，不属本条约束。

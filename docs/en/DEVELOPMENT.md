@@ -67,9 +67,10 @@ Design points:
 ```bash
 npm run build:client   # build the client bundle (esbuild)
 npm run build:check    # rebuild and assert the artifact matches the source
-npm run check          # syntax check (lib/*.js) + full test suite
+npm run typecheck      # JSDoc type check (tsc --noEmit --checkJs; host service declarations in types/dsh-host.d.ts)
+npm run check          # syntax check (lib/*.js) + type check + full test suite
 npm test               # full test suite
-npm run deploy         # deploy pipeline (syntax → tests → sync → post-install verification)
+npm run deploy         # deploy pipeline (syntax → types → tests → sync → post-install verification)
 ```
 
 The client build artifacts (`client/index.js` + `.map`) are committed, but `build:check` keeps them consistent — after changing the JSX source you must rebuild.

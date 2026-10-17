@@ -114,6 +114,8 @@ export async function apply(ctx, config) {
   // or absent read still resolves; without a secret the upstream answers
   // 401 until the record appears.
   await upstream.warm()
+  // `onError` is assigned just below; LoginGateway only ever reads it through
+  // an optional call, so an unwired sink is a no-op.
   const gateway = createGateway(config, {
     upstreamSecretReader: upstream.secret,
     localePreference: () => localePreference(ctx.settings),

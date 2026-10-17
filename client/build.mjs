@@ -6,8 +6,9 @@
  * @deepseek-ai/dsh-client-modules). The bundle must be a
  * `window.__ModuleLoader__.load({ id, factory })` call whose factory receives
  * the loader's `require` and returns `module.exports`; react,
- * react/jsx-runtime and @deepseek-ai/dsh-client-ui-slots are provided by the
- * dsh runtime and stay external.
+ * react/jsx-runtime, @deepseek-ai/dsh-client-ui-slots and
+ * @deepseek-ai/dsh-client-ui-primitives are seeded by the dsh runtime (the
+ * frozen module table) and stay external.
  *
  * Usage: node client/build.mjs
  */
@@ -27,7 +28,7 @@ const result = await build({
   platform: 'browser',
   target: ['es2020'],
   jsx: 'automatic',
-  external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-slots'],
+  external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-primitives'],
   sourcemap: 'external',
   sourcesContent: true,
   outfile,

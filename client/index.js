@@ -31,6 +31,7 @@ window.__ModuleLoader__.load({
 		module.exports = __toCommonJS(index_exports);
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
+		var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 
 		// client/src/update-notice.js
 		function readVersion(data) {
@@ -94,6 +95,12 @@ window.__ModuleLoader__.load({
 		  primaryForeground: "var(--dsw-alias-label-primary-foreground)",
 		  hover: "var(--dsw-alias-interactive-bg-hover)",
 		  hoverDanger: "var(--dsw-alias-interactive-bg-hover-danger)",
+		  // The two tokens dsh's own dropdown triggers are built from (its
+		  // `<name>_selector` rule): a soft module surface rather than a bordered
+		  // field, with `interactive-bg-hover` as the hover fill. Sourcing them by
+		  // name keeps the panel on the host's theme instead of a copied hex.
+		  bgModule: "var(--dsw-alias-bg-module-platform)",
+		  radiusMd: "var(--dsw-radius-md)",
 		  danger: "var(--dsw-alias-state-error-primary)",
 		  dangerSoft: "var(--dsw-alias-state-error-secondary)",
 		  success: "var(--dsw-alias-state-success-primary)",
@@ -417,6 +424,7 @@ window.__ModuleLoader__.load({
 		  const [cookieSecure, setCookieSecure] = (0, import_react.useState)("auto");
 		  const [cookieSecureSource, setCookieSecureSource] = (0, import_react.useState)("deployment");
 		  const [cookieSecureDraft, setCookieSecureDraft] = (0, import_react.useState)(null);
+		  const [cookieMenuOpen, setCookieMenuOpen] = (0, import_react.useState)(false);
 		  const [savingCookieSecure, setSavingCookieSecure] = (0, import_react.useState)(false);
 		  const [cookieSecureHint, setCookieSecureHint] = (0, import_react.useState)(null);
 		  const [requestSecure, setRequestSecure] = (0, import_react.useState)(false);
@@ -843,33 +851,80 @@ window.__ModuleLoader__.load({
 		          cookieSecureSource === "panel" ? t("cookie.source.panel") : t("cookie.source.deployment")
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: "10px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-		            "select",
+		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		            import_dsh_client_ui_primitives.Menu,
 		            {
-		              value: String(cookieSecureDraft ?? cookieSecure),
-		              onChange: (e) => {
-		                const v = e.target.value;
-		                setCookieSecureDraft(v === "true" ? true : v === "false" ? false : "auto");
+		              open: cookieMenuOpen,
+		              onClose: () => setCookieMenuOpen(false),
+		              items: [
+		                { id: "auto", label: t("cookie.edit.mode.auto") },
+		                { id: "true", label: t("cookie.edit.mode.true") },
+		                { id: "false", label: t("cookie.edit.mode.false") }
+		              ],
+		              selectedId: String(cookieSecureDraft ?? cookieSecure),
+		              onSelect: (id) => {
+		                setCookieMenuOpen(false);
+		                setCookieSecureDraft(id === "true" ? true : id === "false" ? false : "auto");
 		              },
-		              style: {
-		                height: "32px",
-		                padding: "0 10px",
-		                borderRadius: "8px",
-		                border: `1px solid ${T.border}`,
-		                background: T.bg1,
-		                color: T.textPrimary,
-		                fontSize: "13px",
-		                lineHeight: "20px",
-		                fontFamily: "inherit",
-		                cursor: "pointer",
-		                outline: "none",
-		                minWidth: "150px"
-		              },
-		              children: [
-		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "auto", children: t("cookie.edit.mode.auto") }),
-		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "true", children: t("cookie.edit.mode.true") }),
-		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "false", children: t("cookie.edit.mode.false") })
-		              ]
+		              align: "start",
+		              portal: true,
+		              anchor: (
+		                // Styled as dsh's own dropdown trigger (its `*_selector`
+		                // rule): bg-module-platform fill, radius-md, 36px tall,
+		                // 14px label, 12px gap, borderless, and the same 14px
+		                // stroke-1 chevron — no rotation on open (dsh does not
+		                // rotate it either). The Menu primitive owns everything
+		                // else: portal, outside-click, Escape, arrow-key roving.
+		                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+		                  "button",
+		                  {
+		                    type: "button",
+		                    "aria-haspopup": "menu",
+		                    "aria-expanded": cookieMenuOpen,
+		                    disabled: savingCookieSecure,
+		                    onClick: () => setCookieMenuOpen((value) => !value),
+		                    onMouseEnter: (e) => {
+		                      if (!savingCookieSecure) e.currentTarget.style.background = T.hover;
+		                    },
+		                    onMouseLeave: (e) => {
+		                      if (!savingCookieSecure) e.currentTarget.style.background = T.bgModule;
+		                    },
+		                    style: {
+		                      display: "inline-flex",
+		                      alignItems: "center",
+		                      gap: "12px",
+		                      height: "36px",
+		                      padding: "0 14px",
+		                      borderRadius: T.radiusMd,
+		                      background: T.bgModule,
+		                      color: T.textPrimary,
+		                      border: "none",
+		                      fontSize: "14px",
+		                      lineHeight: "22px",
+		                      fontFamily: "inherit",
+		                      cursor: savingCookieSecure ? "not-allowed" : "pointer",
+		                      opacity: savingCookieSecure ? 0.5 : 1,
+		                      transition: "background .15s ease"
+		                    },
+		                    children: [
+		                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: t(`cookie.edit.mode.${String(cookieSecureDraft ?? cookieSecure)}`) }),
+		                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		                        "svg",
+		                        {
+		                          width: "14",
+		                          height: "14",
+		                          viewBox: "0 0 16 16",
+		                          fill: "none",
+		                          "aria-hidden": "true",
+		                          strokeWidth: "1",
+		                          style: { flexShrink: 0 },
+		                          children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6", stroke: "currentColor" })
+		                        }
+		                      )
+		                    ]
+		                  }
+		                )
+		              )
 		            }
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: saveCookieSecure, disabled: savingCookieSecure || cookieSecureDraft === null || cookieSecureDraft === cookieSecure, children: savingCookieSecure ? t("cookie.edit.saving") : t("cookie.edit.save") }),

@@ -16,6 +16,11 @@ import { useEffect, useState } from 'react'
 // Side-effect import: guarantees the dsh slots module is materialized by the
 // client loader before this plugin's apply() runs (declared in dsh.client.inject).
 import '@deepseek-ai/dsh-client-ui-slots'
+// dsh's own dropdown primitive (Menu: anchor button + portal menu + check on
+// the selected row). It ships in the shell's frozen module table
+// (PLATFORM_MODULES), so it resolves as a baseline external like react — no
+// `dsh.client.external` entry, no bundled copy of host UI.
+import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { afterCheckAttempt, readVersion, updateNotice } from './update-notice.js'
 import { cookieSecureState, cookieSecureEffective } from './cookie-secure.js'
 
@@ -35,6 +40,12 @@ const T = {
   primaryForeground: 'var(--dsw-alias-label-primary-foreground)',
   hover: 'var(--dsw-alias-interactive-bg-hover)',
   hoverDanger: 'var(--dsw-alias-interactive-bg-hover-danger)',
+  // The two tokens dsh's own dropdown triggers are built from (its
+  // `<name>_selector` rule): a soft module surface rather than a bordered
+  // field, with `interactive-bg-hover` as the hover fill. Sourcing them by
+  // name keeps the panel on the host's theme instead of a copied hex.
+  bgModule: 'var(--dsw-alias-bg-module-platform)',
+  radiusMd: 'var(--dsw-radius-md)',
   danger: 'var(--dsw-alias-state-error-primary)',
   dangerSoft: 'var(--dsw-alias-state-error-secondary)',
   success: 'var(--dsw-alias-state-success-primary)',
@@ -345,8 +356,11 @@ function UserSettingsPanel({ api, t }) {
   // 'panel' = runtime override in the credential record). The panel edits it
   // via POST /login-api/cookie-secure.
   const [cookieSecureSource, setCookieSecureSource] = useState('deployment')
-  // Draft mode for the edit radio; null while the card shows the state only.
+  // Draft mode for the mode dropdown; null while the card shows the state only.
   const [cookieSecureDraft, setCookieSecureDraft] = useState(null)
+  // Open state for the mode dropdown (dsh Menu primitive — the shell owns
+  // outside-click / Escape / arrow-key handling, we only own the value).
+  const [cookieMenuOpen, setCookieMenuOpen] = useState(false)
   const [savingCookieSecure, setSavingCookieSecure] = useState(false)
   const [cookieSecureHint, setCookieSecureHint] = useState(null)
   // The gateway's own view of THIS request's transport (TLS socket or a
@@ -771,22 +785,57 @@ function UserSettingsPanel({ api, t }) {
             {cookieSecureSource === 'panel' ? t('cookie.source.panel') : t('cookie.source.deployment')}
           </p>
           <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <select
-              // The select value is a string; booleans map via String() so
-              // 'auto'/'true'/'false' never collide (mirrored by the parse
-              // in the onChange handler below).
-              value={String(cookieSecureDraft ?? cookieSecure)}
-              onChange={(e) => { const v = e.target.value; setCookieSecureDraft(v === 'true' ? true : v === 'false' ? false : 'auto') }}
-              style={{
-                height: '32px', padding: '0 10px', borderRadius: '8px', border: `1px solid ${T.border}`,
-                background: T.bg1, color: T.textPrimary, fontSize: '13px', lineHeight: '20px',
-                fontFamily: 'inherit', cursor: 'pointer', outline: 'none', minWidth: '150px',
+            <Menu
+              // dsh official dropdown: the anchor button below is the visible
+              // control, the menu portals to <body> with a check on the chosen
+              // row. Values stay strings so 'auto'/'true'/'false' never
+              // collide (mirrored by the parse in onSelect).
+              open={cookieMenuOpen}
+              onClose={() => setCookieMenuOpen(false)}
+              items={[
+                { id: 'auto', label: t('cookie.edit.mode.auto') },
+                { id: 'true', label: t('cookie.edit.mode.true') },
+                { id: 'false', label: t('cookie.edit.mode.false') },
+              ]}
+              selectedId={String(cookieSecureDraft ?? cookieSecure)}
+              onSelect={(id) => {
+                setCookieMenuOpen(false)
+                setCookieSecureDraft(id === 'true' ? true : id === 'false' ? false : 'auto')
               }}
-            >
-              <option value="auto">{t('cookie.edit.mode.auto')}</option>
-              <option value="true">{t('cookie.edit.mode.true')}</option>
-              <option value="false">{t('cookie.edit.mode.false')}</option>
-            </select>
+              align="start"
+              portal
+              anchor={
+                // Styled as dsh's own dropdown trigger (its `*_selector`
+                // rule): bg-module-platform fill, radius-md, 36px tall,
+                // 14px label, 12px gap, borderless, and the same 14px
+                // stroke-1 chevron — no rotation on open (dsh does not
+                // rotate it either). The Menu primitive owns everything
+                // else: portal, outside-click, Escape, arrow-key roving.
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={cookieMenuOpen}
+                  disabled={savingCookieSecure}
+                  onClick={() => setCookieMenuOpen((value) => !value)}
+                  onMouseEnter={(e) => { if (!savingCookieSecure) e.currentTarget.style.background = T.hover }}
+                  onMouseLeave={(e) => { if (!savingCookieSecure) e.currentTarget.style.background = T.bgModule }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '12px',
+                    height: '36px', padding: '0 14px', borderRadius: T.radiusMd,
+                    background: T.bgModule, color: T.textPrimary, border: 'none',
+                    fontSize: '14px', lineHeight: '22px', fontFamily: 'inherit',
+                    cursor: savingCookieSecure ? 'not-allowed' : 'pointer',
+                    opacity: savingCookieSecure ? 0.5 : 1, transition: 'background .15s ease',
+                  }}
+                >
+                  <span>{t(`cookie.edit.mode.${String(cookieSecureDraft ?? cookieSecure)}`)}</span>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"
+                    strokeWidth="1" style={{ flexShrink: 0 }}>
+                    <path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" />
+                  </svg>
+                </button>
+              }
+            />
             <Button variant="primary" onClick={saveCookieSecure} disabled={
               savingCookieSecure || cookieSecureDraft === null || cookieSecureDraft === cookieSecure
             }>

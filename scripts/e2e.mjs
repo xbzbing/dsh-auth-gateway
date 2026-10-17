@@ -270,7 +270,10 @@ try {
   'no restore button while the deployment config rules')
 
   // Save 关闭 -> hint, source flip, restore button appears.
-  await page.selectOption('select', 'false')
+  // The mode control is dsh's official Menu primitive (anchor button +
+  // portaled [role=menu]), not a native <select>: pick the row by its label.
+  await page.click('[role="dialog"] button[aria-haspopup="menu"]')
+  await page.click('[role="menu"] button[role="menuitem"]:has-text("关闭")')
   await page.click('button:has-text("保存")')
   await page.waitForFunction(() => /已保存，新策略立即生效/.test(document.body.innerText), { timeout: 8000 })
   assert.ok(await page.evaluate(() => document.body.innerText.includes('来源：面板设置')),

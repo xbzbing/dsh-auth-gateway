@@ -45,7 +45,7 @@ scripts / tests
 
 Design points:
 
-- **Zero runtime dependencies**: the host uses only Node built-ins; the client build artifact only externally references modules provided by the dsh runtime;
+- **Zero runtime dependencies**: the host uses only Node built-ins; the client build artifact only externally references modules provided by the dsh runtime. Both `@deepseek-ai/dsh-client-ui-slots` and `@deepseek-ai/dsh-client-ui-primitives` (the official UI primitives — the panel's dropdown uses its `Menu` rather than a native `<select>`) belong to the shell's **frozen module table** (`PLATFORM_MODULES`), so they are required as baseline externals — do **not** list them under `dsh.client.external` (that field is only for non-baseline requests answered by a dynamic package row), and never inline host UI, which would fork both its styling and its upgrade behavior;
 - **Official extension points**: `ctx.effect` (lifecycle), `webServer.tapIndex` (randomUUID and authenticated LAN trust injection), `ctx.slots` (client UI), `ctx.emit` (security events), `dsh.bundle` (composition patch);
 - **basePath sub-path deployment**: the gateway strips the `basePath` prefix before routing (with a boundary check, so `/dsh2/foo` is not mistaken for the `/dsh` prefix), prepends it to 302 redirects, and strips it again when forwarding upstream; PWA metadata (`manifest.webmanifest` / `favicon.svg`) and static assets (`/assets/*`) pass through without authentication (browser sub-resource requests, no sensitive data);
 - **Client trust timing**: an index script flips `isLoopback` while connection registers, before Settings makes its persistence decision; this is the project's documented security exception;

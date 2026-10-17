@@ -280,11 +280,21 @@ test('client bundle keeps react and slots as external requires (not inlined)', (
   for (const spec of ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-slots']) {
     assert.ok(code.includes(`require("${spec}")`), `bundle must require ${spec}`)
   }
+  // The mode dropdown uses dsh's own Menu primitive instead of a native
+  // <select>. It must stay an external require against the shell's frozen
+  // module table — inlining host UI would fork the design and drift on
+  // dsh upgrades.
+  assert.ok(code.includes('require("@deepseek-ai/dsh-client-ui-primitives")'),
+    'bundle must require the dsh primitives module externally')
+  assert.ok(!code.includes('<select'), 'bundle must not fall back to a native select')
 })
 
 function requireStub(spec) {
   if (spec === 'react') return { useState: () => [], useEffect: () => {}, Fragment: 'fragment' }
   if (spec === 'react/jsx-runtime') return { jsx: () => ({}), jsxs: () => ({}), Fragment: 'fragment' }
   if (spec === '@deepseek-ai/dsh-client-ui-slots') return {}
+  // dsh's Menu primitive: only referenced from the render tree, which the
+  // contract tests never mount — a placeholder keeps the require resolvable.
+  if (spec === '@deepseek-ai/dsh-client-ui-primitives') return { Menu: () => null }
   return undefined
 }

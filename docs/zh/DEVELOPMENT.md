@@ -45,7 +45,7 @@ scripts / tests
 
 设计要点：
 
-- **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块；
+- **零运行时依赖**：host 全部使用 Node 内置模块；client 构建产物仅 external 引用 dsh 运行时提供的模块。其中 `@deepseek-ai/dsh-client-ui-slots` 与 `@deepseek-ai/dsh-client-ui-primitives`（`Menu` 等官方 UI 原语，面板的下拉框用它而非原生 `<select>`）都属于外壳的**冻结模块表**（`PLATFORM_MODULES`），按 baseline 直接 external require 即可——**不要**写进 `dsh.client.external`（那里只列基线之外的动态包行，且需要提供方 row）；同理也不得内联宿主 UI，否则样式与升级行为都会与 dsh 分叉；
 - **官方扩展点**：`ctx.effect`（生命周期）、`webServer.tapIndex`（randomUUID 与 authenticated LAN trust 注入）、`ctx.slots`（client UI）、`ctx.emit`（安全事件）、`dsh.bundle`（组合 patch）；
 - **basePath 子路径部署**：网关路由先剥离 `basePath` 前缀（带边界检查，`/dsh2/foo` 不会被误当作 `/dsh` 前缀），302 跳转统一拼接前缀，转发上游时再剥离；PWA 元数据（`manifest.webmanifest` / `favicon.svg`）与静态资产（`/assets/*`）免认证放行（浏览器子资源请求，无敏感信息）；
 - **客户端 trust 时序**：index 注入脚本在 connection 注册时翻转 `isLoopback`，早于 settings 持久化决策生效；这是项目记录的安全例外；

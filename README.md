@@ -105,7 +105,7 @@ flowchart LR
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
 | `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。字符集限 `A-Za-z0-9._~/-`，拒绝 `..`、`//`、引号、空白、尖括号（该值会内嵌进页面脚本与链接，故按白名单校验；不合规配置会在加载时被拒绝）。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
 | `cookieSecure` | `auto` | 会话 Cookie 是否携带 `Secure` 属性。`auto`：请求经 TLS（反向代理透传 `X-Forwarded-Proto: https`）时自动附加；`true`：强制附加；`false`：显式关闭。纯 HTTP 下强制开启会使浏览器拒绝 Cookie。**面板可直接修改**：覆盖值持久化于凭据记录，优先于部署配置，直至恢复 |
-| `publicPaths` | `['/oauth/callback']` | **匿名可达的上游握手路径**（精确匹配、仅 GET）。默认值就是 dsh 账号登录的回调：平台以跨站顶层导航回跳过来，浏览器不会带上网关会话 Cookie，落在门后该功能就永久不可用。只接受精确绝对路径（不接受通配符、查询串），字符集同 `basePath`（`A-Za-z0-9._~/-`）；数组或逗号分隔字符串均可，重复项自动去重；保留路径（`/`、`/api*`、`/connect`、网关自有页面与已公开静态资产）会在加载期被拒绝。设为 `[]` 关闭放行。条目按 **basePath 剥离后**的路径匹配（与上游注册路径同坐标系），子路径部署**不要**带 basePath 前缀。取舍与边界见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径) |
+| `publicPaths` | `['/oauth/callback']` | **匿名可达的上游握手路径**（精确匹配、仅 GET）。默认值就是 dsh 账号登录的回调：平台以跨站顶层导航回跳过来，浏览器不会带上网关会话 Cookie，落在门后该功能就永久不可用。只接受精确绝对路径（不接受通配符、查询串），字符集同 `basePath`（`A-Za-z0-9._~/-`）；数组或逗号分隔字符串均可，重复项自动去重；保留路径（`/` 与其别名 `/index.html`、`/api*`、`/connect`、网关自有页面与已公开静态资产）会在加载期被拒绝。设为 `[]` 关闭放行。条目按 **basePath 剥离后**的路径匹配（与上游注册路径同坐标系），子路径部署**不要**带 basePath 前缀。取舍与边界见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径) |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |

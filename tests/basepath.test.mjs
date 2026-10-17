@@ -146,6 +146,25 @@ test('PWA metadata and static assets are served without authentication', async (
   assert.equal(asset.status, 200)
 })
 
+test('basePath: the anonymous handshake path is matched after basePath stripping', async () => {
+  // publicPaths entries live in the basePath-stripped coordinate system — the
+  // same one the upstream registers its exact /oauth/callback route in — so a
+  // sub-path deployment must NOT prefix them. Both spellings have to reach the
+  // upstream as '/oauth/callback': the prefixed one because the prefix is
+  // stripped before matching, the root one because a path outside the basePath
+  // keeps its raw spelling.
+  seenRequests.length = 0
+  const prefixed = await fetch(gw.address().port, '/dsh/oauth/callback?code=abc&state=xyz')
+  assert.equal(prefixed.status, 200, 'sub-path spelling must be forwarded, not redirected')
+  assert.equal(seenRequests.at(-1).url, '/oauth/callback?code=abc&state=xyz',
+    'the upstream sees the stripped path and the verbatim query string')
+
+  seenRequests.length = 0
+  const root = await fetch(gw.address().port, '/oauth/callback?code=abc&state=xyz')
+  assert.equal(root.status, 200, 'root spelling must be forwarded too')
+  assert.equal(seenRequests.at(-1).url, '/oauth/callback?code=abc&state=xyz')
+})
+
 test('basePath redirect: unauthenticated /dsh/api/test → 401 json', async () => {
   const res = await fetch(gw.address().port, '/dsh/api/test', { method: 'POST' })
   assert.equal(res.status, 401)

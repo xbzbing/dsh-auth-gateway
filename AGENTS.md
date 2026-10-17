@@ -29,7 +29,10 @@ lib/
   version.js    自身版本/仓库读取（package.json）+ SemVer 子集比较
   update-check.js 新版本检查：唯一的对外请求（npm registry latest），默认不自动发起、仅手动按钮或 updateCheck=true 触发；TTL 缓存、绝不抛错
   lan-trust-script.js 认证后 LAN trust bootstrap（透传代理仅拦截 connection 注册，见下方安全例外）
-client/         设置面板（slot settings.section）；src/index.jsx 源码，index.js+.map 为入库构建产物
+client/         设置面板（slot settings.section）；src/index.jsx 为容器（全部 state/handler + api 工厂 + slot 注册），
+                展示卡片 src/*-card.jsx 与 src/otp-setup-dialog.jsx（只吃 props、无 state 无请求）、
+                字典 src/locales.js、设计 token/样式 src/styles.js、原语 src/ui.jsx；
+                index.js+.map 为入库构建产物（npm run build:client 重建）
 locale/          插件管理页展示用的标题/描述字典（zh.json / en.json）；icon.svg 为插件图标（package.json 的 icon 字段），dsh 0.1.7 起不执行插件代码即可读取
 scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图
@@ -61,6 +64,7 @@ npm run deploy        # 语法检查 → 测试 → 同步到 $DSH_PROFILE_DIR�
 - **新增 lib 文件必须同步两处清单**：package.json 的 `test` script（测试可见性）与 scripts/deploy.sh 的 `JS_FILES`（部署同步按显式列表复制，不在列表即不到达已安装副本）。展示资源（`locale/*.json`、`icon.svg`）同样按 deploy.sh 的 `RESOURCE_FILES` 显式列表同步，并需在 package.json 的 `files` 中声明才随 npm 包分发。
 - **Cordis patch 的 `config:` 是整对象替换**：profile patch 覆盖字段时必须重申 bundle patch 的全部字段（含 `!!js` 动态端口表达式），漏写即回退默认值。
 - **客户端面板经注入的 basePath 全局量构造 API 路径**（`window.__dshAuthGatewayBasePath__`，由 index.js tapIndex 写入）：面板内禁止根绝对路径 fetch/跳转，否则子路径部署失效。
+- **client 契约测试对 `client/src/index.jsx` 做源码字符串断言**：`tests/client-contract.test.mjs` 用 `source.includes(...)` 在 **index.jsx 文本**上钉住 `config?.['dsh-auth-gateway']`、`cfg.cookieSecure`、`cfg.cookieSecureSource`、`data.requestSecure`、`setCookieSecure: async`、`resetCookieSecure: async`、`const inject = ['slots', 'locale', 'connection']`、`function UserSettingsPanel({ api, t })`、`__dshAuthGatewayBasePath__`，并断言不得出现 `MutationObserver`/`NAV_MARKER`。因此全部 state/handler 与 api 工厂必须留在 index.jsx；把**展示**卡片拆到 `src/*-card.jsx` 是安全的（它们只吃 props），但搬走上述任一字符串前，必须同步把该测试的 `source` 改成 `client/src/` 下全部源码的拼接，否则测试会静默失败或被迫回退重构。
 - **`settings.section` 的 `order` 必须严格大于官方全部 section 的最大值**：slot 列表按 `order` 稳定排序，与官方取值相等时位置由插件加载顺序决定；第三方面板必须落在所有官方菜单之后。
 - **登录失败只返回统一错误码** `invalid-credentials`（防凭据枚举）；受保护流程（OTP 绑定/禁用）才允许细分错误码。页面文案一律走 lib/errors.js 字典，不硬编码。
 - **安全状态变更必须留审计**：登录/登出/改密/OTP 启停经 `onAuthEvent` 输出（只含 kind/ip/reason，绝不带凭据），并与暴力破解告警（`onSecurityEvent`）一同落盘 `audit.log`（lib/audit-log.js）；错误密码计入与登录共享的按地址锁定。

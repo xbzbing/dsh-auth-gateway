@@ -30,8 +30,15 @@ host（零构建，node:crypto / node:http）
 └── lib/config.js     # Standard Schema 配置校验（含 basePath 子路径前缀）
 
 client（可选，源码构建）
-└── client/src/index.jsx  # 设置面板（认证设置：OTP/改密/登出），slot 注册（settings.section）
-    client/build.mjs      # esbuild 构建 → client/index.js（dsh 经 exports["./client"] 服务）
+├── client/src/index.jsx        # 面板容器：全部 state/handler、api 工厂、slot 注册（settings.section）
+├── client/src/locales.js       # 中英文字典（自有命名空间）
+├── client/src/styles.js        # dsh 设计 token 与共享样式对象
+├── client/src/ui.jsx           # Button / Pill / StatusBanner 原语
+├── client/src/*-card.jsx       # 展示卡片（OTP/改密/会话/Cookie Secure/关于）：只吃 props，无 state 无请求
+├── client/src/otp-setup-dialog.jsx # OTP 绑定弹窗（扫码 / 验证 / 一次性备份码）
+├── client/src/cookie-secure.js # Cookie Secure 状态推导（纯函数，单测）
+├── client/src/update-notice.js # 更新提示推导（纯函数，单测）
+└── client/build.mjs            # esbuild 构建 → client/index.js（dsh 经 exports["./client"] 服务）
 
 scripts / tests
 ├── scripts/deploy.sh         # 部署流水线：语法检查 → 全量测试 → 同步到 DSH 安装目录 → 安装后验证（--restart 可选重启）

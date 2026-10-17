@@ -18,7 +18,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`, all verified.
 
-> **Known limitation**: **signing in to a DeepSeek account does not work over remote access** (domain, reverse proxy, LAN IP — any non-loopback http entry): clicking "sign in with a DeepSeek account" in the bottom-left fails immediately with "Could not sign in". **Everything else works normally** (sessions, models, tools, settings). This is an upstream dsh constraint on the sign-in origin (it must be a loopback http origin with an explicit non-zero port), not a gateway fault; triage and evidence in [docs/en/TROUBLESHOOTING.md](docs/en/TROUBLESHOOTING.md) §10.
+> **Known limitation**: **signing in to a DeepSeek account does not work over remote access** (domain, reverse proxy, LAN IP — any non-loopback http entry): clicking "sign in with a DeepSeek account" in the bottom-left fails immediately with "Could not sign in". **Everything else works normally** (sessions, models, tools, settings). The root cause is upstream: dsh requires the **browser origin** to be a loopback http origin with an explicit non-zero port, and a loopback address resolves on the machine running the **browser** — so **this plugin cannot work around it server-side** (remote access is exactly what this plugin provides, which makes the limitation unavoidable in that setup). Triage and evidence in [docs/en/TROUBLESHOOTING.md](docs/en/TROUBLESHOOTING.md) §10.
 >
 > **Manual workarounds** (step-by-step in [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md), section "Signing in to a DeepSeek account over remote access"):
 >

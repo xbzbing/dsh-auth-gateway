@@ -18,7 +18,7 @@
 
 本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`，均已实测。
 
-> **已知缺陷**：**远程访问（域名 / 反向代理 / 局域网 IP 等非回环 http 入口）下无法登录 DeepSeek 账号**——点左下角「登录 DeepSeek 账号」会立即报「登录失败」，**其余功能均正常**（会话、模型、工具、设置面板等）。这是 dsh 上游对登录 origin 的硬约束（要求带显式非零端口的回环 http），与本插件无关；判别与证据见 [docs/zh/TROUBLESHOOTING.md](docs/zh/TROUBLESHOOTING.md) 第 10 节。
+> **已知缺陷**：**远程访问（域名 / 反向代理 / 局域网 IP 等非回环 http 入口）下无法登录 DeepSeek 账号**——点左下角「登录 DeepSeek 账号」会立即报「登录失败」，**其余功能均正常**（会话、模型、工具、设置面板等）。根因在 dsh 上游：账号登录要求**浏览器 origin** 是带显式非零端口的回环 http 地址，而回环地址只在**浏览器所在机器**上解析——**本插件无法在服务端绕过它**（远程访问正是本插件提供的形态，所以该限制在这个部署形态下必然遇到）。判别与证据见 [docs/zh/TROUBLESHOOTING.md](docs/zh/TROUBLESHOOTING.md) 第 10 节。
 >
 > **手动解决方式**（详细操作见 [docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md) 的「远程访问下登录 DeepSeek 账号」一节）：
 >

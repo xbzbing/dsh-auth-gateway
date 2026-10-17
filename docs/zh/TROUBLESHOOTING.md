@@ -227,7 +227,7 @@ map $http_upgrade $connection_upgrade {
 
 **症状**：经域名/反向代理（或任何非回环 http 入口）访问 dsh，点左下角「登录 DeepSeek 账号」后对话框**立即**变成「登录失败 / 操作未完成，请重试。」——浏览器**不会**跳去 `platform.deepseek.com`，也不会出现「等待登录」；重试恒定失败，dsh 日志里**没有** `ALREADY_CONSUMED`（平台侧从未被请求过）。
 
-**根因**（dsh 上游设计，非网关故障）：发起账号登录时，上游强制要求**浏览器 origin** 是带显式非零端口的回环 http（`localhost`、`127.0.0.1`、`[::1]` 之一，且无 path/query/hash）；域名 origin（含 https 反代）在第一段校验即被拒：
+**根因**（dsh 上游设计；网关无故障，但也没有服务端绕过手段）：发起账号登录时，上游强制要求**浏览器 origin** 是带显式非零端口的回环 http（`localhost`、`127.0.0.1`、`[::1]` 之一，且无 path/query/hash）；域名 origin（含 https 反代）在第一段校验即被拒：
 
 1. Web 端把页面的 `window.location.origin` 作为 `callbackOrigin` 传给 `account/startSignIn`（`@deepseek-ai/dsh-client-ui-settings-account/lib/client.js:4671`；桌面端取 `transport.streamBaseUrl` 的 origin）——远程访问下它就是 `https://dsh.example.com` 这类对外 origin；客户端随后按 `ok === false` 置为登录失败（`:4672`、`:4681`）；
 2. 上游 `loginOrigin()` 只接受上述回环形态：正则在 `@deepseek-ai/dsh-deepseek-account-platform/lib/index.js:318`，hostname 白名单在 `:319-322`，不合即抛 `PlatformAuthError("protocol")`（`:323`）；调用点在 `startSignIn` 开头 `:826`，远早于 `auth_init`（`:1019`）——**请求根本到不了开放平台**，也不存在被消费的 `authorize_id`。错误消息格式为 `account: ${code}`（`:13-19`），落到 RPC 信封即 `message: "account: protocol"`；

@@ -1,0 +1,89 @@
+# CI for dsh-auth-gateway.
+#
+# Runs the repository's own gates on every PR and on main — the same commands a
+# developer runs locally, so CI cannot drift from the documented checks:
+#   npm run check       node --check lib/*.js + tsc --noEmit --checkJs + node:test
+#   npm run build:check rebuild the client bundle and assert it matches the commit
+#
+# Not covered here: scripts/verify.sh and scripts/e2e.mjs. Both need a RUNNING
+# dsh instance and both really change the password (see AGENTS.md「实机验证」),
+# so they stay a manual, isolated-instance step.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The workflow only reads the repository.
+permissions:
+  contents: read
+
+# A new push to the same ref supersedes the run in flight.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No test and no shipped code imports playwright — tests/chromium-resolve.test.mjs
+  # only parses its cache-directory naming. Without this the package's
+  # postinstall downloads ~150 MB of browsers the run never uses.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  # The declared support range is `engines: node >= 20`, so the matrix spans it:
+  # the oldest leg is what actually enforces the floor, the newest catches
+  # breakage on current Node.
+  check:
+    name: check (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # `npm ci` also asserts package-lock.json is in sync with package.json.
+      - run: npm ci
+      - run: npm run check
+
+  # The panel half ships as a COMMITTED build artifact (client/index.js +
+  # index.js.map), so a source change that forgot to rebuild would ship stale
+  # UI while every other check stays green. build:check rebuilds and fails on
+  # any diff. esbuild output does not depend on the Node version, so one leg.
+  client-artifact:
+    name: client bundle freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:check
+
+  # AGENTS.md「依赖只从公共 npm registry 解析」: a lock entry pointing at an
+  # internal mirror would leak that host into a public package's install graph.
+  # No install needed — this is a text assertion on the committed lock file.
+  lockfile-registry:
+    name: lockfile resolves from the public registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: every resolved URL is registry.npmjs.org
+        run: |
+          set -euo pipefail
+          bad=$(grep -o '"resolved": *"[^"]*"' package-lock.json \
+                | grep -v '"resolved": *"https://registry.npmjs.org/' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::package-lock.json has non-public registry entries:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "ok: $(grep -c '"resolved": *"https://registry.npmjs.org/' package-lock.json) resolved URLs, all public"

@@ -38,6 +38,7 @@ scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图
 tests/          node:test 单测（文件清单见 package.json 的 test script）
 docs/           zh/ 与 en/ 双语文档目录
+.github/        GitHub Actions CI（workflows/ci.yml）：check 矩阵（Node 20/22/24）+ client 产物新鲜度 + lock 源检查
 ```
 
 ## 命令
@@ -90,3 +91,13 @@ DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/pack
 DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台
 ```
+
+## CI
+
+`.github/workflows/ci.yml` 在 PR 与 main 上跑仓库**自己的**门禁，命令与本地完全一致，避免 CI 与文档漂移：
+
+- **`check`**（矩阵 Node 20 / 22 / 24，`engines` 声明 >=20）：`npm run check` = 语法检查 + 类型检查 + 全量单测。`npm ci` 顺带断言 package-lock.json 与 package.json 同步。
+- **`client-artifact`**：`npm run build:check`。面板产物入库，改了 `client/src/` 忘记重建会让这个 job 红（esbuild 输出与 Node 版本无关，所以只跑一条腿）。
+- **`lockfile-registry`**：断言 lock 里每个 `resolved` 都指向 `registry.npmjs.org`（见上方「依赖只从公共 npm registry 解析」），不需要安装依赖。
+
+**不覆盖** `scripts/verify.sh` 与 `scripts/e2e.mjs`：两者都需要运行中的实例、且都会真实修改密码，仍属手动 + 隔离实例步骤（见上方「实机验证」）。

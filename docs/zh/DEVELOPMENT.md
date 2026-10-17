@@ -67,9 +67,10 @@ scripts / tests
 ```bash
 npm run build:client   # 构建 client bundle（esbuild）
 npm run build:check    # 重建并断言产物与源码一致
-npm run check          # 语法检查（lib/*.js）+ 全量测试
+npm run typecheck      # JSDoc 类型检查（tsc --noEmit --checkJs；宿主服务声明见 types/dsh-host.d.ts）
+npm run check          # 语法检查（lib/*.js）+ 类型检查 + 全量测试
 npm test               # 全量测试
-npm run deploy         # 部署流水线（语法 → 测试 → 同步 → 安装后验证）
+npm run deploy         # 部署流水线（语法 → 类型 → 测试 → 同步 → 安装后验证）
 ```
 
 client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:check` 确保二者一致——修改 JSX 源码后必须重新构建。

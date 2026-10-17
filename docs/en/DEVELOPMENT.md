@@ -30,8 +30,15 @@ host (zero build, node:crypto / node:http)
 └── lib/config.js     # Standard Schema config validation (incl. the basePath sub-path prefix)
 
 client (optional, source-built)
-└── client/src/index.jsx  # Settings panel (auth settings: OTP/change password/logout), slot registration (settings.section)
-    client/build.mjs      # esbuild build → client/index.js (served by dsh via exports["./client"])
+├── client/src/index.jsx        # Panel container: all state/handlers, the api factory, slot registration (settings.section)
+├── client/src/locales.js       # zh/en dictionaries (own namespace)
+├── client/src/styles.js        # dsh design tokens + shared style objects
+├── client/src/ui.jsx           # Button / Pill / StatusBanner primitives
+├── client/src/*-card.jsx       # Presentational cards (OTP/password/session/cookie-Secure/about): props in, no state or requests
+├── client/src/otp-setup-dialog.jsx # OTP setup dialog (scan / verify / one-time backup codes)
+├── client/src/cookie-secure.js # Cookie-Secure state derivation (pure, unit-tested)
+├── client/src/update-notice.js # Update-notice derivation (pure, unit-tested)
+└── client/build.mjs            # esbuild build → client/index.js (served by dsh via exports["./client"])
 
 scripts / tests
 ├── scripts/deploy.sh         # Deploy pipeline: syntax check → full tests → sync to the DSH install dir → post-install verification (--restart optionally restarts)

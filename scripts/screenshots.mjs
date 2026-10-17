@@ -54,28 +54,52 @@ function done(name, file) {
 /**
  * Dismiss dsh's first-run dialogs so the README screenshots show the normal UI.
  *
- * A fresh profile opens the "add an API key" prompt, whose primary action
- * (保存并继续) is DISABLED until a key is typed — so a locator that merely
- * matches "继续" resolves to a button that can never be clicked and the script
- * waits until it times out. Try an explicit skip first, and require the
- * candidate to be enabled before clicking it.
+ * Three shapes ship today: the 0.2.1 preview notice (继续, focus-trapping), the
+ * API-key wizard (稍后配置; its primary 保存并继续 stays DISABLED until a key is
+ * typed, so a locator that merely matches 继续 resolves to a button that can
+ * never be clicked), and the 0.2.1-alpha.3 account prompt (开始使用; offers only
+ * 添加 API Key / 登录, so it has no skip button — it is closed through its own
+ * close control). The queue pops the next dialog a few hundred ms after the
+ * previous one closes, so a single quiet probe slips through the gap; only
+ * return once the surface has stayed quiet for a full quiet window. Mirrors
+ * scripts/e2e.mjs dismissWelcomeNotice + dismissFirstRunDialogs.
  */
-async function dismissFirstRunDialogs(page, rounds = 3) {
-  const skipLabels = ['稍后配置', '稍后再说', '跳过', '知道了', '继续']
-  for (let round = 0; round < rounds; round++) {
-    const dialog = page.locator('[role="dialog"]').first()
-    if (await dialog.count() === 0) return
-    let clicked = false
-    for (const label of skipLabels) {
-      const button = dialog.locator(`button:has-text("${label}")`).first()
-      if (await button.count() === 0) continue
-      if (!(await button.isEnabled().catch(() => false))) continue
-      await button.click({ force: true })
-      clicked = true
-      break
+async function dismissFirstRunDialogs(page) {
+  const NOTICE_DEADLINE = Date.now() + 10000
+  while (Date.now() < NOTICE_DEADLINE) {
+    const present = await page.evaluate(() => {
+      const dlg = [...document.querySelectorAll('[role="dialog"]')]
+        .find((d) => d.isConnected && d.offsetParent !== null && /预览版说明/.test(d.textContent || ''))
+      if (!dlg) return false
+      const btn = [...dlg.querySelectorAll('button')].find((b) => /继续/.test(b.textContent || ''))
+      btn?.click()
+      return true
+    })
+    if (!present) break
+    await page.waitForTimeout(500)
+  }
+  const QUIET_MS = 3000
+  const DEADLINE = Date.now() + 20000
+  let quietSince = Date.now()
+  while (Date.now() < DEADLINE) {
+    const dismissed = await page.evaluate(() => {
+      const dlg = [...document.querySelectorAll('[role="dialog"]')]
+        .find((d) => d.isConnected && d.offsetParent !== null)
+      if (!dlg) return false
+      const skip = [...dlg.querySelectorAll('button')]
+        .find((b) => !b.disabled && /稍后配置|稍后再说|知道了|跳过/.test(b.textContent || ''))
+      if (skip) { skip.click(); return true }
+      const close = dlg.querySelector('button[aria-label="关闭"], button[aria-label="Close"]')
+      if (close !== null) { close.click(); return true }
+      return false
+    })
+    if (dismissed) {
+      quietSince = Date.now()
+      await page.waitForTimeout(400)
+    } else {
+      if (Date.now() - quietSince >= QUIET_MS) return
+      await page.waitForTimeout(300)
     }
-    if (!clicked) return
-    await page.waitForTimeout(600)
   }
 }
 
@@ -116,13 +140,22 @@ try {
   await dismissFirstRunDialogs(page);
 
   // ── 3. settings menu with the 认证设置 entry ─────────────────────────
-  await page.click('button:has-text("设置")', { force: true })
+  // dsh 0.2.1-alpha.3 moved the 设置 entry into the sidebar account menu
+  // (ui-settings-account rewrote AccountMenu); earlier builds exposed a
+  // standalone 设置 button. Same probe as scripts/e2e.mjs openSettings.
+  const accountMenu = page.locator('button[aria-label="账号菜单"]')
+  if (await accountMenu.count() > 0) {
+    await accountMenu.first().click()
+    await page.click('button[role="menuitem"]:has-text("设置")')
+  } else {
+    await page.click('button:has-text("设置")', { force: true })
+  }
   await page.waitForSelector('[role="dialog"]', { timeout: 10000 })
   await page.waitForTimeout(800)
   await page.screenshot({ path: path.join(OUT, 'settings-menu.png') })
   done('settings menu (rail with 认证设置)', 'settings-menu.png')
 
-  // ── 4. user settings panel ──────────────────────────────────────────
+  // ── 4. user settings panel (Cookie 安全 card: dsh Menu dropdown) ────
   await page.click('[role="dialog"] button:has-text("认证设置")', { force: true })
   await page.waitForSelector('text=OTP 双因素认证', { timeout: 10000 })
   await page.waitForTimeout(500)

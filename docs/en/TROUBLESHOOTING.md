@@ -206,3 +206,20 @@ map $http_upgrade $connection_upgrade {
 2. **Gateway (optional hardening, ships with a release)**: `lib/forward.js` strips upstream hop-by-hop headers (`connection`/`keep-alive`/`te`/`trailer`/`upgrade` plus tokens named by `Connection`, see `stripResponseHopByHop`) before relaying, so Node derives connection semantics solely from the **client's own** `Connection` header — the contradiction cannot occur regardless of how the proxy is configured.
 
 > Found on a production 0.7.0 deployment (2026-09). After the fix the same concurrent blast produced 0 400s; direct access to 8080 never showed the issue (browsers use normal keep-alive, so no close/keep-alive contradiction exists).
+
+## 9. Account sign-in stalls at "waiting for sign-in", then the platform keeps answering "authorization failed" (`ALREADY_CONSUMED`)
+
+**Symptom**: after clicking "sign in with a DeepSeek account" the browser goes to the platform and authorization succeeds, but the return to localhost stalls at "waiting for sign-in" until it times out; retries then get "authorization failed" from the platform, and the dsh log shows `ALREADY_CONSUMED`.
+
+**Cause**: the account-login callback comes back from the open platform as a **cross-site top-level navigation** to `http://localhost:<port>/oauth/callback`, and such a navigation does **not** carry the gateway's `SameSite=Strict` session cookie — the request always arrives anonymously. Without a `publicPaths` exemption the gateway treats it as an ordinary page path and answers 302 to `/login`, so dsh never receives the `code` (no `auth_exchange` ever happens), while the platform's `authorize_id` was already consumed when it was approved — every later retry only gets `ALREADY_CONSUMED`.
+
+**Checks**:
+
+1. Confirm the dsh version: the feature is available in the Web (`profile web`) surface since **dsh 0.2.1-alpha.3**; earlier releases registered the account UI in the desktop renderer only, so the local Web surface had no sign-in entry at all;
+2. Confirm `publicPaths` was not closed or mis-written:
+   - `publicPaths: []` closes the exemption entirely (the default is `['/oauth/callback']`);
+   - entries match the **basePath-stripped** path, so a sub-path deployment that writes `/dsh/oauth/callback` will **never** match — it must be `/oauth/callback`;
+   - reserved paths (`/`, `/api*`, `/connect`, …) are refused at load, so account sign-in may only use upstream handshake endpoints;
+3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect.
+
+**Fix**: correct `publicPaths` and **start a fresh sign-in** — a consumed `authorize_id` cannot be reused.

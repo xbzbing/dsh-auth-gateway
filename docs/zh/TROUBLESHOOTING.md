@@ -205,3 +205,20 @@ map $http_upgrade $connection_upgrade {
 2. **网关（可选加固，随版本发布）**：`lib/forward.js` 转发响应时剥离上游逐跳头（`connection`/`keep-alive`/`te`/`trailer`/`upgrade` 及 `Connection` 头列出的字段，见 `stripResponseHopByHop`），由 Node 依据**客户端自己的** `Connection` 头决定连接语义——无论反代怎么配，请求/响应语义都不会再矛盾。
 
 > 本案例于 0.7.0 实机部署中发现（2026-09）。修复后同一并发轰炸 0 个 400；直连 8080 全程无此问题（浏览器直连为正常 keep-alive，不存在 close/keep-alive 矛盾）。
+
+## 9. 账号登录停在「等待登录」，之后平台一直返回「授权失败」（`ALREADY_CONSUMED`）
+
+**症状**：点「登录 DeepSeek 账号」后浏览器跳去平台并完成授权，但回到本机时停在「等待登录」直到超时；此后重试时平台直接返回「授权失败」，dsh 日志里能看到 `ALREADY_CONSUMED`。
+
+**成因**：账号登录的回调由开放平台以**跨站顶层导航**回跳 `http://localhost:<端口>/oauth/callback`，这类导航**不会**携带网关 `SameSite=Strict` 的会话 Cookie，请求必然匿名到达。若该路径没有被 `publicPaths` 放行，网关会按普通页面路径 302 到 `/login`，dsh 永远拿不到 `code`（`auth_exchange` 从未发生），而平台侧的 `authorize_id` 已在批准时被消费——之后每次重试都只会得到 `ALREADY_CONSUMED`。
+
+**排查**：
+
+1. 确认 dsh 版本：该功能自 **dsh 0.2.1-alpha.3** 起在 Web（`profile web`）可用；更早版本的账号 UI 只在桌面渲染器注册，本机 Web 根本没有登录入口；
+2. 确认 `publicPaths` 没被关掉或写错：
+   - `publicPaths: []` 会完全关闭放行（默认值是 `['/oauth/callback']`）；
+   - 条目按 **basePath 剥离后**的路径匹配，子路径部署写成 `/dsh/oauth/callback` 会**永不命中**，必须写 `/oauth/callback`；
+   - 保留路径（`/`、`/api*`、`/connect` 等）会在加载期报错，账号登录请只用上游握手端点；
+3. 用匿名探针确认放行生效：请求 `http://<网关地址>:<端口>/oauth/callback?code=x&state=y`——**没有账号登录在途**时应由上游返回 404（说明请求已穿过网关到达上游）；若得到 302 到 `/login`，说明这条放行没生效。
+
+**处置**：修正 `publicPaths` 后**重新发起一次登录**——已被消费的 `authorize_id` 无法复用。

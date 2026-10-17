@@ -104,3 +104,5 @@ DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始�
 - **`lockfile-registry`**：断言 lock 里每个 `resolved` 都指向 `registry.npmjs.org`（见上方「依赖只从公共 npm registry 解析」），不需要安装依赖。
 
 **不覆盖** `scripts/verify.sh` 与 `scripts/e2e.mjs`：两者都需要运行中的实例、且都会真实修改密码，仍属手动 + 隔离实例步骤（见上方「实机验证」）。
+
+上面五个 job 在 `main` 上是 **required status checks**（branch protection）：`strict` 开启（合并前分支需先与 main 同步，校验的才是真正要合入的结果），`enforce_admins` 关闭（管理员可绕过，所以「小改动直接推 main」的既有分工不受影响；贡献者的 PR 必须全绿才能合并），不要求 PR。改动用 `gh api -X PUT repos/<owner>/<repo>/branches/main/protection`；context 名必须与 job 的 `name` 一字不差（矩阵 job 带 `(node N)` 后缀）。

@@ -31,7 +31,6 @@ window.__ModuleLoader__.load({
 		module.exports = __toCommonJS(index_exports);
 		var import_react = require("react");
 		var import_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
-		var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 
 		// client/src/update-notice.js
 		function readVersion(data) {
@@ -80,78 +79,7 @@ window.__ModuleLoader__.load({
 		  return state === "auto-https" || state === "forced-https";
 		}
 
-		// client/src/index.jsx
-		var import_jsx_runtime = require("react/jsx-runtime");
-		var T = {
-		  bg1: "var(--dsw-alias-bg-layer-1)",
-		  bg2: "var(--dsw-alias-bg-layer-2)",
-		  border: "var(--dsw-alias-border-l2)",
-		  textPrimary: "var(--dsw-alias-label-primary)",
-		  textSecondary: "var(--dsw-alias-label-secondary)",
-		  textTertiary: "var(--dsw-alias-label-tertiary)",
-		  brand: "var(--dsw-alias-brand-primary)",
-		  primaryFill: "var(--dsw-alias-button-primary-fill)",
-		  primaryHover: "var(--dsw-alias-button-primary-hover)",
-		  primaryForeground: "var(--dsw-alias-label-primary-foreground)",
-		  hover: "var(--dsw-alias-interactive-bg-hover)",
-		  hoverDanger: "var(--dsw-alias-interactive-bg-hover-danger)",
-		  // The two tokens dsh's own dropdown triggers are built from (its
-		  // `<name>_selector` rule): a soft module surface rather than a bordered
-		  // field, with `interactive-bg-hover` as the hover fill. Sourcing them by
-		  // name keeps the panel on the host's theme instead of a copied hex.
-		  bgModule: "var(--dsw-alias-bg-module-platform)",
-		  radiusMd: "var(--dsw-radius-md)",
-		  danger: "var(--dsw-alias-state-error-primary)",
-		  dangerSoft: "var(--dsw-alias-state-error-secondary)",
-		  success: "var(--dsw-alias-state-success-primary)",
-		  successBg: "var(--dsw-alias-state-success-tertiary)",
-		  shadow3: "var(--dsw-shadow-lv3)",
-		  mask1: "var(--dsw-alias-bg-mask-1)",
-		  maskBlur: "var(--dsw-mask-blur)",
-		  fontCode: "var(--ds-font-family-code)"
-		};
-		var CARD = {
-		  background: T.bg1,
-		  border: `1px solid ${T.border}`,
-		  borderRadius: "12px",
-		  padding: "16px",
-		  marginBottom: "12px"
-		};
-		var CARD_TITLE = {
-		  fontSize: "14px",
-		  lineHeight: "22px",
-		  fontWeight: 500,
-		  color: T.textPrimary
-		};
-		var DESC = {
-		  margin: "0 0 12px",
-		  fontSize: "13px",
-		  lineHeight: "20px",
-		  color: T.textSecondary
-		};
-		var INPUT = {
-		  height: "32px",
-		  padding: "0 12px",
-		  borderRadius: "8px",
-		  border: `1px solid ${T.border}`,
-		  background: T.bg1,
-		  color: T.textPrimary,
-		  fontSize: "14px",
-		  lineHeight: "22px",
-		  outline: "none",
-		  width: "100%",
-		  boxSizing: "border-box",
-		  fontFamily: "inherit",
-		  transition: "border-color .15s ease"
-		};
-		var focusProps = {
-		  onFocus: (e) => {
-		    e.currentTarget.style.borderColor = T.brand;
-		  },
-		  onBlur: (e) => {
-		    e.currentTarget.style.borderColor = "";
-		  }
-		};
+		// client/src/locales.js
 		var NS = "dsh-auth-gateway";
 		var zh = {
 		  "nav": "\u8BA4\u8BC1\u8BBE\u7F6E",
@@ -349,6 +277,118 @@ window.__ModuleLoader__.load({
 		  "error.unknown": "Unknown error",
 		  "error.invalidCode": "Invalid code"
 		};
+
+		// client/src/styles.js
+		var T = {
+		  bg1: "var(--dsw-alias-bg-layer-1)",
+		  bg2: "var(--dsw-alias-bg-layer-2)",
+		  border: "var(--dsw-alias-border-l2)",
+		  textPrimary: "var(--dsw-alias-label-primary)",
+		  textSecondary: "var(--dsw-alias-label-secondary)",
+		  textTertiary: "var(--dsw-alias-label-tertiary)",
+		  brand: "var(--dsw-alias-brand-primary)",
+		  primaryFill: "var(--dsw-alias-button-primary-fill)",
+		  primaryHover: "var(--dsw-alias-button-primary-hover)",
+		  primaryForeground: "var(--dsw-alias-label-primary-foreground)",
+		  hover: "var(--dsw-alias-interactive-bg-hover)",
+		  hoverDanger: "var(--dsw-alias-interactive-bg-hover-danger)",
+		  // The two tokens dsh's own dropdown triggers are built from (its
+		  // `<name>_selector` rule): a soft module surface rather than a bordered
+		  // field, with `interactive-bg-hover` as the hover fill. Sourcing them by
+		  // name keeps the panel on the host's theme instead of a copied hex.
+		  bgModule: "var(--dsw-alias-bg-module-platform)",
+		  radiusMd: "var(--dsw-radius-md)",
+		  danger: "var(--dsw-alias-state-error-primary)",
+		  dangerSoft: "var(--dsw-alias-state-error-secondary)",
+		  success: "var(--dsw-alias-state-success-primary)",
+		  successBg: "var(--dsw-alias-state-success-tertiary)",
+		  shadow3: "var(--dsw-shadow-lv3)",
+		  mask1: "var(--dsw-alias-bg-mask-1)",
+		  maskBlur: "var(--dsw-mask-blur)",
+		  fontCode: "var(--ds-font-family-code)"
+		};
+		var CARD = {
+		  background: T.bg1,
+		  border: `1px solid ${T.border}`,
+		  borderRadius: "12px",
+		  padding: "16px",
+		  marginBottom: "12px"
+		};
+		var CARD_TITLE = {
+		  fontSize: "14px",
+		  lineHeight: "22px",
+		  fontWeight: 500,
+		  color: T.textPrimary
+		};
+		var DESC = {
+		  margin: "0 0 12px",
+		  fontSize: "13px",
+		  lineHeight: "20px",
+		  color: T.textSecondary
+		};
+		var INPUT = {
+		  height: "32px",
+		  padding: "0 12px",
+		  borderRadius: "8px",
+		  border: `1px solid ${T.border}`,
+		  background: T.bg1,
+		  color: T.textPrimary,
+		  fontSize: "14px",
+		  lineHeight: "22px",
+		  outline: "none",
+		  width: "100%",
+		  boxSizing: "border-box",
+		  fontFamily: "inherit",
+		  transition: "border-color .15s ease"
+		};
+		var focusProps = {
+		  onFocus: (e) => {
+		    e.currentTarget.style.borderColor = T.brand;
+		  },
+		  onBlur: (e) => {
+		    e.currentTarget.style.borderColor = "";
+		  }
+		};
+		var CARD_HEAD = {
+		  display: "flex",
+		  alignItems: "center",
+		  gap: "8px",
+		  marginBottom: "4px"
+		};
+		var CARD_HEAD_TIGHT = { ...CARD_HEAD, marginBottom: "2px" };
+		var INNER_BOX = {
+		  display: "flex",
+		  flexDirection: "column",
+		  gap: "10px",
+		  padding: "12px",
+		  background: T.bg2,
+		  borderRadius: "10px",
+		  border: `1px solid ${T.border}`
+		};
+		var ROW = { display: "flex", gap: "8px" };
+		var SIDE_BOX = {
+		  flex: "1 1 0",
+		  minWidth: "200px",
+		  display: "flex",
+		  flexDirection: "column",
+		  border: `1px solid ${T.border}`,
+		  borderRadius: "10px",
+		  padding: "12px"
+		};
+		var CARD_FOOT = { marginTop: "auto", paddingTop: "8px" };
+		var DESC_TIGHT = { ...DESC, margin: "0 0 10px" };
+		var DESC_FLUSH = { ...DESC, margin: 0 };
+		var FIELD_LABEL = {
+		  fontSize: "12px",
+		  lineHeight: "18px",
+		  fontWeight: 500,
+		  color: T.textSecondary,
+		  marginBottom: "6px"
+		};
+		var BLOCK_16 = { margin: "16px 0" };
+
+		// client/src/ui.jsx
+		var import_jsx_runtime = require("react/jsx-runtime");
 		function Button({ variant = "primary", disabled, onClick, children, full, style }) {
 		  const kinds = {
 		    primary: { background: T.primaryFill, color: T.primaryForeground, hover: T.primaryHover },
@@ -395,12 +435,6 @@ window.__ModuleLoader__.load({
 		    }
 		  );
 		}
-		var COOKIE_SECURE_FAILURE_CODES = {
-		  "invalid-mode": "invalid-mode",
-		  "force-secure-requires-tls": "force-secure-requires-tls",
-		  "storage-unavailable": "storage-unavailable",
-		  "storage-failed": "storage-failed"
-		};
 		function Pill({ children, tone = "neutral" }) {
 		  const toneStyle = tone === "success" ? { color: T.success, background: T.successBg } : tone === "warn" ? { color: T.danger, background: T.dangerSoft } : { color: T.textSecondary, background: T.hover };
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
@@ -414,6 +448,467 @@ window.__ModuleLoader__.load({
 		    ...toneStyle
 		  }, children });
 		}
+		function StatusBanner({ status, compact = false }) {
+		  if (!status) return null;
+		  const ok = status.type === "success";
+		  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: compact ? {
+		    margin: "12px 0",
+		    padding: "8px 12px",
+		    borderRadius: "8px",
+		    fontSize: "12px",
+		    lineHeight: "18px",
+		    background: ok ? T.successBg : T.hoverDanger,
+		    color: ok ? T.success : T.danger
+		  } : {
+		    marginTop: "12px",
+		    padding: "10px 14px",
+		    borderRadius: "10px",
+		    fontSize: "13px",
+		    lineHeight: "20px",
+		    background: ok ? T.successBg : T.hoverDanger,
+		    color: ok ? T.success : T.danger
+		  }, children: status.message });
+		}
+
+		// client/src/otp-card.jsx
+		var import_jsx_runtime2 = require("react/jsx-runtime");
+		function OtpCard({
+		  t,
+		  enabled,
+		  digits,
+		  enabling,
+		  onEnable,
+		  showDisable,
+		  onShowDisable,
+		  code,
+		  onCodeChange,
+		  disabling,
+		  onDisable,
+		  onCancelDisable
+		}) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: CARD, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: CARD_HEAD, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { style: CARD_TITLE, children: [
+		        "\u{1F510} ",
+		        t("otp.title")
+		      ] }),
+		      enabled ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Pill, { tone: "success", children: t("otp.enabled") }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Pill, { children: t("otp.disabled") })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: DESC, children: t("otp.desc") }),
+		    !enabled ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Button, { variant: "primary", onClick: onEnable, disabled: enabling, children: t("otp.enable") }) : !showDisable ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Button, { variant: "dangerOutline", onClick: onShowDisable, children: t("otp.disable") }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: INNER_BOX, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { margin: 0, fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("otp.disable.confirm", { digits }) }),
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		        "input",
+		        {
+		          type: "text",
+		          placeholder: t("otp.codePlaceholder"),
+		          value: code,
+		          onChange: (e) => onCodeChange(e.target.value),
+		          style: INPUT,
+		          autoFocus: true,
+		          ...focusProps,
+		          onKeyDown: (e) => {
+		            if (e.key === "Enter") onDisable();
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: ROW, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Button, { variant: "danger", onClick: onDisable, disabled: disabling, children: disabling ? t("otp.disable.progress") : t("otp.disable.confirmBtn") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Button, { variant: "outline", onClick: onCancelDisable, children: t("dialog.cancel") })
+		      ] })
+		    ] })
+		  ] });
+		}
+
+		// client/src/password-card.jsx
+		var import_jsx_runtime3 = require("react/jsx-runtime");
+		function PasswordCard({
+		  t,
+		  open,
+		  changing,
+		  oldPassword,
+		  newPassword,
+		  confirmPassword,
+		  onOpen,
+		  onCancel,
+		  onOldChange,
+		  onNewChange,
+		  onConfirmChange,
+		  onSubmit
+		}) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: SIDE_BOX, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: CARD_HEAD_TIGHT, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { style: CARD_TITLE, children: [
+		      "\u{1F511} ",
+		      t("password.title")
+		    ] }) }),
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: DESC_TIGHT, children: t("password.desc") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: CARD_FOOT, children: !open ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Button, { variant: "primary", onClick: onOpen, children: t("password.change") }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: INNER_BOX, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+		        "input",
+		        {
+		          type: "password",
+		          placeholder: t("password.old"),
+		          value: oldPassword,
+		          onChange: (e) => onOldChange(e.target.value),
+		          style: INPUT,
+		          ...focusProps
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+		        "input",
+		        {
+		          type: "password",
+		          placeholder: t("password.new"),
+		          value: newPassword,
+		          onChange: (e) => onNewChange(e.target.value),
+		          style: INPUT,
+		          ...focusProps
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+		        "input",
+		        {
+		          type: "password",
+		          placeholder: t("password.confirm"),
+		          value: confirmPassword,
+		          onChange: (e) => onConfirmChange(e.target.value),
+		          style: INPUT,
+		          ...focusProps,
+		          onKeyDown: (e) => {
+		            if (e.key === "Enter") onSubmit();
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: ROW, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Button, { variant: "primary", onClick: onSubmit, disabled: changing, children: changing ? t("password.progress") : t("password.submit") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Button, { variant: "outline", onClick: onCancel, children: t("dialog.cancel") })
+		      ] })
+		    ] }) })
+		  ] });
+		}
+
+		// client/src/session-card.jsx
+		var import_jsx_runtime4 = require("react/jsx-runtime");
+		function SessionCard({ t, onLogout }) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: SIDE_BOX, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: CARD_HEAD_TIGHT, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { style: CARD_TITLE, children: [
+		        "\u{1F512} ",
+		        t("session.title")
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Pill, { children: t("session.loggedIn") })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: DESC_TIGHT, children: t("session.desc") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: CARD_FOOT, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Button, { variant: "dangerOutline", onClick: onLogout, children: t("session.logout") }) })
+		  ] });
+		}
+
+		// client/src/cookie-secure-card.jsx
+		var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		var import_jsx_runtime5 = require("react/jsx-runtime");
+		function CookieSecureCard({
+		  t,
+		  secureState,
+		  secureEffective,
+		  mode,
+		  source,
+		  draft,
+		  menuOpen,
+		  saving,
+		  hint,
+		  onToggleMenu,
+		  onCloseMenu,
+		  onSelectMode,
+		  onSave,
+		  onReset
+		}) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: CARD, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: CARD_HEAD, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { style: CARD_TITLE, children: [
+		        "\u{1F6E1}\uFE0F ",
+		        t("cookie.title")
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Pill, { tone: secureEffective ? "success" : secureState === "auto-http" ? "neutral" : "warn", children: secureEffective ? t("cookie.pill.effective") : secureState === "off" ? t("cookie.pill.off") : t("cookie.pill.ineffective") })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { style: DESC, children: t("cookie.desc") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { style: DESC_FLUSH, children: t(`cookie.state.${secureState}`) }),
+		    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("p", { style: { margin: "8px 0 0", fontSize: "12px", lineHeight: "18px", color: T.textTertiary }, children: [
+		      t("cookie.configHint", { mode: String(mode) }),
+		      " \xB7 ",
+		      source === "panel" ? t("cookie.source.panel") : t("cookie.source.deployment")
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: { marginTop: "10px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+		        import_dsh_client_ui_primitives.Menu,
+		        {
+		          open: menuOpen,
+		          onClose: onCloseMenu,
+		          items: [
+		            { id: "auto", label: t("cookie.edit.mode.auto") },
+		            { id: "true", label: t("cookie.edit.mode.true") },
+		            { id: "false", label: t("cookie.edit.mode.false") }
+		          ],
+		          selectedId: String(draft ?? mode),
+		          onSelect: (id) => {
+		            onCloseMenu();
+		            onSelectMode(id === "true" ? true : id === "false" ? false : "auto");
+		          },
+		          align: "start",
+		          portal: true,
+		          anchor: (
+		            // Styled as dsh's own dropdown trigger (its `*_selector`
+		            // rule): bg-module-platform fill, radius-md, 36px tall,
+		            // 14px label, 12px gap, borderless, and the same 14px
+		            // stroke-1 chevron — no rotation on open (dsh does not
+		            // rotate it either). The Menu primitive owns everything
+		            // else: portal, outside-click, Escape, arrow-key roving.
+		            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+		              "button",
+		              {
+		                type: "button",
+		                "aria-haspopup": "menu",
+		                "aria-expanded": menuOpen,
+		                disabled: saving,
+		                onClick: onToggleMenu,
+		                onMouseEnter: (e) => {
+		                  if (!saving) e.currentTarget.style.background = T.hover;
+		                },
+		                onMouseLeave: (e) => {
+		                  if (!saving) e.currentTarget.style.background = T.bgModule;
+		                },
+		                style: {
+		                  display: "inline-flex",
+		                  alignItems: "center",
+		                  gap: "12px",
+		                  height: "36px",
+		                  padding: "0 14px",
+		                  borderRadius: T.radiusMd,
+		                  background: T.bgModule,
+		                  color: T.textPrimary,
+		                  border: "none",
+		                  fontSize: "14px",
+		                  lineHeight: "22px",
+		                  fontFamily: "inherit",
+		                  cursor: saving ? "not-allowed" : "pointer",
+		                  opacity: saving ? 0.5 : 1,
+		                  transition: "background .15s ease"
+		                },
+		                children: [
+		                  /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t(`cookie.edit.mode.${String(draft ?? mode)}`) }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+		                    "svg",
+		                    {
+		                      width: "14",
+		                      height: "14",
+		                      viewBox: "0 0 16 16",
+		                      fill: "none",
+		                      "aria-hidden": "true",
+		                      strokeWidth: "1",
+		                      style: { flexShrink: 0 },
+		                      children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("path", { d: "M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6", stroke: "currentColor" })
+		                    }
+		                  )
+		                ]
+		              }
+		            )
+		          )
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Button, { variant: "primary", onClick: onSave, disabled: saving || draft === null || draft === mode, children: saving ? t("cookie.edit.saving") : t("cookie.edit.save") }),
+		      source === "panel" && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Button, { variant: "outline", onClick: onReset, disabled: saving, children: t("cookie.edit.reset") }),
+		      hint !== null && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: {
+		        fontSize: "12px",
+		        lineHeight: "18px",
+		        color: hint.tone === "warn" ? T.danger : T.textSecondary
+		      }, children: hint.text })
+		    ] })
+		  ] });
+		}
+
+		// client/src/about-card.jsx
+		var import_jsx_runtime6 = require("react/jsx-runtime");
+		function AboutCard({ t, versionInfo, notice, checkingUpdate, onCheck }) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: CARD, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: CARD_HEAD, children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { style: CARD_TITLE, children: [
+		      "\u2139\uFE0F ",
+		      t("about.title")
+		    ] }) }),
+		    versionInfo === null ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: DESC_FLUSH, children: t("about.checking") }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: "13px", lineHeight: "20px" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { style: { color: T.textSecondary }, children: [
+		          t("about.version"),
+		          " ",
+		          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: T.textPrimary, fontFamily: T.fontCode }, children: versionInfo.version === "" ? t("about.unknown") : "v" + versionInfo.version })
+		        ] }),
+		        versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { style: { color: T.textSecondary }, children: [
+		          t("about.repository"),
+		          " ",
+		          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+		            "a",
+		            {
+		              href: versionInfo.repository,
+		              target: "_blank",
+		              rel: "noopener noreferrer",
+		              style: { color: T.brand, textDecoration: "none" },
+		              children: t("about.repositoryLink")
+		            }
+		          )
+		        ] })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: { marginTop: "12px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Button, { variant: "outline", onClick: onCheck, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }),
+		        !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: {
+		          padding: "10px 14px",
+		          borderRadius: "10px",
+		          fontSize: "13px",
+		          lineHeight: "20px",
+		          background: T.successBg,
+		          color: T.success
+		        }, children: [
+		          notice.text,
+		          notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+		            " ",
+		            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+		              "a",
+		              {
+		                href: notice.href,
+		                target: "_blank",
+		                rel: "noopener noreferrer",
+		                style: { color: T.success, textDecoration: "underline" },
+		                children: t("about.releaseNotes")
+		              }
+		            )
+		          ] })
+		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: DESC_FLUSH, children: notice.text }))
+		      ] })
+		    ] })
+		  ] });
+		}
+
+		// client/src/otp-setup-dialog.jsx
+		var import_jsx_runtime7 = require("react/jsx-runtime");
+		function OtpSetupDialog({
+		  t,
+		  digits,
+		  qrData,
+		  otpCode,
+		  setupDone,
+		  backupCodes,
+		  status,
+		  verifyingOtp,
+		  onClose,
+		  onCodeChange,
+		  onVerify,
+		  onDone
+		}) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: {
+		    position: "fixed",
+		    inset: 0,
+		    zIndex: 1e3,
+		    display: "flex",
+		    alignItems: "center",
+		    justifyContent: "center",
+		    padding: "24px"
+		    // After a successful setup the dialog holds the one-time backup
+		    // codes; the mask must not dismiss it (see the container's close handler).
+		  }, onClick: setupDone ? void 0 : onClose, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { position: "absolute", inset: 0, background: T.mask1, backdropFilter: T.maskBlur } }),
+		    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: {
+		      position: "relative",
+		      boxSizing: "border-box",
+		      background: T.bg2,
+		      borderRadius: "24px",
+		      boxShadow: T.shadow3,
+		      border: `1px solid ${T.border}`,
+		      width: "min(400px, 100%)",
+		      maxHeight: "calc(100vh - 48px)",
+		      overflow: "auto"
+		    }, onClick: (e) => e.stopPropagation(), children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "20px 24px 4px" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: t("dialog.title") }),
+		        !setupDone && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { variant: "ghost", onClick: onClose, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { padding: "0 24px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: {
+		          margin: "8px 0 16px",
+		          padding: "10px 12px",
+		          borderRadius: "10px",
+		          fontSize: "13px",
+		          lineHeight: "20px",
+		          color: T.success,
+		          background: T.successBg,
+		          border: `1px solid ${T.border}`
+		        }, children: [
+		          t("status.otpEnabled"),
+		          " \u2014 ",
+		          t("dialog.enabledDesc")
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: BLOCK_16, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: FIELD_LABEL, children: t("dialog.backupCodesTitle") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: {
+		            padding: "8px 12px",
+		            background: T.bg1,
+		            border: `1px solid ${T.border}`,
+		            borderRadius: "8px",
+		            fontFamily: T.fontCode,
+		            fontSize: "13px",
+		            lineHeight: "22px",
+		            color: T.textPrimary
+		          }, children: backupCodes.join("\n") })
+		        ] })
+		      ] }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("dialog.desc") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: `1px solid ${T.border}`, borderRadius: "8px", width: "200px", height: "200px" } }) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: BLOCK_16, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: FIELD_LABEL, children: t("dialog.secret") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: {
+		            padding: "8px 12px",
+		            background: T.bg1,
+		            border: `1px solid ${T.border}`,
+		            borderRadius: "8px",
+		            fontFamily: T.fontCode,
+		            fontSize: "13px",
+		            lineHeight: "20px",
+		            color: T.textPrimary,
+		            wordBreak: "break-all"
+		          }, children: qrData.secret })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: BLOCK_16, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: FIELD_LABEL, children: t("dialog.code") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+		            "input",
+		            {
+		              type: "text",
+		              placeholder: t("dialog.codePlaceholder", { digits }),
+		              maxLength: digits,
+		              value: otpCode,
+		              onChange: (e) => onCodeChange(e.target.value.replace(/\D/g, "")),
+		              style: { ...INPUT, width: "140px", textAlign: "center", letterSpacing: "6px", fontFamily: T.fontCode },
+		              ...focusProps,
+		              onKeyDown: (e) => {
+		                if (e.key === "Enter") onVerify();
+		              }
+		            }
+		          )
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(StatusBanner, { status, compact: true })
+		      ] }) }),
+		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { variant: "primary", onClick: onDone, children: t("dialog.doneBtn") }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { variant: "outline", onClick: onClose, children: t("dialog.cancel") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { variant: "primary", onClick: onVerify, disabled: verifyingOtp, children: verifyingOtp ? t("dialog.verifying") : t("dialog.verify") })
+		      ] }) })
+		    ] })
+		  ] });
+		}
+
+		// client/src/index.jsx
+		var import_jsx_runtime8 = require("react/jsx-runtime");
+		var COOKIE_SECURE_FAILURE_CODES = {
+		  "invalid-mode": "invalid-mode",
+		  "force-secure-requires-tls": "force-secure-requires-tls",
+		  "storage-unavailable": "storage-unavailable",
+		  "storage-failed": "storage-failed"
+		};
 		function UserSettingsPanel({ api, t }) {
 		  const [otpEnabled, setOtpEnabled] = (0, import_react.useState)(false);
 		  const [digits, setDigits] = (0, import_react.useState)(6);
@@ -663,14 +1158,14 @@ window.__ModuleLoader__.load({
 		    }
 		  }
 		  if (loading) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
+		    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { padding: "24px 0", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("loading") });
 		  }
 		  const notice = updateNotice(versionInfo?.update, t, versionInfo?.repository ?? "");
 		  const secureState = cookieSecureState(cookieSecure, isHttps ? "https:" : "http:");
 		  const secureEffective = cookieSecureEffective(secureState);
-		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { paddingTop: "4px" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { style: {
+		  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { paddingTop: "4px" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("h3", { style: {
 		        margin: "0 0 4px",
 		        fontSize: "16px",
 		        lineHeight: "24px",
@@ -681,7 +1176,7 @@ window.__ModuleLoader__.load({
 		        gap: "8px"
 		      }, children: [
 		        t("nav"),
-		        versionInfo !== null && versionInfo.version !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: {
+		        versionInfo !== null && versionInfo.version !== "" && /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { style: {
 		          fontSize: "12px",
 		          lineHeight: "18px",
 		          padding: "0 8px",
@@ -694,421 +1189,108 @@ window.__ModuleLoader__.load({
 		          versionInfo.version
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: t("header.desc") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		            "\u{1F510} ",
-		            t("otp.title")
-		          ] }),
-		          otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: "success", children: t("otp.enabled") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("otp.disabled") })
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("otp.desc") }),
-		        !otpEnabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: enableOTP, disabled: enablingOtp, children: t("otp.enable") }) : !showDisableOtp ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: () => setShowDisableOtp(true), children: t("otp.disable") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		          display: "flex",
-		          flexDirection: "column",
-		          gap: "10px",
-		          padding: "12px",
-		          background: T.bg2,
-		          borderRadius: "10px",
-		          border: `1px solid ${T.border}`
-		        }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: 0, fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("otp.disable.confirm", { digits }) }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		            "input",
-		            {
-		              type: "text",
-		              placeholder: t("otp.codePlaceholder"),
-		              value: disableOtpCode,
-		              onChange: (e) => setDisableOtpCode(e.target.value),
-		              style: INPUT,
-		              autoFocus: true,
-		              ...focusProps,
-		              onKeyDown: (e) => {
-		                if (e.key === "Enter") disableOTP();
-		              }
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", onClick: disableOTP, disabled: disablingOtp, children: disablingOtp ? t("otp.disable.progress") : t("otp.disable.confirmBtn") }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
-		              setShowDisableOtp(false);
-		              setDisableOtpCode("");
-		            }, children: t("dialog.cancel") })
-		          ] })
-		        ] })
-		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { style: { ...DESC, margin: "0 0 16px" }, children: t("header.desc") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		        OtpCard,
+		        {
+		          t,
+		          enabled: otpEnabled,
+		          digits,
+		          enabling: enablingOtp,
+		          onEnable: enableOTP,
+		          showDisable: showDisableOtp,
+		          onShowDisable: () => setShowDisableOtp(true),
+		          code: disableOtpCode,
+		          onCodeChange: setDisableOtpCode,
+		          disabling: disablingOtp,
+		          onDisable: disableOTP,
+		          onCancelDisable: () => {
+		            setShowDisableOtp(false);
+		            setDisableOtpCode("");
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: {
 		        display: "flex",
 		        gap: "12px",
 		        flexWrap: "wrap",
 		        alignItems: "stretch",
 		        marginBottom: "12px"
 		      }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		          flex: "1 1 0",
-		          minWidth: "200px",
-		          display: "flex",
-		          flexDirection: "column",
-		          border: `1px solid ${T.border}`,
-		          borderRadius: "10px",
-		          padding: "12px"
-		        }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		            "\u{1F511} ",
-		            t("password.title")
-		          ] }) }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 10px" }, children: t("password.desc") }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "auto", paddingTop: "8px" }, children: !showChangePassword ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => setShowChangePassword(true), children: t("password.change") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		            display: "flex",
-		            flexDirection: "column",
-		            gap: "10px",
-		            padding: "12px",
-		            background: T.bg2,
-		            borderRadius: "10px",
-		            border: `1px solid ${T.border}`
-		          }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		              "input",
-		              {
-		                type: "password",
-		                placeholder: t("password.old"),
-		                value: oldPassword,
-		                onChange: (e) => setOldPassword(e.target.value),
-		                style: INPUT,
-		                ...focusProps
-		              }
-		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		              "input",
-		              {
-		                type: "password",
-		                placeholder: t("password.new"),
-		                value: newPassword,
-		                onChange: (e) => setNewPassword(e.target.value),
-		                style: INPUT,
-		                ...focusProps
-		              }
-		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		              "input",
-		              {
-		                type: "password",
-		                placeholder: t("password.confirm"),
-		                value: confirmPassword,
-		                onChange: (e) => setConfirmPassword(e.target.value),
-		                style: INPUT,
-		                ...focusProps,
-		                onKeyDown: (e) => {
-		                  if (e.key === "Enter") changePassword();
-		                }
-		              }
-		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", gap: "8px" }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: changePassword, disabled: changingPassword, children: changingPassword ? t("password.progress") : t("password.submit") }),
-		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: () => {
-		                setShowChangePassword(false);
-		                setOldPassword("");
-		                setNewPassword("");
-		                setConfirmPassword("");
-		              }, children: t("dialog.cancel") })
-		            ] })
-		          ] }) })
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		          flex: "1 1 0",
-		          minWidth: "200px",
-		          display: "flex",
-		          flexDirection: "column",
-		          border: `1px solid ${T.border}`,
-		          borderRadius: "10px",
-		          padding: "12px"
-		        }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		              "\u{1F512} ",
-		              t("session.title")
-		            ] }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { children: t("session.loggedIn") })
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "0 0 10px" }, children: t("session.desc") }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { marginTop: "auto", paddingTop: "8px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "dangerOutline", onClick: logout, children: t("session.logout") }) })
-		        ] })
+		        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		          PasswordCard,
+		          {
+		            t,
+		            open: showChangePassword,
+		            changing: changingPassword,
+		            oldPassword,
+		            newPassword,
+		            confirmPassword,
+		            onOpen: () => setShowChangePassword(true),
+		            onCancel: () => {
+		              setShowChangePassword(false);
+		              setOldPassword("");
+		              setNewPassword("");
+		              setConfirmPassword("");
+		            },
+		            onOldChange: setOldPassword,
+		            onNewChange: setNewPassword,
+		            onConfirmChange: setConfirmPassword,
+		            onSubmit: changePassword
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(SessionCard, { t, onLogout: logout })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		            "\u{1F6E1}\uFE0F ",
-		            t("cookie.title")
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pill, { tone: secureEffective ? "success" : secureState === "auto-http" ? "neutral" : "warn", children: secureEffective ? t("cookie.pill.effective") : secureState === "off" ? t("cookie.pill.off") : t("cookie.pill.ineffective") })
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: DESC, children: t("cookie.desc") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: t(`cookie.state.${secureState}`) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: "8px 0 0", fontSize: "12px", lineHeight: "18px", color: T.textTertiary }, children: [
-		          t("cookie.configHint", { mode: String(cookieSecure) }),
-		          " \xB7 ",
-		          cookieSecureSource === "panel" ? t("cookie.source.panel") : t("cookie.source.deployment")
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: "10px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		            import_dsh_client_ui_primitives.Menu,
-		            {
-		              open: cookieMenuOpen,
-		              onClose: () => setCookieMenuOpen(false),
-		              items: [
-		                { id: "auto", label: t("cookie.edit.mode.auto") },
-		                { id: "true", label: t("cookie.edit.mode.true") },
-		                { id: "false", label: t("cookie.edit.mode.false") }
-		              ],
-		              selectedId: String(cookieSecureDraft ?? cookieSecure),
-		              onSelect: (id) => {
-		                setCookieMenuOpen(false);
-		                setCookieSecureDraft(id === "true" ? true : id === "false" ? false : "auto");
-		              },
-		              align: "start",
-		              portal: true,
-		              anchor: (
-		                // Styled as dsh's own dropdown trigger (its `*_selector`
-		                // rule): bg-module-platform fill, radius-md, 36px tall,
-		                // 14px label, 12px gap, borderless, and the same 14px
-		                // stroke-1 chevron — no rotation on open (dsh does not
-		                // rotate it either). The Menu primitive owns everything
-		                // else: portal, outside-click, Escape, arrow-key roving.
-		                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-		                  "button",
-		                  {
-		                    type: "button",
-		                    "aria-haspopup": "menu",
-		                    "aria-expanded": cookieMenuOpen,
-		                    disabled: savingCookieSecure,
-		                    onClick: () => setCookieMenuOpen((value) => !value),
-		                    onMouseEnter: (e) => {
-		                      if (!savingCookieSecure) e.currentTarget.style.background = T.hover;
-		                    },
-		                    onMouseLeave: (e) => {
-		                      if (!savingCookieSecure) e.currentTarget.style.background = T.bgModule;
-		                    },
-		                    style: {
-		                      display: "inline-flex",
-		                      alignItems: "center",
-		                      gap: "12px",
-		                      height: "36px",
-		                      padding: "0 14px",
-		                      borderRadius: T.radiusMd,
-		                      background: T.bgModule,
-		                      color: T.textPrimary,
-		                      border: "none",
-		                      fontSize: "14px",
-		                      lineHeight: "22px",
-		                      fontFamily: "inherit",
-		                      cursor: savingCookieSecure ? "not-allowed" : "pointer",
-		                      opacity: savingCookieSecure ? 0.5 : 1,
-		                      transition: "background .15s ease"
-		                    },
-		                    children: [
-		                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: t(`cookie.edit.mode.${String(cookieSecureDraft ?? cookieSecure)}`) }),
-		                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		                        "svg",
-		                        {
-		                          width: "14",
-		                          height: "14",
-		                          viewBox: "0 0 16 16",
-		                          fill: "none",
-		                          "aria-hidden": "true",
-		                          strokeWidth: "1",
-		                          style: { flexShrink: 0 },
-		                          children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6", stroke: "currentColor" })
-		                        }
-		                      )
-		                    ]
-		                  }
-		                )
-		              )
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: saveCookieSecure, disabled: savingCookieSecure || cookieSecureDraft === null || cookieSecureDraft === cookieSecure, children: savingCookieSecure ? t("cookie.edit.saving") : t("cookie.edit.save") }),
-		          cookieSecureSource === "panel" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: resetCookieSecure, disabled: savingCookieSecure, children: t("cookie.edit.reset") }),
-		          cookieSecureHint !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: {
-		            fontSize: "12px",
-		            lineHeight: "18px",
-		            color: cookieSecureHint.tone === "warn" ? T.danger : T.textSecondary
-		          }, children: cookieSecureHint.text })
-		        ] })
-		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: CARD, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: CARD_TITLE, children: [
-		          "\u2139\uFE0F ",
-		          t("about.title")
-		        ] }) }),
-		        versionInfo === null ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: t("about.checking") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: "13px", lineHeight: "20px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { color: T.textSecondary }, children: [
-		              t("about.version"),
-		              " ",
-		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { color: T.textPrimary, fontFamily: T.fontCode }, children: versionInfo.version === "" ? t("about.unknown") : "v" + versionInfo.version })
-		            ] }),
-		            versionInfo.repository !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { color: T.textSecondary }, children: [
-		              t("about.repository"),
-		              " ",
-		              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		                "a",
-		                {
-		                  href: versionInfo.repository,
-		                  target: "_blank",
-		                  rel: "noopener noreferrer",
-		                  style: { color: T.brand, textDecoration: "none" },
-		                  children: t("about.repositoryLink")
-		                }
-		              )
-		            ] })
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: "12px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: checkForUpdates, disabled: checkingUpdate, children: checkingUpdate ? t("about.checking") : t("about.check") }),
-		            !checkingUpdate && notice !== null && (notice.tone === "banner" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		              padding: "10px 14px",
-		              borderRadius: "10px",
-		              fontSize: "13px",
-		              lineHeight: "20px",
-		              background: T.successBg,
-		              color: T.success
-		            }, children: [
-		              notice.text,
-		              notice.href !== "" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		                " ",
-		                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		                  "a",
-		                  {
-		                    href: notice.href,
-		                    target: "_blank",
-		                    rel: "noopener noreferrer",
-		                    style: { color: T.success, textDecoration: "underline" },
-		                    children: t("about.releaseNotes")
-		                  }
-		                )
-		              ] })
-		            ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: 0 }, children: notice.text }))
-		          ] })
-		        ] })
-		      ] }),
-		      status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-		        marginTop: "12px",
-		        padding: "10px 14px",
-		        borderRadius: "10px",
-		        fontSize: "13px",
-		        lineHeight: "20px",
-		        background: status.type === "success" ? T.successBg : T.hoverDanger,
-		        color: status.type === "success" ? T.success : T.danger
-		      }, children: status.message })
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		        CookieSecureCard,
+		        {
+		          t,
+		          secureState,
+		          secureEffective,
+		          mode: cookieSecure,
+		          source: cookieSecureSource,
+		          draft: cookieSecureDraft,
+		          menuOpen: cookieMenuOpen,
+		          saving: savingCookieSecure,
+		          hint: cookieSecureHint,
+		          onToggleMenu: () => setCookieMenuOpen((value) => !value),
+		          onCloseMenu: () => setCookieMenuOpen(false),
+		          onSelectMode: setCookieSecureDraft,
+		          onSave: saveCookieSecure,
+		          onReset: resetCookieSecure
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		        AboutCard,
+		        {
+		          t,
+		          versionInfo,
+		          notice,
+		          checkingUpdate,
+		          onCheck: checkForUpdates
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(StatusBanner, { status })
 		    ] }),
-		    showQRModal && qrData && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		      position: "fixed",
-		      inset: 0,
-		      zIndex: 1e3,
-		      display: "flex",
-		      alignItems: "center",
-		      justifyContent: "center",
-		      padding: "24px"
-		      // After a successful setup the dialog holds the one-time backup
-		      // codes; the mask must not dismiss it (see closeQRModal).
-		    }, onClick: setupDone ? void 0 : closeQRModal, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { position: "absolute", inset: 0, background: T.mask1, backdropFilter: T.maskBlur } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		        position: "relative",
-		        boxSizing: "border-box",
-		        background: T.bg2,
-		        borderRadius: "24px",
-		        boxShadow: T.shadow3,
-		        border: `1px solid ${T.border}`,
-		        width: "min(400px, 100%)",
-		        maxHeight: "calc(100vh - 48px)",
-		        overflow: "auto"
-		      }, onClick: (e) => e.stopPropagation(), children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "20px 24px 4px" }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { margin: 0, fontSize: "16px", lineHeight: "24px", fontWeight: 500, color: T.textPrimary }, children: t("dialog.title") }),
-		          !setupDone && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "ghost", onClick: closeQRModal, style: { height: "28px", width: "28px", padding: 0, borderRadius: "8px" }, children: "\u2715" })
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { padding: "0 24px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: {
-		            margin: "8px 0 16px",
-		            padding: "10px 12px",
-		            borderRadius: "10px",
-		            fontSize: "13px",
-		            lineHeight: "20px",
-		            color: T.success,
-		            background: T.successBg,
-		            border: `1px solid ${T.border}`
-		          }, children: [
-		            t("status.otpEnabled"),
-		            " \u2014 ",
-		            t("dialog.enabledDesc")
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.backupCodesTitle") }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-		              padding: "8px 12px",
-		              background: T.bg1,
-		              border: `1px solid ${T.border}`,
-		              borderRadius: "8px",
-		              fontFamily: T.fontCode,
-		              fontSize: "13px",
-		              lineHeight: "22px",
-		              color: T.textPrimary
-		            }, children: backupCodes.join("\n") })
-		          ] })
-		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { margin: "8px 0 16px", fontSize: "13px", lineHeight: "20px", color: T.textSecondary }, children: t("dialog.desc") }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { textAlign: "center", margin: "16px 0" }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: qrData.svgUrl, alt: "OTP QR Code", style: { border: `1px solid ${T.border}`, borderRadius: "8px", width: "200px", height: "200px" } }) }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.secret") }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-		              padding: "8px 12px",
-		              background: T.bg1,
-		              border: `1px solid ${T.border}`,
-		              borderRadius: "8px",
-		              fontFamily: T.fontCode,
-		              fontSize: "13px",
-		              lineHeight: "20px",
-		              color: T.textPrimary,
-		              wordBreak: "break-all"
-		            }, children: qrData.secret })
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { margin: "16px 0" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: "12px", lineHeight: "18px", fontWeight: 500, color: T.textSecondary, marginBottom: "6px" }, children: t("dialog.code") }),
-		            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-		              "input",
-		              {
-		                type: "text",
-		                placeholder: t("dialog.codePlaceholder", { digits }),
-		                maxLength: digits,
-		                value: otpCode,
-		                onChange: (e) => setOtpCode(e.target.value.replace(/\D/g, "")),
-		                style: { ...INPUT, width: "140px", textAlign: "center", letterSpacing: "6px", fontFamily: T.fontCode },
-		                ...focusProps,
-		                onKeyDown: (e) => {
-		                  if (e.key === "Enter") verifyOTPSetup();
-		                }
-		              }
-		            )
-		          ] }),
-		          status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-		            margin: "12px 0",
-		            padding: "8px 12px",
-		            borderRadius: "8px",
-		            fontSize: "12px",
-		            lineHeight: "18px",
-		            background: status.type === "success" ? T.successBg : T.hoverDanger,
-		            color: status.type === "success" ? T.success : T.danger
-		          }, children: status.message })
-		        ] }) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "0 24px 24px", marginTop: "20px" }, children: setupDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: () => {
+		    showQRModal && qrData && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      OtpSetupDialog,
+		      {
+		        t,
+		        digits,
+		        qrData,
+		        otpCode,
+		        setupDone,
+		        backupCodes,
+		        status,
+		        verifyingOtp,
+		        onClose: closeQRModal,
+		        onCodeChange: setOtpCode,
+		        onVerify: verifyOTPSetup,
+		        onDone: () => {
 		          location.href = BASE + "/login";
-		        }, children: t("dialog.doneBtn") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", onClick: closeQRModal, children: t("dialog.cancel") }),
-		          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "primary", onClick: verifyOTPSetup, disabled: verifyingOtp, children: verifyingOtp ? t("dialog.verifying") : t("dialog.verify") })
-		        ] }) })
-		      ] })
-		    ] })
+		        }
+		      }
+		    )
 		  ] });
 		}
 		var inject = ["slots", "locale", "connection"];
@@ -1184,9 +1366,9 @@ window.__ModuleLoader__.load({
 		    const pkg = subject?.kind === "bundle" || subject?.kind === "row" ? subject.pkg : void 0;
 		    if (pkg?.name !== "dsh-auth-gateway") return null;
 		    const tr = seatT ?? t;
-		    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { style: { marginTop: "12px" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: CARD_TITLE, children: tr("detail.guide.title") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { ...DESC, margin: "4px 0 0" }, children: tr("detail.guide.body") })
+		    return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("section", { style: { marginTop: "12px" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: CARD_TITLE, children: tr("detail.guide.title") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { style: { ...DESC, margin: "4px 0 0" }, children: tr("detail.guide.body") })
 		    ] });
 		  };
 		  ctx.slots.inject("plugins.detail.section", () => ctx.slots.register({

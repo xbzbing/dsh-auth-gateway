@@ -227,11 +227,17 @@ function startUpstream() {
     const cookie = decode(req.headers)
     seenRequests.push({ url: req.url, upstreamCookie: cookie !== undefined })
     // dsh 0.1.2 serves the PWA public assets to anonymous browsers by design;
-    // only the index fallback and /api demand the browser-auth cookie.
+    // only the index fallback and /api demand the browser-auth cookie. The
+    // account-login callback is an upstream-owned exact route that never calls
+    // the gate either (see `publicPaths` in lib/gateway.js), so an anonymous
+    // forward to it is answered like a public asset — which is exactly what
+    // lets the loop below assert the gateway did not mint the bearer for it.
     const isPublicAsset = req.method === 'GET' && (
       req.url === '/manifest.webmanifest'
       || req.url === '/favicon.svg'
       || req.url.startsWith('/assets/')
+      || req.url === '/oauth/callback'
+      || req.url.startsWith('/oauth/callback?')
     )
     if (cookie === undefined && !isPublicAsset) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' })
@@ -437,7 +443,7 @@ test('pre-gate public assets forward WITHOUT the minted upstream cookie', async 
   // reach the upstream without the bearer. One entry per upstreamAuth:false
   // route row — dropping the flag on any of them would ship the fully
   // privileged bearer to anonymous clients.
-  for (const path of ['/manifest.webmanifest', '/favicon.svg', '/assets/index-abc123.js']) {
+  for (const path of ['/manifest.webmanifest', '/favicon.svg', '/assets/index-abc123.js', '/oauth/callback']) {
     const res = await request(path, { cookie: sessionCookie })
     assert.equal(res.status, 200, path)
     const record = seenRequests.at(-1)

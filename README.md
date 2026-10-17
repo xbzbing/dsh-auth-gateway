@@ -40,7 +40,7 @@ dsh plugin --profile web remove dsh-auth-gateway
 
 - **密码认证**：首次部署自动生成初始密码（控制台打印，一次性），登录后引导设置个人密码（scrypt 哈希存储），之后每次访问需登录；
 - **双因素认证（TOTP）**：可选启用，兼容 Google Authenticator、Authy、1Password 等主流认证器；含一次性备份代码（scrypt 哈希存储、单次使用），设备丢失时可恢复访问；**OTP 密钥以 AES-256-GCM 加密存储**（主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY` 或自动生成的 `auth-gateway/otp-master.key`），磁盘泄露不再直接暴露第二因素根密钥；
-- **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
+- **真实请求拦截**：未认证 `/api/*` 返回 401、页面类路径 302 到登录页、WebSocket 升级直接拒绝；**上游自有的一次性握手路径**（`publicPaths`，默认 `/oauth/callback`）是唯一的匿名例外——dsh 账号登录的回调由平台以**跨站顶层导航**回跳，浏览器必然不带会话 Cookie，见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径)；认证通过后请求透明转发（Host/Origin 规范化，兼容内部 trust fence）；
 - **登录审计**：登录成功 / 失败 / 登出 / 改密与暴力破解告警（锁定/限流）均输出审计日志（`ctx.logger.info`/`warn`，含来源 IP 与失败原因，不记录任何凭据），并**持久化落盘** `$DSH_HOME/auth-gateway/log/audit.log`（JSONL，按天轮转、保留 90 天），形成完整可审计闭环；
 - **多层防爆破**：密码失败按来源锁定（默认 5 次/5 分钟）+ 全局速率限制（默认 60 次/分钟）+ OTP/备份码独立限流（默认 10 次/分钟），scrypt 在 libuv 线程池异步执行，登录洪峰不阻塞事件循环；
 - **会话管理**：内存 256-bit token（30 天），HttpOnly + SameSite=Strict Cookie，修改密码/禁用 OTP 吊销全部会话；
@@ -105,6 +105,7 @@ flowchart LR
 | `upstreamHost` / `upstreamPort` | `127.0.0.1` / `3081` | 内部 webserver 地址与端口 |
 | `basePath` | `/` | 反向代理子路径前缀（如 `/dsh`）；**默认 `/`（根路径）**。字符集限 `A-Za-z0-9._~/-`，拒绝 `..`、`//`、引号、空白、尖括号（该值会内嵌进页面脚本与链接，故按白名单校验；不合规配置会在加载时被拒绝）。子路径部署时在**部署方 profile patch** 中配置，不随插件分发 |
 | `cookieSecure` | `auto` | 会话 Cookie 是否携带 `Secure` 属性。`auto`：请求经 TLS（反向代理透传 `X-Forwarded-Proto: https`）时自动附加；`true`：强制附加；`false`：显式关闭。纯 HTTP 下强制开启会使浏览器拒绝 Cookie。**面板可直接修改**：覆盖值持久化于凭据记录，优先于部署配置，直至恢复 |
+| `publicPaths` | `['/oauth/callback']` | **匿名可达的上游握手路径**（精确匹配、仅 GET）。默认值就是 dsh 账号登录的回调：平台以跨站顶层导航回跳过来，浏览器不会带上网关会话 Cookie，落在门后该功能就永久不可用。只接受精确绝对路径（不接受通配符、查询串），设为 `[]` 关闭放行。条目按 **basePath 剥离后**的路径匹配（与上游注册路径同坐标系），子路径部署**不要**带 basePath 前缀。取舍与边界见 [SECURITY.md](docs/zh/SECURITY.md#匿名可达的上游握手路径) |
 | `minPasswordLength` | `8` | 密码最小长度（4–128） |
 | `requireMixedCase` / `requireSpecial` | `true` / `true` | 密码复杂度：大小写混合或特殊字符二选一满足 |
 | `maxLoginFailures` / `lockMinutes` | `5` / `5` | 密码失败锁定阈值与时长 |

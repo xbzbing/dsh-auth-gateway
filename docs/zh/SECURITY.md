@@ -23,7 +23,7 @@
 | OTP 验证码暴力猜测 | 每来源限流 + 失败计入统一锁定；scrypt 异步执行，洪峰不阻塞事件循环 |
 | OTP 重放（同一验证码在窗口内复用） | 记录已接受时间步（`lastCounter`，持久化），同一步或更早步骤的验证码拒绝 |
 | 会话劫持（Cookie 窃取） | HttpOnly + SameSite=Strict；禁用 OTP、修改密码等敏感操作要求完整重验证 |
-| DNS-rebinding / 跨站请求 | 网关 Cookie 门禁接管（跨站请求无会话 Cookie 即被拒）；内部 fence 职责移交后，Host/Origin 改写为回环（见下） |
+| DNS-rebinding / 跨站请求 | 网关 Cookie 门禁接管（跨站请求无会话 Cookie 即被拒）；内部 fence 职责移交后，Host/Origin 改写为回环（见下）。**例外**：`publicPaths` 声明的上游握手路径不需要会话 Cookie，其防护由上游自校验承担，见「匿名可达的上游握手路径」 |
 | LAN 浏览器获得客户端 loopback trust | trust bootstrap 只随内部 DSH index 提供；外部浏览器必须先通过网关完整认证才能取得页面，内部 webserver 仍只监听回环，服务端 privileged fence 保持启用 |
 | 本机浏览器 handoff 打开内部端口 | dsh 的 `openBrowser` 会打开 `http://127.0.0.1:<内部端口>/?token=…`，内部 `frontend-static` 接受该启动令牌并直接铸出会话 cookie——**不经网关密码**。仅本机可达（内部端口只监听回环），属上文本机可信模型，非漏洞；但可避免：启动时加 `--no-open`，或声明 `--public-url` 让 handoff 指向对外 origin（见 [DEPLOYMENT.md](DEPLOYMENT.md)） |
 | 存储泄露（`$DSH_HOME` 文件被读取） | 密码与备份代码为 scrypt 哈希；**OTP 密钥为 AES-256-GCM 加密**（读取需主密钥，见"已知限制"） |
@@ -74,6 +74,20 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件把 webserver 绑定在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
 
+### 匿名可达的上游握手路径
+
+有一条路径**不经过认证门**：`publicPaths`（默认 `/oauth/callback`，精确匹配、仅 GET）。原因不是图省事，而是它**只能匿名到达**——dsh 0.2.1 起提供的「登录 DeepSeek 账号」，最后由开放平台把浏览器**顶层导航**回 `http://localhost:<端口>/oauth/callback`。这是从 `platform.deepseek.com` 发起的**跨站**导航，浏览器不会携带网关的 `SameSite=Strict` 会话 Cookie（也因此，靠"把 Strict 放宽成 Lax"之类改 Cookie 的方式解决，会把会话 Cookie 一并暴露在跨站顶层导航上，面更大）。
+
+这条放行的边界（全部由测试锁定）：
+
+- **只有这一条精确路径的一次 GET**：同一路径的其它方法、任何前缀相似的路径（`/oauth/callback-x`）仍按普通页面路径 302 到登录页；不接受通配符或查询串配置；
+- **条目按 basePath 剥离后的路径匹配**：与上游注册路径同一坐标系，所以子路径部署（如 `basePath: '/dsh'`）**不要**给条目加前缀——写成 `/dsh/oauth/callback` 会永不命中，豁免静默失效（账号登录永久停在「等待登录」，且没有任何告警）；
+- **不附带上游 bearer**：转发显式不铸 upstream BrowserAuth cookie——与公开静态资产同一口径（匿名流量不携带全权 cookie）。上游只对 index、`/api`、`/connect` 三处自行启用该门禁，**其它 named route 默认无鉴权**，这个回调端点不在门禁之内；
+- **安全由上游自己负责**：dsh 对该回调用 `state` + PKCE 校验，且只接受自己发起、仍在有效期内的一次性 `authorize_id`；网关不参与校验、不为该路径保留任何状态、也不因它记录会话；
+- **不合意可以关**：`publicPaths: []` 完全关闭放行，代价是 dsh 账号登录不可用（该部署只能继续用 API Key 通道）。
+
+也就是说，「未认证流量无法触及后端」这条承诺在此收窄为：**未认证流量只能触及上游自有的握手端点**。这是有意为之的取舍——不放行等于该功能永久不可用，而放行面是一条可枚举、可审计的精确路径。
+
 ### 与 dsh 内置浏览器认证的关系（dsh ≥ 0.1.2）
 
 dsh 0.1.2 起，内部 webserver 自身启用 BrowserAuth：index 页与 `/api` 要求进程启动 token（一次性 `?token=` 交换）或一枚绑定 authority 的持久签名 cookie。浏览器只持有网关会话 cookie，无法完成 upstream 的 token 交换——网关若不处理，所有转发请求都会被 upstream 判 401。网关的补齐方式：
@@ -93,6 +107,7 @@ DSH 客户端会用页面 hostname 初始化 `connection.isLoopback`，并在 Se
 - **OTP 密钥加密存储**：`$DSH_HOME/auth-gateway/otp.json` 中的 Base32 密钥已用 AES-256-GCM 加密（lib/otp-crypto.js），读取需主密钥。主密钥来自环境变量 `DSH_AUTH_GATEWAY_MASTER_KEY`（hex/base64）或首次启用时自动生成的 `auth-gateway/otp-master.key`（0600）；仍属本机可信模型——能读 `$DSH_HOME` 的本机用户同时可取密钥，故需将主密钥置于加密卷或外部密钥管理方能真正隔离磁盘泄露；
 - **明文 HTTP（传输层）**：密码与 Cookie 在网络中明文传输。这是传输层问题——本插件的会话 Cookie 支持 `Secure` 属性（配置项 `cookieSecure`，默认 `auto`）：当连接经 TLS（反向代理终结并透传 `X-Forwarded-Proto: https`）时自动附加，浏览器从此只经加密链路回传 Cookie；置 `true` 可强制附加（反代 TLS 但未透传协议头时使用）——注意纯 HTTP 下强制开启会使浏览器拒绝保存 Cookie、登录立即失败，这是**显式的失败而非静默降级**（网关还会在每次此类登录时通过 dsh 控制台告警，提示前置 TLS 或改回 `auto`）；`false` 显式关闭。**面板可运行时修改**（「认证设置 → Cookie 安全」）：覆盖值持久化于凭据记录并优先于部署配置，「恢复为部署配置」撤销后回到 patch 值——部署者无需改 patch、重启即可在反代上线 TLS 时立即武装 Secure。切换**即时生效**：保存成功后网关会以新策略重发当前会话 Cookie（同一 token、属性即改），下一次请求就已按新模式走——但浏览器只允许**安全来源**改写已存在的 Secure Cookie：若从明文 HTTP 入口选择「关闭」，而浏览器仍存有此前经 HTTPS 留下的 Secure Cookie，该覆盖会被浏览器拒绝且服务端无从感知，故面板会提示改用 HTTPS 入口重新执行或手动清除站点 Cookie；反过来，在明文 HTTP 入口选择「强制开启」会被**面板与服务端一并拒绝**并说明原因（强制 Secure 会让该入口的登录立即失效，服务端同样以 `force-secure-requires-tls` 拒绝直连请求）。Secure 只解决「Cookie 不被明文链路回传」，**不加密请求本身**——要真正消除明文暴露仍须部署 TLS（反向代理或证书，见 DEPLOYMENT.md）；
 - **OTP 启用权限（DoS 面）**：`/otp/enable` 与 `/otp/verify-setup` 仅要求任意有效会话——启用 2FA 是用户操作（无需部署开关），密码泄露场景下攻击者可用泄露的密码登录后绑定自己的认证器，锁死真实用户登录。这不构成凭据窃取，主要是 DoS 面；缓解为启用成功后**吊销全部会话**（含启用者自身，强制在 2FA 策略下重新登录）；后续方向为启用时要求密码重验证；
+- **匿名可达的上游握手端点（`publicPaths`）**：默认放行 `GET /oauth/callback` 一条精确路径。它不经过认证门、**不写入审计日志**（与公开静态资产同一口径），安全性完全由上游自校验承担（`state` + PKCE + 一次性 `authorize_id`）。放行面可枚举、仅 GET，可用 `publicPaths: []` 关闭；条目按 basePath 剥离后的路径匹配，且当前**不会拒绝**指向 `/api` 或 index 的过宽条目——请勿这样配置。详见「匿名可达的上游握手路径」；
 - **内存会话**：dsh 重启后全员下线（需重新登录；OTP 已启用时需重新完成 2FA）；
 - **无分布式防护**：全局限流按单进程计数，多实例部署或分布式攻击者可分摊请求。
 - **面板可改部署级策略（cookieSecure）**：「认证设置」的 Cookie 安全卡片允许**任意已认证会话**修改 `cookieSecure`（含改为 `false` 关闭传输保护）——这是有意的运行时便利，但意味着多用户部署中任一用户可影响全体会话的传输策略；单用户内网部署无实际影响。每次修改都经审计（`cookie-secure-change`）；若多用户部署需要更严格门槛，应改由部署配置锁定（面板覆盖可被「恢复为部署配置」之外的部署约束取代，见 DEPLOYMENT.md）。

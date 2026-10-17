@@ -177,6 +177,25 @@ test('schema defaults match createGateway defaults (no silent divergence)', asyn
   assert.deepEqual(gw.publicPaths, schema.publicPaths, 'publicPaths default mismatch')
 })
 
+test('createGateway keeps the string form and fails loud on an unusable exemption', async () => {
+  const { createGateway } = await import('../lib/gateway.js')
+  // A direct caller gets the same comma-separated-string semantics as the
+  // schema validator instead of silently losing the exemption to an
+  // Array.isArray check.
+  assert.deepEqual(createGateway({ publicPaths: '/a, /b' }).publicPaths, ['/a', '/b'])
+  assert.deepEqual(createGateway({ publicPaths: ['/x'] }).publicPaths, ['/x'])
+  assert.deepEqual(createGateway(undefined).publicPaths, ['/oauth/callback'])
+  assert.deepEqual(createGateway({ publicPaths: '' }).publicPaths, [], 'an empty string closes the exemption')
+  // A trailing '*' is a PREFIX match in the route table and a reserved entry
+  // breaks a documented contract: the constructor refuses both rather than
+  // silently dropping them (a dropped exemption makes account login stall at
+  // "waiting for sign-in" with nothing to explain it).
+  assert.throws(() => createGateway({ publicPaths: ['/oauth/*'] }), /not a valid exemption/)
+  assert.throws(() => createGateway({ publicPaths: ['/'] }), /not a valid exemption/)
+  assert.throws(() => createGateway({ publicPaths: ['/api/x'] }), /not a valid exemption/)
+  assert.throws(() => createGateway({ publicPaths: ['/index.html'] }), /not a valid exemption/)
+})
+
 test('publicPaths: exact absolute paths only, duplicates collapse, [] turns the exemption off', () => {
   assert.deepEqual(
     validate({ publicPaths: ['/oauth/callback', '/dsh/authorized'] }).value.publicPaths,
@@ -198,6 +217,31 @@ test('publicPaths: exact absolute paths only, duplicates collapse, [] turns the 
     const result = validate({ publicPaths: bad })
     assert.ok(result.issues, `publicPaths ${JSON.stringify(bad)} must be rejected`)
     assert.equal(result.issues[0].path[0], 'publicPaths')
+  }
+})
+
+test('publicPaths: gateway-owned and already-public paths are reserved (fail loud, not silently shadowed)', () => {
+  // An entry for any of these either does nothing — the built-in route wins the
+  // first-match lookup, so the exemption is silently ineffective (or, for a
+  // POST-only row like /login/auth, becomes an active anonymous GET) — or
+  // breaks a contract the gateway documents: a bare '/' (or its alias
+  // '/index.html') must 302 page paths to the login page, '/api*' must answer
+  // 401, and '/connect' is the launch-token exchange that mints a session.
+  // Refusing them at load keeps the exempted surface enumerable and auditable.
+  for (const reserved of [
+    '/', '/index.html', '/api', '/api/remote.mux', '/connect', '/login', '/login/auth', '/login-api/settings',
+    '/otp/setup', '/onboarding', '/onboarding/password', '/assets/index-abc.js',
+    '/manifest.webmanifest', '/favicon.svg',
+  ]) {
+    const result = validate({ publicPaths: [reserved] })
+    assert.ok(result.issues, `publicPaths ${JSON.stringify(reserved)} must be rejected as reserved`)
+    assert.equal(result.issues[0].path[0], 'publicPaths')
+  }
+  // Lookalikes are not reserved: the check is segment-boundary aware, so a path
+  // that merely starts with the same letters stays configurable.
+  for (const allowed of ['/oauth/callback', '/apix', '/loginx', '/assets-extra/thing', '/onboarding-extra']) {
+    assert.deepEqual(validate({ publicPaths: [allowed] }).value.publicPaths, [allowed],
+      `publicPaths ${JSON.stringify(allowed)} must stay configurable`)
   }
 })
 

@@ -74,6 +74,19 @@ When the key comes from an environment variable, it should live on an encrypted 
 
 Before forwarding, the gateway rewrites `Host`/`Origin` to the loopback address: the internal trust fence's LAN trust list is sampled from the webserver's listening address, and since this plugin binds the webserver to `127.0.0.1`, LAN access would be 403'd internally without the rewrite. The rewrite is safe — the fence's remote-reachability duty has been taken over by the gateway cookie gate (cross-site/DNS-rebinding requests carry no session cookie and are rejected at the gateway).
 
+### Anonymous upstream handshake paths
+
+One path **does not pass the authentication gate**: `publicPaths` (default `/oauth/callback`, exact match, GET only). The reason is not convenience — this path **can only arrive anonymously**. The "sign in with a DeepSeek account" flow shipped in dsh 0.2.1 ends with the open platform navigating the browser back to `http://localhost:<port>/oauth/callback`. That is a **cross-site** navigation from `platform.deepseek.com`, and the browser does not attach the gateway's `SameSite=Strict` session cookie to it (which is also why "relax Strict to Lax" is the worse fix: it would put the session cookie onto every cross-site top-level navigation).
+
+The boundaries of this exemption (all locked by tests):
+
+- **One GET on this one exact path**: other methods on the same path, and any lookalike path (`/oauth/callback-x`), keep redirecting to the login page like any other page path; wildcards and query strings are rejected in configuration;
+- **No upstream bearer**: the forward explicitly does not mint the upstream BrowserAuth cookie — the same rule as public static assets (anonymous traffic must not carry a fully-privileged cookie). The upstream only enforces that gate on index and `/api`; this callback endpoint is not among them;
+- **The upstream owns the security**: dsh validates the callback with `state` + PKCE and only accepts a one-shot `authorize_id` it issued itself and that is still within its lifetime. The gateway validates nothing, keeps no state for the path, and mints no session for it;
+- **It can be turned off**: `publicPaths: []` closes the exemption entirely, at the cost of making dsh account login unusable (such a deployment stays on the API key route).
+
+In other words, the promise "unauthenticated traffic cannot reach the backend" narrows here to: **unauthenticated traffic can only reach an upstream-owned handshake endpoint**. That is a deliberate trade-off — without the exemption the feature is permanently unusable, and the exempted surface is one enumerable, auditable exact path.
+
 ### Relationship to the built-in dsh browser authentication (dsh ≥ 0.1.2)
 
 Starting with dsh 0.1.2, the internal webserver itself enforces BrowserAuth: the index page and `/api` demand either the process launch token (a one-shot `?token=` exchange) or a persistent, authority-bound signed cookie. The browser only holds the gateway's session cookie and can never complete the upstream token exchange — without handling this, every forwarded request would be answered 401 by the upstream. How the gateway fills the gap:

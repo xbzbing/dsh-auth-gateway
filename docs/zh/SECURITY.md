@@ -74,6 +74,19 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件把 webserver 绑定在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
 
+### 匿名可达的上游握手路径
+
+有一条路径**不经过认证门**：`publicPaths`（默认 `/oauth/callback`，精确匹配、仅 GET）。原因不是图省事，而是它**只能匿名到达**——dsh 0.2.1 起提供的「登录 DeepSeek 账号」，最后由开放平台把浏览器**顶层导航**回 `http://localhost:<端口>/oauth/callback`。这是从 `platform.deepseek.com` 发起的**跨站**导航，浏览器不会携带网关的 `SameSite=Strict` 会话 Cookie（也因此，靠"把 Strict 放宽成 Lax"之类改 Cookie 的方式解决，会把会话 Cookie 一并暴露在跨站顶层导航上，面更大）。
+
+这条放行的边界（全部由测试锁定）：
+
+- **只有这一条精确路径的一次 GET**：同一路径的其它方法、任何前缀相似的路径（`/oauth/callback-x`）仍按普通页面路径 302 到登录页；不接受通配符或查询串配置；
+- **不附带上游 bearer**：转发显式不铸 upstream BrowserAuth cookie——与公开静态资产同一口径（匿名流量不运输全权 cookie）。上游只对 index 与 `/api` 启用该门禁，这个回调端点本身不在其中；
+- **安全由上游自己负责**：dsh 对该回调用 `state` + PKCE 校验，且只接受自己发起、仍在有效期内的一次性 `authorize_id`；网关不参与校验、不为该路径保留任何状态、也不因它记录会话；
+- **不合意可以关**：`publicPaths: []` 完全关闭放行，代价是 dsh 账号登录不可用（该部署只能继续用 API Key 通道）。
+
+也就是说，「未认证流量无法触及后端」这条承诺在此收窄为：**未认证流量只能触及上游自有的握手端点**。这是有意为之的取舍——不放行等于该功能永久不可用，而放行面是一条可枚举、可审计的精确路径。
+
 ### 与 dsh 内置浏览器认证的关系（dsh ≥ 0.1.2）
 
 dsh 0.1.2 起，内部 webserver 自身启用 BrowserAuth：index 页与 `/api` 要求进程启动 token（一次性 `?token=` 交换）或一枚绑定 authority 的持久签名 cookie。浏览器只持有网关会话 cookie，无法完成 upstream 的 token 交换——网关若不处理，所有转发请求都会被 upstream 判 401。网关的补齐方式：

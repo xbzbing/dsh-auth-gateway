@@ -23,6 +23,7 @@ test('undefined/null config gets defaults', () => {
       otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
       cookieSecure: 'auto',
+      publicPaths: ['/oauth/callback'],
     },
   })
   assert.deepEqual(validate(null), validate(undefined))
@@ -38,6 +39,7 @@ test('partial config keeps defaults for omitted fields', () => {
       otpIssuer: 'dsh-auth-gateway', otpPeriod: 30, otpDigits: 6, otpWindow: 1, backupCodeCount: 10, backupCodeLength: 8,
       updateCheck: false,
       cookieSecure: 'auto',
+      publicPaths: ['/oauth/callback'],
     },
   })
 })
@@ -171,6 +173,31 @@ test('schema defaults match createGateway defaults (no silent divergence)', asyn
   }
   for (const key of otpKeys) {
     assert.equal(schema[key], gw.otp[key], `otp default mismatch: ${key}`)
+  }
+  assert.deepEqual(gw.publicPaths, schema.publicPaths, 'publicPaths default mismatch')
+})
+
+test('publicPaths: exact absolute paths only, duplicates collapse, [] turns the exemption off', () => {
+  assert.deepEqual(
+    validate({ publicPaths: ['/oauth/callback', '/dsh/authorized'] }).value.publicPaths,
+    ['/oauth/callback', '/dsh/authorized'],
+  )
+  // A comma-separated string is accepted too: a profile patch reads better on one line.
+  assert.deepEqual(
+    validate({ publicPaths: '/oauth/callback, /dsh/authorized' }).value.publicPaths,
+    ['/oauth/callback', '/dsh/authorized'],
+  )
+  assert.deepEqual(validate({ publicPaths: ['/x', '/x'] }).value.publicPaths, ['/x'], 'duplicates collapse')
+  assert.deepEqual(validate({ publicPaths: [] }).value.publicPaths, [], 'empty list is legal (exemption off)')
+  // The exemption surface must stay enumerable, so wildcards, query strings,
+  // relative paths and HTML-breakout characters are refused at load.
+  for (const bad of [
+    ['oauth/callback'], ['/oauth/callback?code=x'], ['/oauth/*'], ['/a b'], ['/a<b>'], ['/a"b'],
+    ['//evil.com'], ['/x/..'], [''], [42], 42, 'not/a/path',
+  ]) {
+    const result = validate({ publicPaths: bad })
+    assert.ok(result.issues, `publicPaths ${JSON.stringify(bad)} must be rejected`)
+    assert.equal(result.issues[0].path[0], 'publicPaths')
   }
 })
 

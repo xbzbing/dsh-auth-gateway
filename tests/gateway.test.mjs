@@ -60,7 +60,7 @@ function closeUpstream() {
 
 let gateway, gatewayPort, home
 
-async function startGateway(policy, cookieSecure, cookieSecureOverride, cookieSecureOverrideStore) {
+async function startGateway(policy, cookieSecure, cookieSecureOverride, cookieSecureOverrideStore, publicPaths) {
   home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-test-'))
   process.env.DSH_HOME = home
   gateway = new LoginGateway({
@@ -72,6 +72,7 @@ async function startGateway(policy, cookieSecure, cookieSecureOverride, cookieSe
     ...(cookieSecure !== undefined ? { cookieSecure } : {}),
     ...(cookieSecureOverride !== undefined ? { cookieSecureOverride } : {}),
     ...(cookieSecureOverrideStore !== undefined ? { cookieSecureOverrideStore } : {}),
+    ...(publicPaths !== undefined ? { publicPaths } : {}),
   })
   await gateway.start()
   gatewayPort = gateway.address().port
@@ -1408,4 +1409,45 @@ test('global rate limit emits once per exhausted window', async () => {
   } finally {
     await stopGateway()
   }
+})
+
+// ── dsh account login: anonymous handshake path ──────────────────────────
+
+test('anonymous handshake path: GET /oauth/callback reaches the upstream, POST and lookalikes stay gated', async () => {
+  // dsh 账号登录的回调由平台作为**跨站顶层导航**回跳
+  // （platform.deepseek.com → http://localhost:<port>/oauth/callback）；浏览器不会
+  // 在这类导航里携带 SameSite=Strict 的网关会话 Cookie，请求必然匿名到达。挡在
+  // 认证门后上游就永远拿不到 code——表现为账号始终登录不上，而平台侧 authorize_id
+  // 已在 approve 时消费（重试一律 ALREADY_CONSUMED）。默认 publicPaths 即此路径。
+  seenRequests.length = 0
+  await setPassword('GoodPass1')
+
+  const anonymous = await request('/oauth/callback?code=abc&state=xyz')
+  assert.equal(anonymous.status, 200, 'the callback must be forwarded, not redirected to /login')
+  assert.equal(seenRequests.length, 1, 'the handshake request must reach the upstream')
+  assert.equal(seenRequests[0].url, '/oauth/callback?code=abc&state=xyz', 'query string forwarded verbatim')
+  assert.equal(seenRequests[0].host, `127.0.0.1:${upstreamPort}`, 'Host still rewritten to the loopback upstream')
+
+  // Only GET is exempted: the callback is a browser navigation, so a write on the
+  // same path must keep passing through the gate.
+  const post = await request('/oauth/callback', { method: 'POST', body: {} })
+  assert.equal(post.status, 302)
+  assert.equal(post.headers.location, '/login')
+  assert.equal(seenRequests.length, 1, 'a gated request must never reach the upstream')
+
+  // Exact match, not a prefix: a lookalike path is still gated.
+  const lookalike = await request('/oauth/callback-extra')
+  assert.equal(lookalike.status, 302)
+  assert.equal(lookalike.headers.location, '/login')
+  assert.equal(seenRequests.length, 1)
+})
+
+test('anonymous handshake path: an empty publicPaths closes the exemption again', async () => {
+  await startGateway(undefined, undefined, undefined, undefined, [])
+  seenRequests.length = 0
+  await setPassword('GoodPass1')
+  const res = await request('/oauth/callback?code=abc&state=xyz')
+  assert.equal(res.status, 302, 'with the exemption off the path is an ordinary gated path')
+  assert.equal(res.headers.location, '/login')
+  assert.equal(seenRequests.length, 0)
 })

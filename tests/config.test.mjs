@@ -177,6 +177,21 @@ test('schema defaults match createGateway defaults (no silent divergence)', asyn
   assert.deepEqual(gw.publicPaths, schema.publicPaths, 'publicPaths default mismatch')
 })
 
+test('createGateway keeps the string form and never builds a wildcard exemption', async () => {
+  const { createGateway } = await import('../lib/gateway.js')
+  // A direct caller gets the same comma-separated-string semantics as the
+  // schema validator instead of silently losing the exemption to an
+  // Array.isArray check.
+  assert.deepEqual(createGateway({ publicPaths: '/a, /b' }).publicPaths, ['/a', '/b'])
+  assert.deepEqual(createGateway({ publicPaths: ['/x'] }).publicPaths, ['/x'])
+  assert.deepEqual(createGateway(undefined).publicPaths, ['/oauth/callback'])
+  assert.deepEqual(createGateway({ publicPaths: '' }).publicPaths, [], 'an empty string closes the exemption')
+  // A trailing '*' is a PREFIX match in the route table, so the constructor
+  // must drop it even though lib/config.js already refuses such a value.
+  assert.deepEqual(createGateway({ publicPaths: ['/oauth/*', '/ok'] }).publicPaths, ['/ok'])
+  assert.deepEqual(createGateway({ publicPaths: ['/oauth/callback*'] }).publicPaths, [])
+})
+
 test('publicPaths: exact absolute paths only, duplicates collapse, [] turns the exemption off', () => {
   assert.deepEqual(
     validate({ publicPaths: ['/oauth/callback', '/dsh/authorized'] }).value.publicPaths,

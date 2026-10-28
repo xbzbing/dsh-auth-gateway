@@ -1,7 +1,7 @@
 # dsh-auth-gateway
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xbzbing/dsh-auth-gateway/main/docs/assets/banner-en.png" alt="dsh-auth-gateway banner" width="880">
+  <img src="docs/assets/banner-en.png" alt="dsh-auth-gateway banner" width="880">
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@ A Cordis plugin that puts an authentication gate in front of the [DeepSeek Harne
 
 `dsh web`'s official authentication targets the local loopback only: since dsh 0.1.2 the internal webserver enforces built-in browser authentication (BrowserAuth), but it is just a single authority-bound bearer cookie — the design note states plainly *"There is no logout operation"* and that *"Authentication does not configure TLS, forwarding-header interpretation, or proxies"*. dsh 0.2.1 did add a native HTTPS listener (`--tls-cert` / `--tls-key`) and concrete-IP binding for direct deployments (the CLI only rejects wildcard addresses such as `0.0.0.0` and accepts concrete address literals), yet the authentication layer itself still has **no logout, no password or multi-factor auth, no brute-force protection, no login audit, and no integration channel for putting another authentication gateway in front of it**. This plugin fills that missing remote-access authentication itself, as an in-process gateway: the gateway exclusively owns the external port, the bundle patch binds the internal webserver to the loopback address, and the gateway is the only way in.
 
-This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`, all verified.
+This project supports `0.1.5-rc.2 <= dsh <= 0.2.2-alpha.2`, all verified.
 
 > **Known limitation**: **signing in to a DeepSeek account does not work over remote access** (domain, reverse proxy, LAN IP — any non-loopback http entry): clicking "sign in with a DeepSeek account" in the bottom-left fails immediately with "Could not sign in". **Everything else works normally** (sessions, models, tools, settings). The root cause is upstream: dsh requires the **browser origin** to be a loopback http origin with an explicit non-zero port, and a loopback address resolves on the machine running the **browser** — so **this plugin cannot work around it server-side** (remote access is exactly what this plugin provides, which makes the limitation unavoidable in that setup). Triage and evidence in [docs/en/TROUBLESHOOTING.md](docs/en/TROUBLESHOOTING.md) §10.
 >
@@ -26,6 +26,8 @@ This project supports `0.1.5-rc.2 <= dsh <= 0.2.1-rc.2`, all verified.
 > 2. **SSH local port forward**: when the browser is elsewhere, run `ssh -L 8080:127.0.0.1:<gateway listenPort> <host>` (the first port is local and can be any free port) and browse `http://127.0.0.1:8080`;
 > 3. **Any other loopback forward**: any tunnel / port-forward tool that maps `http://127.0.0.1:<explicit port>` to the remote gateway (VS Code, `kubectl port-forward`, `gost`, …);
 > 4. **Switch to the API Key route**: click "Add API Key" in the sign-in dialog — the established substitute on domain-only / reverse-proxy deployments.
+
+**Companion desktop app**: to manage remote dsh instances from the desktop, use [dsh-hub-desktop](https://github.com/xbzbing/dsh-hub-desktop) — an Electron desktop client that manages **local processes, SSH tunnels, and remote HTTP connections** in one place. It authenticates against this plugin's gateway protocol (**password + TOTP + HttpOnly cookie injection**, with five-state gateway detection), with a credential vault for silent sign-in and in-instance plugin management (install / check for updates / uninstall).
 
 ## Installation and Uninstallation
 

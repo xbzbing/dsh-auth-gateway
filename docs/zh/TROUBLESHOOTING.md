@@ -263,4 +263,4 @@ map $http_upgrade $connection_upgrade {
 2. **纯域名/反代部署改用 API Key 通道**（面板「添加 API Key」）：该拓扑下账号登录不可用，这是上游 origin 硬约束，不是配置问题；
 3. **不要**为这个症状放宽 `publicPaths`、放宽 Cookie 或关闭认证门——它们都不在这条因果链上。
 
-> 本节结论基于 dsh 0.2.1-rc.2（`next` 线最高版；`latest` tag 反而是更旧的 0.2.0-rc.2）。已发布的全部 13 个 `@deepseek-ai/dsh-deepseek-account-platform` 版本中，`loginOrigin` 函数体字节级一致——升级或降级 dsh 都不会改变这一行为。
+> 本节结论：账号登录要求**浏览器 origin** 为带显式非零端口的回环 http，是上游 `loginOrigin` 的硬性约束——`@deepseek-ai/dsh-deepseek-account-platform` 中该函数的源码自引入以来逐字节未变，升级或降级 dsh 都不会改变这一行为。npm 的 `latest` tag 可能指向比 `next` 线更旧的版本；插件支持的 dsh 版本区间以 [README](../../README.md) 为准。

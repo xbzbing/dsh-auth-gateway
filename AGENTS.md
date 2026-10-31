@@ -77,7 +77,7 @@ npm run deploy        # 语法检查 → 类型检查 → 测试 → 同步到 $
 
 ## 文档与发布
 
-- 文档双语：`docs/zh/` + `docs/en/` 一一对应（第 3 行语言切换，跨语言链接 `../zh/`、`../en/`），README.md（中文）与 README.en.md 成对修改；改动后校验链接可解析。docs 不打进 npm 包（`files` 不含 docs/）。
+- 文档双语：`docs/zh/` + `docs/en/` 一一对应（第 3 行语言切换，跨语言链接 `../zh/`、`../en/`），README.md（中文）与 README.en.md 成对修改；改动后校验链接可解析。docs 一般不打进 npm 包（`files` 不含 docs/）；唯一例外是插件详情页文档 `docs/details/DETAIL*.md`——`locale/*.json` 的 `meta.detail` 指向它，文件不在安装副本时详情页报「插件声明的详细介绍文件无效」，故 `files` 与 `scripts/deploy.sh` 的 `RESOURCE_FILES` 都须收录。
 - 版本号同时改 `package.json` 与 `package-lock.json`（根 + `packages[""]` 两处）；打 tag `vX.Y.Z`，`gh release` 用中文发布说明。
 - 提交信息：conventional 前缀（`feat:`/`fix:`/`docs:`/`chore:`）+ 中文描述。
 

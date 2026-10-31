@@ -68,6 +68,8 @@ RESOURCE_FILES=(
   icon.svg
   locale/zh.json
   locale/en.json
+  docs/details/DETAIL.md
+  docs/details/DETAIL.en.md
 )
 ALL_FILES=("${JS_FILES[@]}" "${CLIENT_FILES[@]}" "${RESOURCE_FILES[@]}" cordis.patch.yml package.json)
 

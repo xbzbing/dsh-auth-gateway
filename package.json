@@ -20,6 +20,7 @@
     "scripts/reset.mjs",
     "README.md",
     "README.en.md",
+    "docs/details",
     "locale",
     "icon.svg"
   ],

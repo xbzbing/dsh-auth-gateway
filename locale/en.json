@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "DSH Auth Gateway",
-    "description": "An authentication gateway for DSH Web with password, TOTP, and audit protection."
+    "description": "An authentication gateway for DSH Web with password, TOTP, and audit protection.",
+    "detail": "docs/details/DETAIL.en.md"
   }
 }

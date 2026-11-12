@@ -22,6 +22,18 @@ Written with node:test, covering:
 | `tests/patch-ports.test.mjs` | Bundle-patch port expression derivation (`--port` following) |
 | `tests/client-contract.test.mjs` | Client bundle contract (loader registration, inject alignment, api inject face, no ctx, externals) |
 | `tests/audit-log.test.mjs` | Audit-log file sink (JSONL appends, daily rotation, stale-file adoption after restart, 90-day pruning, archive-name collision suffixes, write-failure isolation, 0600/0700 modes) |
+| `tests/auth.test.mjs` | Session-cookie primitives: `requestIsSecure` (TLS / X-Forwarded-Proto), cookie attributes, token parsing |
+| `tests/forward.test.mjs` | Hop-by-hop stripping on relayed responses (incl. the nginx intermittent empty-400 regression) and response relay |
+| `tests/upstream-auth.test.mjs` | BrowserAuth record validation, cookie minting and rotation, no-secret degradation, plus the end-to-end HTTP/WS loopback hop |
+| `tests/rate-limit.test.mjs` | Three-layer brute-force state machine: global window, per-address lockout, OTP window and stale-entry pruning |
+| `tests/cookie-secure.test.mjs` | `cookieSecure` auto/true/false policy normalization and effectiveness derivation (the panel-override cases live in `tests/gateway.test.mjs`) |
+| `tests/paths.test.mjs` | `$DSH_HOME` path resolution and directory creation |
+| `tests/version.test.mjs` | SemVer-subset comparison, repository normalization, `package.json` read |
+| `tests/update-check.test.mjs` | npm registry check caching, in-flight coalescing, never throwing |
+| `tests/update-notice.test.mjs` | Panel update-notice derivation and failure degradation |
+| `tests/chromium-resolve.test.mjs` | Playwright chromium discovery across platform layouts |
+| `tests/scripts-imports.test.mjs` | `node:` built-in import discipline in scripts and lib |
+| `tests/uninstall.test.mjs` | The uninstall script removes only its own data and keeps unrelated logs |
 
 ## Build consistency
 
@@ -61,7 +73,7 @@ DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
 # plugin — the array order is the bundle-patch stacking order, and the plugin binds the
 # internal webserver to N+1 by overriding web-app's webserver row
 DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/package.json',j=require(f);j.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-auth-gateway'];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
-DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
+DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots install
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # initial password printed to the console
 ```
 

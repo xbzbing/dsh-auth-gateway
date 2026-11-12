@@ -7,11 +7,15 @@
 ```
 host（零构建，node:crypto / node:http）
 ├── index.js          # Cordis 插件入口：gateway 生命周期、tapIndex 注入（randomUUID + authenticated LAN trust）、安全事件与登录审计接线、首次部署初始密码
+├── lib/lan-trust-script.js # 认证后 LAN trust 引导脚本（index 注入；透传代理仅拦截 client-connection 注册，翻转 isLoopback）
 ├── lib/gateway.js    # 认证网关：HTTP/WS 拦截与转发、认证状态机、防爆破三层、防重放、basePath 路由/跳转/转发剥离、登录审计事件、静态资产免认证
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
+├── lib/gateway-panel-api.js # 设置面板 API（/login-api/*：settings、session 探针、cookie-secure 运行时覆盖、version）
 ├── lib/forward.js    # HTTP/WS 转发管道（Host/Origin 回环改写、upgrade 双向管道、lanAddresses）
 ├── lib/upstream-auth.js # dsh ≥ 0.1.2 上游浏览器认证桥接（经 credentials 服务读密钥、为回环一跳铸同构 cookie；含 record 晚到快速重试/后台轮询与轮换重铸）
 ├── lib/auth.js       # 会话表与 Cookie：内存 256-bit token、onboarding/OTP 状态标记、改密吊销
+├── lib/rate-limit.js # 三层防爆破状态机（全局窗口 / 按地址锁定 / OTP 窗口）
+├── lib/paths.js      # $DSH_HOME 路径解析（凭据目录、审计日志目录）
 ├── lib/audit-log.js  # 审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/log/audit.log，按天轮转、保留 90 天）
 ├── lib/page-shell.js # 页面脚手架共享件（基础 CSS、HTML 骨架、script 头：ERRORS + post）
 ├── lib/errors.js     # 页面错误文案总字典（中英双语，errorsFor 按页选取 + 覆盖）
@@ -47,7 +51,7 @@ scripts / tests
 ├── scripts/verify.sh         # curl 门禁验证（401/302/WS 拒绝/锁定）
 ├── scripts/reset.mjs         # dsh-auth-gateway-reset：仅删 password.json（双语输出）
 ├── scripts/uninstall.mjs     # dsh-auth-gateway-uninstall：删整个 auth-gateway/（双语输出）
-└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract / audit-log
+└── tests/                    # 22 个 node:test 套件（gateway/config/policy/otp/locale/basepath/forward/upstream-auth/rate-limit/cookie-secure/audit-log 等；完整清单见 package.json 的 test script）
 ```
 
 设计要点：
@@ -95,6 +99,18 @@ client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:
 
 ## 版本历史
 
+- `0.8.7`：`publicPaths` 匿名放行 `GET /oauth/callback`（dsh 账号登录回调）并加固边界；账号登录远程限制的文档；Chromium 探测改用 Playwright 语义；
+- `0.8.6`：支持 dsh `--public-url` 并与控制台 URL 行对齐；声明 dsh 0.2.1-alpha.3 支持；
+- `0.8.5`：支持区间跟进 dsh 0.2.x；NGINX 文档澄清不依赖 dsh 原生 `--public-url`；更新检查结果移到按钮右侧；
+- `0.8.4`：README 头图换用 banner、架构图移入 SECURITY；门禁响应补 `cache-control: no-store`；补齐 OTP 启用审计；路由与响应样板去重；
+- `0.8.3`：支持范围改为区间声明；声明 dsh peer 下限 `>=0.1.5-rc.2`；本地化 `meta.title`；
+- `0.8.2`：详情页认证设置引导；适配 dsh 0.1.7（语言偏好迁移到 `settings` 服务）；支持区间扩展至 0.1.5-rc.2；
+- `0.8.1`：LAN trust 双机制文档；client bundle 新鲜度门禁；凭据竞态与认证门禁加固；
+- `0.8.0`：`cookieSecure` 三态（auto/true/false）与面板即时切换；登录页会话自检探针；`gateway-panel-api.js` 拆分；
+- `0.7.1`：转发响应剥离逐跳头，修 nginx 反代场景的间歇性空 400；
+- `0.7.0`：更新检查默认关闭 + 面板「检查更新」；「关于」卡片；WebSocket 缺 `Upgrade` 头的明确诊断；`settings.section` order 撞值修正；五轴评审修复；
+- `0.6.0`：dsh ≥ 0.1.2 上游 BrowserAuth 桥接（经官方 `credentials` 通道铸 cookie）；启动期密钥晚到快速重试；patch 重申 webserver 压缩配置；
+- `0.5.1`：审计日志迁至 `log/` 子目录并加固迁移；
 - `0.5.0`：重置/卸载命令中英双语输出；部署文档中英双语（DEPLOYMENT / NGINX-DEPLOYMENT）；文档维护；
 - `0.4.2`：basePath 子路径部署（路由/跳转/转发剥离 + PWA/静态资产免认证）、登录审计日志、登录失败统一错误码 + 页面错误字典集中化（lib/errors.js）、中英文部署文档；
 - `0.4.1`：认证后 LAN 浏览器设置支持（loopback-trusted，PR #7）；

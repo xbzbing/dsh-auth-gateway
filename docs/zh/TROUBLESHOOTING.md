@@ -229,10 +229,10 @@ map $http_upgrade $connection_upgrade {
 
 **根因**（dsh 上游设计；网关无故障，但也没有服务端绕过手段）：发起账号登录时，上游强制要求**浏览器 origin** 是带显式非零端口的回环 http（`localhost`、`127.0.0.1`、`[::1]` 之一，且无 path/query/hash）；域名 origin（含 https 反代）在第一段校验即被拒：
 
-1. Web 端把页面的 `window.location.origin` 作为 `callbackOrigin` 传给 `account/startSignIn`（`@deepseek-ai/dsh-client-ui-settings-account/lib/client.js:4671`；桌面端取 `transport.streamBaseUrl` 的 origin）——远程访问下它就是 `https://dsh.example.com` 这类对外 origin；客户端随后按 `ok === false` 置为登录失败（`:4672`、`:4681`）；
-2. 上游 `loginOrigin()` 只接受上述回环形态：正则在 `@deepseek-ai/dsh-deepseek-account-platform/lib/index.js:318`，hostname 白名单在 `:319-322`，不合即抛 `PlatformAuthError("protocol")`（`:323`）；调用点在 `startSignIn` 开头 `:826`，远早于 `auth_init`（`:1019`）——**请求根本到不了开放平台**，也不存在被消费的 `authorize_id`。错误消息格式为 `account: ${code}`（`:13-19`），落到 RPC 信封即 `message: "account: protocol"`；
+1. Web 端把页面的 `window.location.origin` 作为 `callbackOrigin` 传给 `account/startSignIn`（`@deepseek-ai/dsh-client-ui-settings-account` 的 `src/client/index.ts` 中 `start()` 的请求拼装；桌面端取 `transport.streamBaseUrl` 的 origin）——远程访问下它就是 `https://dsh.example.com` 这类对外 origin；客户端随后把 `ok === false` 当作登录失败；
+2. 上游 `loginOrigin()` 只接受上述回环形态：实现位于 `@deepseek-ai/dsh-deepseek-account` 的 `src/protocol.ts`（dsh 0.1.7-alpha.1 引入时由 `@deepseek-ai/dsh-deepseek-account-platform` 提供；0.2.2-rc.2 起并入 `@deepseek-ai/dsh-deepseek-account`，判定逻辑未变）；调用点在 `startSignIn`（同包 `src/index.ts`）开头，远早于 `auth_init`——**请求根本到不了开放平台**，也不存在被消费的 `authorize_id`。错误消息格式为 `account: ${code}`，落到 RPC 信封即 `message: "account: protocol"`；
 3. 上游自己的 README「Known Limitations」写明：*"Only local access and SSH local forwarding through HTTP localhost, 127.0.0.1, or [::1] with an explicit port are supported; non-loopback reverse proxies are unsupported."*；
-4. **没有任何开关能放宽**：account-platform 配置的全部 13 个字段（`lib/index.js:500-518`）里，`allowLoopbackHttp` 只作用于 `platformOrigin`、`rewriteBrowserOrigin` 只改平台回跳地址；`loginOrigin` 不读任何配置或环境变量；
+4. **没有任何开关能放宽**：账号服务当前的 14 个配置字段（0.2.2-rc.2 的 `src/index.ts` `Config`）里，`allowLoopbackHttp` 只作用于 `platformOrigin` / `harnessOrigin`，`rewriteBrowserOrigin` 只改平台回跳地址；`loginOrigin` 不读任何配置或环境变量；
 5. 这条链路上**网关没有问题**：`publicPaths` 只放行**入站** `GET /oauth/callback`（第 9 节那条链，边界见 [SECURITY.md](SECURITY.md#匿名可达的上游握手路径)），而 `callbackOrigin` 是浏览器内计算、经 RPC **请求体**上传的参数——`lib/forward.js` 的 Host/Origin 改写只作用于转发头，够不到请求体。
 
 **快速判定**（命中一条即可定性）：
@@ -263,4 +263,4 @@ map $http_upgrade $connection_upgrade {
 2. **纯域名/反代部署改用 API Key 通道**（面板「添加 API Key」）：该拓扑下账号登录不可用，这是上游 origin 硬约束，不是配置问题；
 3. **不要**为这个症状放宽 `publicPaths`、放宽 Cookie 或关闭认证门——它们都不在这条因果链上。
 
-> 本节结论：账号登录要求**浏览器 origin** 为带显式非零端口的回环 http，是上游 `loginOrigin` 的硬性约束——`@deepseek-ai/dsh-deepseek-account-platform` 中该函数的源码自引入以来逐字节未变，升级或降级 dsh 都不会改变这一行为。npm 的 `latest` tag 可能指向比 `next` 线更旧的版本；插件支持的 dsh 版本区间以 [README](../../README.md) 为准。
+> 本节结论：账号登录要求**浏览器 origin** 为带显式非零端口的回环 http，是上游 `loginOrigin` 的硬性约束——该函数在 `@deepseek-ai/dsh-deepseek-account` 的 `src/protocol.ts`（0.2.2-rc.2 前由 `@deepseek-ai/dsh-deepseek-account-platform` 提供）中，自 dsh 0.1.7-alpha.1 引入以来判定逻辑未变，升级或降级 dsh 都不会改变这一行为；Web 入口自 0.2.1-alpha.3 开放。npm 的 `latest` tag 可能指向比 `next` 线更旧的版本；插件支持的 dsh 版本区间以 [README](../../README.md) 为准。

@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-auth-gateway
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
 
 # pinned version / branch / commit
-dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.5.0
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.8.7
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main
 ```
 

@@ -7,11 +7,15 @@
 ```
 host (zero build, node:crypto / node:http)
 ├── index.js          # Cordis plugin entry: gateway lifecycle, tapIndex injection (randomUUID + authenticated LAN trust), security-event & login-audit wiring, first-run initial password
+├── lib/lan-trust-script.js # Authenticated LAN trust bootstrap (injected by index; pass-through proxy intercepts only the client-connection registration to flip isLoopback)
 ├── lib/gateway.js    # Auth gateway: HTTP/WS interception & forwarding, auth state machine, three-layer brute-force protection, replay protection, basePath routing/redirect/forward stripping, login-audit events, static-asset pass-through
 ├── lib/gateway-otp.js # OTP route handlers (/otp/setup|enable|verify-setup|verify|verify-backup|disable, split out of gateway.js)
+├── lib/gateway-panel-api.js # Settings-panel API (/login-api/*: settings, session probe, cookie-secure runtime override, version)
 ├── lib/forward.js    # HTTP/WS forwarding plumbing (loopback Host/Origin rewrite, upgrade piping, lanAddresses)
 ├── lib/upstream-auth.js # dsh ≥ 0.1.2 upstream browser-auth bridge (secret via the credentials service, minted loopback-hop cookie; record-late fast retry / background probing and rotation re-mint)
 ├── lib/auth.js       # Session table & cookies: in-memory 256-bit tokens, onboarding/OTP state flags, revocation on password change
+├── lib/rate-limit.js # Three-layer brute-force state machine (global window / per-address lockout / OTP window)
+├── lib/paths.js      # $DSH_HOME path resolution (credential dir, audit-log dir)
 ├── lib/audit-log.js  # Audit-log file sink (JSONL, $DSH_HOME/auth-gateway/log/audit.log, daily rotation, 90-day retention)
 ├── lib/page-shell.js # Shared page scaffolding (base CSS, HTML skeleton, script head: ERRORS + post)
 ├── lib/errors.js     # Master page-error dictionary (zh/en; errorsFor selects per page with overrides)
@@ -47,7 +51,7 @@ scripts / tests
 ├── scripts/verify.sh         # curl gate verification (401/302/WS rejection/lockout)
 ├── scripts/reset.mjs         # dsh-auth-gateway-reset: deletes only password.json (bilingual output)
 ├── scripts/uninstall.mjs     # dsh-auth-gateway-uninstall: deletes the whole auth-gateway/ (bilingual output)
-└── tests/                    # gateway / config / policy / otp / locale / basepath / patch-ports / plugin-contract / client-contract / audit-log
+└── tests/                    # 22 node:test suites (gateway/config/policy/otp/locale/basepath/forward/upstream-auth/rate-limit/cookie-secure/audit-log and more; the full list is in package.json's test script)
 ```
 
 Design points:
@@ -95,6 +99,18 @@ This project was developed and tested by **DeepSeek Harness (dsh)**. The early d
 
 ## Version history
 
+- `0.8.7`: `publicPaths` exempts `GET /oauth/callback` anonymously (the dsh account-sign-in callback) with hardened boundaries; docs on the remote account-sign-in limit; Chromium discovery follows Playwright semantics;
+- `0.8.6`: support dsh `--public-url` and align the console URL line; declare dsh 0.2.1-alpha.3 support;
+- `0.8.5`: support range tracks dsh 0.2.x; NGINX docs clarify it does not rely on dsh's native `--public-url`; update-check result moves beside the button;
+- `0.8.4`: README banner switched to the banner image and the architecture image moved into SECURITY; gate responses add `cache-control: no-store`; OTP enable audit completed; route/response boilerplate deduplicated;
+- `0.8.3`: support statement becomes a range; dsh peer floor declared as `>=0.1.5-rc.2`; localized `meta.title`;
+- `0.8.2`: detail page gains auth-settings guidance; dsh 0.1.7 adaptation (language preference moved to the `settings` service); support range extended to 0.1.5-rc.2;
+- `0.8.1`: LAN trust dual-mechanism docs; client bundle freshness gate; credential race and auth-gate hardening;
+- `0.8.0`: three-state `cookieSecure` (auto/true/false) with live panel switching; login-page session probe; `gateway-panel-api.js` split out;
+- `0.7.1`: strip hop-by-hop headers from relayed responses, fixing intermittent empty 400s behind nginx;
+- `0.7.0`: update check off by default + panel "check for updates"; "About" card; explicit diagnosis for a WebSocket handshake missing `Upgrade`; `settings.section` order collision fixed; five-axis review fixes;
+- `0.6.0`: dsh ≥ 0.1.2 upstream BrowserAuth bridge (cookie minted through the official `credentials` channel); fast retry when the secret record arrives late at startup; patch restates the webserver compression config;
+- `0.5.1`: audit log moved under `log/` with hardened migration;
 - `0.5.0`: bilingual reset/uninstall commands; bilingual deployment docs (DEPLOYMENT / NGINX-DEPLOYMENT); docs maintenance;
 - `0.4.2`: basePath sub-path deployment (route/redirect/forward stripping + PWA/static-asset pass-through), login audit logs, unified login-failure error + centralized page error dictionary (lib/errors.js), bilingual deployment docs;
 - `0.4.1`: authenticated LAN browser settings support (loopback-trusted, PR #7);

@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-auth-gateway
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
 
 # 指定版本 / 分支 / 提交
-dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.5.0
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.8.7
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main
 ```
 

@@ -22,6 +22,18 @@ npm test
 | `tests/patch-ports.test.mjs` | bundle patch 端口表达式推导（`--port` 跟随） |
 | `tests/client-contract.test.mjs` | client bundle 契约（loader 注册、inject 对齐、api inject face、无 ctx、external） |
 | `tests/audit-log.test.mjs` | 审计日志文件 sink（JSONL 追加、按天轮转、同日重启接管、重启接管陈旧文件、90 天清理、归档名冲突后缀、写失败隔离、flush 排空、权限 0600/0700 与启动收紧） |
+| `tests/auth.test.mjs` | 会话 Cookie 基础件：`requestIsSecure`（TLS / X-Forwarded-Proto）、Cookie 属性、token 解析 |
+| `tests/forward.test.mjs` | 转发响应逐跳头剥离（含 nginx 间歇空 400 回归）与响应中继 |
+| `tests/upstream-auth.test.mjs` | BrowserAuth record 校验、cookie 铸造与轮换、无密钥降级，以及 HTTP/WS 回环一跳端到端 |
+| `tests/rate-limit.test.mjs` | 三层防爆破状态机：全局窗口、按地址锁定、OTP 窗口与过期清理 |
+| `tests/cookie-secure.test.mjs` | `cookieSecure` auto/true/false 的策略归一化与有效性推导（面板覆盖用例在 `tests/gateway.test.mjs`） |
+| `tests/paths.test.mjs` | `$DSH_HOME` 路径解析与目录创建 |
+| `tests/version.test.mjs` | SemVer 子集比较、仓库地址规范化、`package.json` 读取 |
+| `tests/update-check.test.mjs` | npm registry 检查的缓存、并发合并与绝不抛错 |
+| `tests/update-notice.test.mjs` | 面板更新提示的推导与失败降级 |
+| `tests/chromium-resolve.test.mjs` | Playwright chromium 位置探测（多平台布局） |
+| `tests/scripts-imports.test.mjs` | 脚本与 lib 的 `node:` 内置模块导入纪律 |
+| `tests/uninstall.test.mjs` | 卸载脚本只清理自身数据、保留无关日志 |
 
 ## 构建一致性
 
@@ -60,7 +72,7 @@ DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots add file:$PWD
 # webStartup/webServer 由 @deepseek-ai/dsh-web-app 提供，必须补进 bundles 且排在插件之前：
 # bundles 数组序即 bundle patch 叠加序，插件要把内部 webserver 绑定到 N+1，必须覆盖 web-app 的 webserver 行
 DSH_HOME=/tmp/dsh-gw-home node -e "const f='/tmp/dsh-gw-home/profiles/shots/package.json',j=require(f);j.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-auth-gateway'];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
-DSH_HOME=/tmp/dsh-gw-home dsh plugin install --profile shots
+DSH_HOME=/tmp/dsh-gw-home dsh plugin --profile shots install
 DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始密码打印在控制台
 ```
 

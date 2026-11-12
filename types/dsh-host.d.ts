@@ -10,7 +10,7 @@
  * the convention lib/locale.js already follows for `ctx.settings`.
  *
  * Only the members this plugin calls are declared. Each signature is copied
- * from the host's own declarations (dsh 0.2.1-rc.2):
+ * from the host's own declarations (verified against dsh 0.2.2-rc.2):
  *   - webServer.tapIndex   dsh-host-webserver/lib/types/index.d.ts:198
  *                          `tapIndex(transform: (html: string) => string): () => void`
  *   - credentials.*        dsh-credentials/lib/types/index.d.ts:159/186/191

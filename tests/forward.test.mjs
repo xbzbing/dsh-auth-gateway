@@ -15,7 +15,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { createForwarder, stripResponseHopByHop } from '../lib/forward.js'
+import { createForwarder, stripResponseHopByHop, isLoopbackAuthority } from '../lib/forward.js'
+
+// ── unit: isLoopbackAuthority ───────────────────────────────────────────
+
+test('isLoopbackAuthority: accepts exactly the loopback hostnames dsh loginOrigin accepts', () => {
+  for (const host of ['localhost:3080', '127.0.0.1:8080', '[::1]:3080', 'LocalHost:1', 'localhost']) {
+    assert.equal(isLoopbackAuthority(host), true, host)
+  }
+  for (const host of [
+    undefined, '', 'dsh.example.com', '192.168.1.5:3080', '127.0.0.2:3080', '127.0.0.1.nip.io',
+    'evil@127.0.0.1', '127.0.0.1/x', '127.0.0.1?x', '127.0.0.1#x', '127.0.0.1 :80', 'localhost\\x', '[::1',
+    // Spellings URL parsing would normalize to loopback: refused literally,
+    // like dsh's loginOrigin (the Host is forwarded verbatim).
+    '127.1:3080', '0x7f.0.0.1:3080', '2130706433:80', '[0:0:0:0:0:0:0:1]:3080', 'local%68ost:3080', 'localhost.:3080',
+    'localhost:', 'localhost:123456',
+  ]) {
+    assert.equal(isLoopbackAuthority(host), false, String(host))
+  }
+})
 
 // ── unit: stripResponseHopByHop ─────────────────────────────────────────
 

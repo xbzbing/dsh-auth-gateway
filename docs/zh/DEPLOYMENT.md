@@ -6,21 +6,23 @@
 
 **支持的 dsh 版本区间以 [README](../../README.md) 为准。** 用 `dsh --version` 查看当前安装版本。
 
-本插件依赖的扩展点在整个支持区间内均未变动，因此可直接使用：
+本插件依赖的官方扩展点如下；上游认证按 dsh 版本二选一（启动时自动探测）：
 
 | 依赖的官方扩展点 | 用途 |
 |---|---|
 | `webServer.tapIndex` | 注入 `randomUUID` polyfill 与 `basePath` 全局量（仅自包含全局量） |
 | `dsh.bundle` patch | 把内部 webserver 绑定在 `127.0.0.1:<N+1>`（安全根基，见 [SECURITY.md](SECURITY.md)） |
 | `ctx.slots`（`settings.section`） | 客户端「认证设置」面板 |
-| `credentials` 服务 + `client-connection/browser-session` record | 读取上游 BrowserAuth 密钥，为回环一跳铸造同构 cookie |
-| BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`） | 与 dsh 自身的浏览器会话 cookie（index 路由铸造的 `v1`）同构，上游无法区分 |
+| `connection.authentication` 提供者注册表 + `connection.createPeer`（dsh ≥ 0.2.3-alpha.1） | 注册网关自己的认证提供者，转发请求以进程内随机凭据获准入（见 [ADR-0001](adr/0001-official-authentication-provider.md)） |
+| `credentials` 服务 + `client-connection/browser-session` record（dsh ≤ 0.2.2） | 读取上游 BrowserAuth 密钥，为回环一跳铸造同构 cookie |
+| BrowserAuth cookie 形状（`dsh-auth-<sha256(authority)>`、`v1.<payload>.<hmac>`，dsh ≤ 0.2.2） | 与 dsh 自身的浏览器会话 cookie（index 路由铸造的 `v1`）同构，上游无法区分 |
 
 版本线行为：
 
 - **dsh ≥ 0.1.2**：内部 webserver 启用 BrowserAuth，网关自动铸 cookie 适配（机制见 [SECURITY.md](SECURITY.md)）；
 - **dsh ≥ 0.2.1-alpha.3**：BrowserAuth 增加 `v2` cookie（带 `id` 的 API operator，由新增的 `/connect` 启动令牌交换铸造，供 SDK / 桌面端等 API 客户端使用）；**浏览器会话仍是 `v1`**，网关铸造的正是 `v1`，上游照旧接受。同版本起 dsh 新增 `remoteAccess` RBAC，但它只约束**非 owner** principal，而浏览器请求（持有 `v1` cookie）一律以 `owner` 通过，因此网关路径不受影响；
 - **dsh ≥ 0.2.1-alpha.3（「登录 DeepSeek 账号」）**：账号登录的回调由开放平台以**跨站顶层导航**回跳 `http://localhost:<端口>/oauth/callback`，浏览器不会带上网关会话 Cookie、请求必然匿名到达，因此需要 `publicPaths` 放行（默认值即包含该路径）。若把它设成 `[]`，账号登录会一直停在「等待登录」直到超时，之后再试平台只会返回「授权失败」（`ALREADY_CONSUMED`，因为 `authorize_id` 已在批准时被消费）。**另有一个前置条件**：账号登录还要求**浏览器 origin** 本身是带显式非零端口的回环 http（上游 `loginOrigin` 约束）——域名 / https 反代入口下点「登录 DeepSeek 账号」会立即报「登录失败」（`account: protocol`），与 `publicPaths` 无关、调它也无济于事；判别与处置见 [TROUBLESHOOTING.md 第 10 节](TROUBLESHOOTING.md)。取舍与边界见 [SECURITY.md](SECURITY.md#匿名可达的上游握手路径)；
+- **dsh ≥ 0.2.3-alpha.1**：BrowserAuth 拆成独立包 `@deepseek-ai/dsh-host-authentication-token`，Connection 新增 `connection.authentication` 提供者注册表。网关改为注册自己的提供者，转发请求携带 `x-dsh-auth-gateway-credential` 请求头，不再读取 dsh 密钥、不再铸 cookie。同版本的账号回调改为按 `Host === 浏览器 origin` 匹配，网关在 `publicPaths` 转发上保留回环 Host（**网关 ≤ 0.8.7 在此版本上账号登录会停在「等待登录」**，需升级到 0.9.0）。同版本新增的「远程连接」（二维码登录、凭据链接、设备配对）在网关后面不可用，bundle patch 将其禁用，远程访问由网关负责；
 - **dsh ≤ 0.1.1**：无 BrowserAuth，record 不存在，网关静默退化为逐字转发，行为与旧版一致。
 
 > **升级 dsh 后请注意**：dsh 的 **WebSocket 端点路径会随版本变化**——旧版是 `/api/events.mux`、`/sidebar/ws/*`，0.1.5 起只有 `/api/remote.mux`。网关按路径透明转发、**不硬编码任何端点名**，所以插件侧无需改动；但**反向代理若为 WebSocket 维护了路径白名单，dsh 一换路径就会静默失效**（症状：HTTP 正常、登录正常、页面提示连接失败）。反代请把 `Upgrade`/`Connection` 转发放在**兜底 location** 上，详见 [NGINX-DEPLOYMENT.md](NGINX-DEPLOYMENT.md) 与 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 7 节。
@@ -41,7 +43,7 @@
    ssh -L 8080:127.0.0.1:<网关 listenPort> <部署机>
    ```
 
-   然后浏览 `http://127.0.0.1:8080`（用**本机**那个端口），先在网关登录页完成密码（+ OTP）认证。账号登录的跨站回调也会回到浏览器这一侧的 `http://127.0.0.1:8080/oauth/callback`，经同一条隧道抵达网关，再由 `publicPaths`（默认放行）转给上游，因此全流程可通。注意：若部署时把 `cookieSecure` 强制为 `true`（如反代终结 TLS 但未透传协议头，或出于确定性固定该属性），明文 http 回环入口按现有说明无法保存会话 Cookie——需要账号登录时请让该入口使用默认的 `auto`（见「网络与安全建议」）。
+   然后浏览 `http://127.0.0.1:8080`（用**本机**那个端口），先在网关登录页完成密码（+ OTP）认证。账号登录的跨站回调也会回到浏览器这一侧的 `http://127.0.0.1:8080/oauth/callback`，经同一条隧道抵达网关，再由 `publicPaths`（默认放行）保留回环 Host 转给上游，因此全流程可通（dsh ≥ 0.2.3 需要网关 ≥ 0.9.0）。注意：若部署时把 `cookieSecure` 强制为 `true`（如反代终结 TLS 但未透传协议头，或出于确定性固定该属性），明文 http 回环入口按现有说明无法保存会话 Cookie——需要账号登录时请让该入口使用默认的 `auto`（见「网络与安全建议」）。
 
 3. **其它回环转发方式**——任何能把 `http://127.0.0.1:<显式端口>` 映射到远端网关的隧道 / 端口转发工具都等价可用（VS Code / JetBrains 的端口转发、`kubectl port-forward`、`gost` 等）。唯一约束是浏览器地址栏里的 origin 必须落在 `http://{localhost|127.0.0.1|[::1]}:<非零端口>` 之内。
 4. **改用 API Key 通道**——不使用账号登录，在账号弹窗里点「添加 API Key」（或按 dsh 的模型凭据方式配置）。纯域名 / 反代部署下这是既定替代方案，见 [SECURITY.md](SECURITY.md#匿名可达的上游握手路径)。

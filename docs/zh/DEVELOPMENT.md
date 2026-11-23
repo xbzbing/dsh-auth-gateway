@@ -12,7 +12,8 @@ host（零构建，node:crypto / node:http）
 ├── lib/gateway-otp.js # OTP 路由 handler（/otp/setup|enable|verify-setup|verify|verify-backup|disable，自 gateway.js 拆分）
 ├── lib/gateway-panel-api.js # 设置面板 API（/login-api/*：settings、session 探针、cookie-secure 运行时覆盖、version）
 ├── lib/forward.js    # HTTP/WS 转发管道（Host/Origin 回环改写、upgrade 双向管道、lanAddresses）
-├── lib/upstream-auth.js # dsh ≥ 0.1.2 上游浏览器认证桥接（经 credentials 服务读密钥、为回环一跳铸同构 cookie；含 record 晚到快速重试/后台轮询与轮换重铸）
+├── lib/upstream-auth.js # dsh 0.1.2–0.2.2 上游浏览器认证桥接（经 credentials 服务读密钥、为回环一跳铸同构 cookie；含 record 晚到快速重试/后台轮询与轮换重铸）
+├── lib/upstream-provider.js # dsh ≥ 0.2.3 上游官方认证提供者（connection.authentication 注册、网关 owner Peer、进程内随机凭据请求头；见 adr/0001）
 ├── lib/auth.js       # 会话表与 Cookie：内存 256-bit token、onboarding/OTP 状态标记、改密吊销
 ├── lib/rate-limit.js # 三层防爆破状态机（全局窗口 / 按地址锁定 / OTP 窗口）
 ├── lib/paths.js      # $DSH_HOME 路径解析（凭据目录、审计日志目录）

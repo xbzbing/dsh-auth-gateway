@@ -219,7 +219,8 @@ map $http_upgrade $connection_upgrade {
    - `publicPaths: []` 会完全关闭放行（默认值是 `['/oauth/callback']`）；
    - 条目按 **basePath 剥离后**的路径匹配，子路径部署写成 `/dsh/oauth/callback` 会**永不命中**，必须写 `/oauth/callback`；
    - 保留路径（`/`、`/api*`、`/connect` 等）会在加载期报错，账号登录请只用上游握手端点；
-3. 用匿名探针确认放行生效：请求 `http://<网关地址>:<端口>/oauth/callback?code=x&state=y`——**没有账号登录在途**时应由上游返回 404（说明请求已穿过网关到达上游）；若得到 302 到 `/login`，说明这条放行没生效。
+3. 用匿名探针确认放行生效：请求 `http://<网关地址>:<端口>/oauth/callback?code=x&state=y`——**没有账号登录在途**时应由上游返回 404（说明请求已穿过网关到达上游）；若得到 302 到 `/login`，说明这条放行没生效；
+4. **dsh ≥ 0.2.3 时确认网关 ≥ 0.9.0**：0.2.3 的回调改为按 `Host === 发起登录时的浏览器 origin` 匹配，网关 ≤ 0.8.7 会把 Host 改写成内部端口，回调永远对不上，现象与本节完全相同（探针仍是 404，无法据此区分）。0.9.0 起 `publicPaths` 转发保留浏览器的回环 Host，见 [SECURITY.md](SECURITY.md#匿名可达的上游握手路径)。
 
 **处置**：修正 `publicPaths` 后**重新发起一次登录**——已被消费的 `authorize_id` 无法复用。
 

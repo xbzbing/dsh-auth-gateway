@@ -18,13 +18,14 @@ Written with node:test, covering:
 | `tests/locale.test.mjs` | Page language resolution (preference > Accept-Language > zh) |
 | `tests/policy.test.mjs` | Password-strength policy matrix |
 | `tests/config.test.mjs` | Config Schema validation (defaults, invalid values, boundaries) |
-| `tests/plugin-contract.test.mjs` | Cordis plugin contract (loader normalize, Config validation) |
-| `tests/patch-ports.test.mjs` | Bundle-patch port expression derivation (`--port` following) |
+| `tests/plugin-contract.test.mjs` | Cordis plugin contract (loader normalize, Config validation, upstream-auth mode selection: a present registry selects the provider and never reads the dsh secret; no registry keeps the cookie fallback) |
+| `tests/patch-ports.test.mjs` | Bundle-patch port expression derivation (`--port` following); the remote-connection row is disabled by a field-level override only |
 | `tests/client-contract.test.mjs` | Client bundle contract (loader registration, inject alignment, api inject face, no ctx, externals) |
 | `tests/audit-log.test.mjs` | Audit-log file sink (JSONL appends, daily rotation, stale-file adoption after restart, 90-day pruning, archive-name collision suffixes, write-failure isolation, 0600/0700 modes) |
 | `tests/auth.test.mjs` | Session-cookie primitives: `requestIsSecure` (TLS / X-Forwarded-Proto), cookie attributes, token parsing |
-| `tests/forward.test.mjs` | Hop-by-hop stripping on relayed responses (incl. the nginx intermittent empty-400 regression) and response relay |
-| `tests/upstream-auth.test.mjs` | BrowserAuth record validation, cookie minting and rotation, no-secret degradation, plus the end-to-end HTTP/WS loopback hop |
+| `tests/forward.test.mjs` | Hop-by-hop stripping on relayed responses (incl. the nginx intermittent empty-400 regression) and response relay; literal loopback matching in `isLoopbackAuthority` |
+| `tests/upstream-auth.test.mjs` | BrowserAuth record validation, cookie minting and rotation, no-secret degradation, plus the end-to-end HTTP/WS loopback hop (the dsh ≤ 0.2.2 path) |
+| `tests/upstream-provider.test.mjs` | The dsh ≥ 0.2.3 official authentication provider: random-credential comparison, forged-header stripping, registry probing, child-plugin registration and timeout, plus end-to-end HTTP/WS forwarding (no minted cookie, no credential on anonymous forwards) |
 | `tests/rate-limit.test.mjs` | Three-layer brute-force state machine: global window, per-address lockout, OTP window and stale-entry pruning |
 | `tests/cookie-secure.test.mjs` | `cookieSecure` auto/true/false policy normalization and effectiveness derivation (the panel-override cases live in `tests/gateway.test.mjs`) |
 | `tests/paths.test.mjs` | `$DSH_HOME` path resolution and directory creation |

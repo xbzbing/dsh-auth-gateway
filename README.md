@@ -14,7 +14,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供认证门禁的 Cordis 插件：**密码认证 + TOTP 双因素认证 + 多层防爆破 + 会话管理 + 登录审计**，并在网关层**真实拦截每一个请求**（HTTP 与 WebSocket），未认证流量无法触及后端。
 
-`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但它只是一枚绑定 authority 的 bearer cookie——设计说明写明「没有登出操作」（*"There is no logout operation"*），且「认证不配置 TLS、转发头解释或代理」（*"Authentication does not configure TLS, forwarding-header interpretation, or proxies"*）。dsh 0.2.1 虽为直连场景补上了原生 HTTPS（`--tls-cert` / `--tls-key`）与具体 IP 绑定（CLI 仅拒绝 `0.0.0.0` 等通配地址，接受具体地址字面量），但认证层本身依旧**没有登出、没有密码 / 多因素、没有防爆破、没有登录审计，也没有为「前面再套一层认证网关」预留任何集成通道**。本插件以进程内网关的形态补上这层缺失的远程访问认证：对外端口由网关独占，内部 webserver 由 bundle patch 绑定在本地回环，网关是唯一入口。
+`dsh web` 的官方认证只面向本机回环：dsh 0.1.2 起内部 webserver 启用内置浏览器认证（BrowserAuth），但它只是一枚绑定 authority 的 bearer cookie——设计说明写明「没有登出操作」（*"There is no logout operation"*），且「认证不配置 TLS、转发头解释或代理」（*"Authentication does not configure TLS, forwarding-header interpretation, or proxies"*）。dsh 0.2.1 虽为直连场景补上了原生 HTTPS（`--tls-cert` / `--tls-key`）与具体 IP 绑定（CLI 仅拒绝 `0.0.0.0` 等通配地址，接受具体地址字面量），但认证层本身依旧**没有登出、没有密码 / 多因素、没有防爆破、没有登录审计，也没有为「前面再套一层认证网关」预留任何集成通道**（dsh 0.2.3 起 Connection 新增了认证提供者注册表，网关改为以官方提供者接入，见 [ADR-0001](docs/zh/adr/0001-official-authentication-provider.md)；它仍不提供上述任何一项）。本插件以进程内网关的形态补上这层缺失的远程访问认证：对外端口由网关独占，内部 webserver 由 bundle patch 绑定在本地回环，网关是唯一入口。
 
 本项目支持 `0.1.5-rc.2 <= dsh <= 0.2.2-rc.2`；`0.2.2-rc.2` 已完成隔离 profile 启动验证。
 

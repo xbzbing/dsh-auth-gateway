@@ -220,7 +220,8 @@ map $http_upgrade $connection_upgrade {
    - `publicPaths: []` closes the exemption entirely (the default is `['/oauth/callback']`);
    - entries match the **basePath-stripped** path, so a sub-path deployment that writes `/dsh/oauth/callback` will **never** match — it must be `/oauth/callback`;
    - reserved paths (`/`, `/api*`, `/connect`, …) are refused at load, so account sign-in may only use upstream handshake endpoints;
-3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect.
+3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect;
+4. **On dsh ≥ 0.2.3, confirm the gateway is ≥ 0.9.0**: the 0.2.3 callback matches by `Host === the browser origin that started the login`, and gateway ≤ 0.8.7 rewrites Host to the internal port, so the callback never matches — with exactly the symptom of this section (the probe still answers 404 and cannot tell the two apart). From 0.9.0 the `publicPaths` forward keeps the browser's loopback Host; see [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths).
 
 **Fix**: correct `publicPaths` and **start a fresh sign-in** — a consumed `authorize_id` cannot be reused.
 

@@ -100,6 +100,7 @@ client 构建产物（`client/index.js` + `.map`）随源码入库，但 `build:
 
 ## 版本历史
 
+- `0.9.0`：dsh 0.2.3 起改用官方 `connection.authentication` 认证提供者（转发携带进程内随机凭据请求头，不再读 dsh 密钥、不再铸 cookie；0.2.2 及更早保留 cookie 签发回退，决策见 [ADR-0001](adr/0001-official-authentication-provider.md)）；`publicPaths` 转发保留浏览器回环 Host，修复 dsh 0.2.3 上账号登录停在「等待登录」；bundle patch 禁用 dsh 0.2.3 的 remote-connection；支持区间上移至 0.2.3-alpha.2；
 - `0.8.7`：`publicPaths` 匿名放行 `GET /oauth/callback`（dsh 账号登录回调）并加固边界；账号登录远程限制的文档；Chromium 探测改用 Playwright 语义；
 - `0.8.6`：支持 dsh `--public-url` 并与控制台 URL 行对齐；声明 dsh 0.2.1-alpha.3 支持；
 - `0.8.5`：支持区间跟进 dsh 0.2.x；NGINX 文档澄清不依赖 dsh 原生 `--public-url`；更新检查结果移到按钮右侧；

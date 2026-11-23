@@ -100,6 +100,7 @@ This project was developed and tested by **DeepSeek Harness (dsh)**. The early d
 
 ## Version history
 
+- `0.9.0`: from dsh 0.2.3 the gateway authenticates upstream through the official `connection.authentication` provider (forwards carry a per-process random credential header; no dsh secret is read and no cookie minted; 0.2.2 and earlier keep the cookie-minting fallback — decision in [ADR-0001](adr/0001-official-authentication-provider.md)); `publicPaths` forwards keep a loopback browser Host, fixing account sign-in stalling at "waiting for sign-in" on dsh 0.2.3; the bundle patch disables dsh 0.2.3's remote-connection; support range raised to 0.2.3-alpha.2;
 - `0.8.7`: `publicPaths` exempts `GET /oauth/callback` anonymously (the dsh account-sign-in callback) with hardened boundaries; docs on the remote account-sign-in limit; Chromium discovery follows Playwright semantics;
 - `0.8.6`: support dsh `--public-url` and align the console URL line; declare dsh 0.2.1-alpha.3 support;
 - `0.8.5`: support range tracks dsh 0.2.x; NGINX docs clarify it does not rely on dsh's native `--public-url`; update-check result moves beside the button;

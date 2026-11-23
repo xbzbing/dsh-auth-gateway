@@ -27,6 +27,12 @@ test('module satisfies the Cordis plugin contract', () => {
   assert.ok(plugin.inject.includes('webServer'), 'webServer must be injected')
   assert.ok(plugin.inject.includes('credentials'), 'credentials must be injected (upstream browser-auth secret source)')
   assert.ok(plugin.inject.includes('settings'), 'settings must be injected (page language source)')
+  // Connection orders the gateway after it, so the upstream-auth mode is
+  // settled at apply time (docs/zh/adr/0001). The registry itself must NOT be
+  // a hard inject: dsh <= 0.2.2 never provides it and the gateway would
+  // never start there.
+  assert.ok(plugin.inject.includes('connection'), 'connection must be injected')
+  assert.ok(!plugin.inject.includes('connection.authentication'), 'the 0.2.3-only registry must stay optional')
   assert.equal(plugin.Config['~standard'].version, 1, 'Config must be a Standard Schema v1 validator')
 })
 
@@ -154,7 +160,36 @@ test('the console URL line falls back to the loopback address without --public-u
   }
 })
 
-async function captureIndexTransform(extraConfig = {}, settings = { describe: () => [] }, { webStartup, logSink } = {}) {
+test('dsh >= 0.2.3: a present registry selects provider mode and never reads the dsh secret', async () => {
+  const providers = []
+  const capture = await captureIndexTransform({}, { describe: () => [] }, {
+    registry: { register: (provider) => { providers.push(provider); return async () => {} } },
+  })
+  try {
+    assert.equal(capture.children.length, 1, 'the provider is registered from one child plugin')
+    assert.deepEqual(capture.children[0].inject, ['connection', 'connection.authentication'])
+    assert.equal(providers.length, 1)
+    assert.ok(!capture.readKeys.includes('client-connection/browser-session'),
+      `provider mode must not read the dsh browser-session secret, read: ${capture.readKeys.join(', ')}`)
+    assert.ok(capture.infos.some((line) => line.includes('官方认证提供者')), capture.infos.join(' | '))
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+test('dsh <= 0.2.2: no registry keeps the cookie-minting fallback', async () => {
+  const capture = await captureIndexTransform()
+  try {
+    assert.equal(capture.children.length, 0, 'no provider child plugin without the registry')
+    assert.ok(capture.readKeys.includes('client-connection/browser-session'),
+      'the fallback warms the browser-session secret cache')
+    assert.ok(capture.infos.some((line) => line.includes('回退路径')), capture.infos.join(' | '))
+  } finally {
+    await capture.cleanup()
+  }
+})
+
+async function captureIndexTransform(extraConfig = {}, settings = { describe: () => [] }, { webStartup, logSink, registry } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-auth-gateway-contract-'))
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -163,9 +198,17 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
   const taps = []
   const disposers = []
   const warnings = []
+  const infos = []
+  const readKeys = []
+  const children = []
   // Services a real Cordis Context resolves through get(); the plugin reads
-  // webStartup that way (the patch row declares inject: [webStartup]).
-  const services = { settings, ...webStartup === undefined ? {} : { webStartup } }
+  // webStartup that way (the patch row declares inject: [webStartup]), and
+  // probes the dsh >= 0.2.3 `connection.authentication` registry the same way.
+  const services = {
+    settings,
+    ...webStartup === undefined ? {} : { webStartup },
+    ...registry === undefined ? {} : { 'connection.authentication': registry },
+  }
   const ctx = {
     get: (name) => services[name],
     webServer: {
@@ -179,7 +222,7 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
     // cookieSecure panel override). An empty store exercises the mint path
     // with no secret known.
     credentials: {
-      readRecord: async () => undefined,
+      readRecord: async (key) => { readKeys.push(key); return undefined },
       modifyRecord: async () => {},
       deleteRecord: async () => {},
     },
@@ -190,9 +233,20 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
       warn(format, ...args) {
         warnings.push([format, ...args].join(' '))
       },
-      info() {},
+      info(format, ...args) {
+        infos.push([format, ...args].join(' '))
+      },
     },
     emit() {},
+    // Child plugins (the provider registration): run apply against a scope
+    // holding the injected services, as Cordis does once they are available.
+    plugin(def) {
+      children.push(def)
+      def.apply({
+        connection: { createPeer: (options) => ({ options, signal: new AbortController().signal }) },
+        'connection.authentication': registry,
+      })
+    },
     effect(factory) {
       const dispose = factory()
       disposers.push(dispose)
@@ -220,7 +274,7 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
   }
 
   assert.equal(taps.length, 1, 'plugin installs exactly one index transform')
-  return { transform: taps[0], warnings, listenPort, cleanup }
+  return { transform: taps[0], warnings, infos, readKeys, children, listenPort, cleanup }
 
   async function cleanup() {
     for (const dispose of disposers.reverse()) {

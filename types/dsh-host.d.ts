@@ -10,7 +10,8 @@
  * the convention lib/locale.js already follows for `ctx.settings`.
  *
  * Only the members this plugin calls are declared. Each signature is copied
- * from the host's own declarations (verified against dsh 0.2.2-rc.2):
+ * from the host's own declarations (verified against dsh 0.2.2-rc.2; the
+ * Connection members against 0.2.3-alpha.2):
  *   - webServer.tapIndex   dsh-host-webserver/lib/types/index.d.ts:198
  *                          `tapIndex(transform: (html: string) => string): () => void`
  *   - credentials.*        dsh-credentials/lib/types/index.d.ts:159/186/191
@@ -57,6 +58,25 @@ declare module '@deepseek-ai/cordis' {
         ) => Promise<AuthGatewayCredentialRecord | undefined>,
       ): Promise<AuthGatewayCredentialRecord | undefined>
       deleteRecord(key: string): Promise<void>
+    }
+    /**
+     * dsh's Host Connection service. Injected on every supported version (it
+     * orders the gateway after Connection); only `createPeer` is called, and
+     * only in provider mode (dsh >= 0.2.3, verified against 0.2.3-alpha.2
+     * dsh-client-connection/src/rpc.ts:232).
+     */
+    connection: {
+      createPeer(options: { readonly principal: { kind: 'owner' } }): { readonly signal: AbortSignal }
+    }
+    /**
+     * dsh >= 0.2.3-alpha.1 credential-verifier registry
+     * (dsh-client-connection/src/authentication.ts). Absent on 0.2.2 and
+     * earlier, so only the provider child plugin, which injects it, reads it.
+     */
+    'connection.authentication': {
+      register(provider: {
+        authenticate(request: { readonly headers: unknown }): { readonly signal: AbortSignal } | undefined
+      }): () => Promise<void>
     }
     /** dsh's settings service (read for the UI language preference). */
     settings: {

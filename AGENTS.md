@@ -107,3 +107,12 @@ DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始�
 **不覆盖** `scripts/verify.sh` 与 `scripts/e2e.mjs`：两者都需要运行中的实例、且都会真实修改密码，仍属手动 + 隔离实例步骤（见上方「实机验证」）。
 
 上面五个 job 在 `main` 上是 **required status checks**（branch protection）：`strict` 开启（合并前分支需先与 main 同步，校验的才是真正要合入的结果），`enforce_admins` 关闭（管理员可绕过，所以「小改动直接推 main」的既有分工不受影响；贡献者的 PR 必须全绿才能合并），不要求 PR。改动用 `gh api -X PUT repos/<owner>/<repo>/branches/main/protection`；context 名必须与 job 的 `name` 一字不差（矩阵 job 带 `(node N)` 后缀）。
+
+## 发版
+
+`.github/workflows/release.yml` 在「version bump 合入 main」（package.json 变更）时执行，也可 `gh workflow run release.yml` 手动触发（仅 main 分支产生动作）：门禁（`npm ci` + `npm run check` + `npm run build:check` + `npm pack` + `scripts/assert-pack.mjs`）→ 打 tag `v<version>` → 创建 GitHub Release 并附 tgz 附件（完整编译包，可在 dsh 中直接粘贴下载地址安装）。**workflow 不发 npm**——npm 由维护者手动 `npm publish --access public`（要让正文里的 npm 安装行可用，先发 npm 再推 version bump）。
+
+- **Release 正文必须中英双语**：正式版写 `docs/releases/v<version>.md`、随发版提交入库，格式唯一来源是 `.github/RELEASE_TEMPLATE.md`（缺失则 workflow 在打 tag 之前失败）；预发布不入库，页面先由 `.github/PRERELEASE_BODY.md` 的固定说明生成（含本版附件 URL），发布后 `gh release edit --notes-file` 补正文，重跑不覆盖。
+- 预发布版本号含 `-`（如 `0.9.0-rc.1`）：GitHub 标 prerelease、`releases/latest` 不返回它，插件面板的「检查更新」不会提示升级到它。
+- 每步先查状态再动手：已有 tag / Release 不重建（Release 原地改正文、补传附件），失败后直接重跑 `gh workflow run release.yml` 即可续跑。
+- `scripts/assert-pack.mjs` 校验解包后的 tarball：必备文件齐全（cordis.patch.yml、client 产物、locale、docs/details、凭据脚本等）、checkout 里全部 `lib/*.js` 与 `locale/*.json` 都在包内、无 install 生命周期钩子、name/version 与 checkout 一致——`files` 清单漏项在发版时失败，而不是在用户安装后。

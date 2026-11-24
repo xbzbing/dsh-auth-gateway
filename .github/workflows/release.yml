@@ -1,0 +1,316 @@
+name: release
+
+# Release flow, adapted from dsh-git-panel's release.yml and trimmed to this
+# repository: pushing a version bump (a package.json change) to main runs the
+# full gate, tags the release commit, then opens a GitHub Release with the
+# packed tarball attached. The asset is a plain `npm pack` of the tag — client
+# bundle included — so a prerelease (or any release) installs by pasting its
+# download URL straight into dsh:
+#   dsh plugin --profile web add https://github.com/<repo>/releases/download/<tag>/<pkg>-<version>.tgz
+#
+# Deliberate difference from dsh-git-panel: this workflow NEVER publishes to
+# npm — npm stays a manual `npm publish` by the maintainer (0.8.x line). The
+# Release body is therefore the single source of install instructions for a
+# given version.
+#
+# Both bodies are bilingual (Chinese first, English after `---`), never
+# --generate-notes: a stable body ships in docs/releases/v<version>.md with the
+# version bump; a prerelease page starts from the fixed notice in
+# .github/PRERELEASE_BODY.md and its change log is authored afterwards with
+# `gh release edit` — docs/releases/ archives stable versions only, so a rerun
+# leaves a prerelease body alone instead of clobbering it.
+#
+# Every step checks state first, so a partially completed release can be
+# re-run: an existing tag or Release is not recreated (the Release body is
+# edited in place).
+#
+# Two jobs, on purpose. The gate installs devDependencies and runs their code
+# (`npm ci` scripts, esbuild, the test suite), so it must not hold a token that
+# can push a tag: a compromised dependency there could otherwise mint a signed
+# release. `gate` is read-only and hands the tarball to `release` as an
+# artifact; `release` executes no dependency code at all — it only tags and
+# writes the Release.
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+# Default for the whole workflow; `release` widens it for itself only.
+permissions:
+  contents: read
+
+# One release at a time; never cancel one halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # Same reason as ci.yml: no test and no shipped code drives a browser, and
+  # playwright's postinstall would otherwise download ~150 MB the run never
+  # uses.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # A manual run from a branch must not publish: the tag and the Release have
+    # to describe the commit that is on main.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      # No persisted credential: this job never pushes, and the token would
+      # otherwise sit in .git/config while dependency code runs.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+
+      # Read what has already happened for this version, before spending a
+      # minute on a gate that may not be needed. A version carrying a hyphen
+      # (0.9.0-rc.1) is a prerelease.
+      - id: state
+        name: Release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V=$(node -p "require('./package.json').version")
+          # The value reaches later steps through `env`, never pasted into a
+          # script: it decides a tag name.
+          if ! printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::package.json version '$V' is not a release version"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in
+            *-*) PRE=true ;;
+            *)   PRE=false ;;
+          esac
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          # Carried to the release job as an artifact: that job runs no checkout
+          # and must not have to guess the version back out of a file name.
+          printf 'V=%s\nPRERELEASE=%s\n' "$V" "$PRE" > release-state.env
+          # Authenticated even though the repository is public: a tag may be
+          # annotated (its ref then names a tag object, so the peeled `^{}` line
+          # is the commit).
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # Same rule as the release job's state step: an existing tag is judged
+          # by the version inside the commit it points at, not by SHA equality —
+          # later main commits that touch package.json without bumping the
+          # version must rerun green and finish whatever steps are still pending.
+          if git ls-remote --exit-code --tags "$REMOTE" "refs/tags/v$V" >/dev/null 2>&1; then
+            echo "tag=done" >> "$GITHUB_OUTPUT"
+            # This checkout is shallow and carries no tags, so fetch just this
+            # one. Fetching by explicit refspec does not create a local tag, so
+            # read the file off FETCH_HEAD (the `:path` syntax peels an
+            # annotated tag to its commit). Failing to read the tagged version
+            # fails closed instead of releasing blind.
+            if TV=$(git fetch --quiet --depth=1 "$REMOTE" "refs/tags/v$V" \
+                && git show FETCH_HEAD:package.json \
+                | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))') \
+              && [ -n "$TV" ]; then
+              if [ "$TV" != "$V" ]; then
+                echo "::error::tag v$V points at a commit whose package.json version is '$TV', not '$V'"
+                exit 1
+              fi
+            else
+              echo "::error::could not read package.json from tag v$V — refusing to guess whether it was released"
+              exit 1
+            fi
+            # Which commit the tag names, for the log only.
+            TAG_SHA=$(git ls-remote --tags "$REMOTE" "refs/tags/v$V^{}" | cut -f1 | head -1) || true
+            if [ -z "$TAG_SHA" ]; then
+              TAG_SHA=$(git ls-remote --tags "$REMOTE" "refs/tags/v$V" | cut -f1 | head -1) || true
+            fi
+            echo "tag v$V points at commit ${TAG_SHA:-unknown} (release commit $GITHUB_SHA)"
+          fi
+          gh release view "v$V" >/dev/null 2>&1 && echo "gh=done" >> "$GITHUB_OUTPUT" || true
+
+      # A stable release ships its body in docs/releases/v<v>.md. A pre-release
+      # page starts from the fixed notice here, which keeps the page valid even
+      # before the hand-written body lands; docs/releases/ archives stable
+      # versions only, so a rerun leaves a prerelease body alone.
+      - id: notes
+        name: Release notes
+        env:
+          V: ${{ steps.state.outputs.version }}
+          PRERELEASE: ${{ steps.state.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          # Both inputs live in the checkout; the artifact step below can only
+          # carry files from the workspace, so the body is staged there.
+          if [ "$PRERELEASE" = "true" ]; then
+            # Drop the authoring comments: the body is published verbatim.
+            sed -e '/^<!--/,/-->/d' -e "s|<TAG>|v$V|g" -e "s|<VERSION>|$V|g" .github/PRERELEASE_BODY.md > release-notes.md
+          else
+            FILE="docs/releases/v$V.md"
+            # The body ships with the release commit; a missing file must fail
+            # before the tag, not after it.
+            if [ ! -f "$FILE" ]; then
+              echo "::error::$FILE is missing — write it from .github/RELEASE_TEMPLATE.md and commit it with the version bump"
+              exit 1
+            fi
+            cp "$FILE" release-notes.md
+          fi
+          echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Gate
+        if: steps.state.outputs.tag != 'done' || steps.state.outputs.gh != 'done'
+        env:
+          V: ${{ steps.state.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run check
+          # Explicit even though nothing here depends on a test side effect:
+          # packing must not ship a stale client bundle, and build:check fails
+          # on any diff between source and the committed artifact.
+          npm run build:check
+          npm pack
+          mkdir -p pkg && tar -xzf "dsh-auth-gateway-$V.tgz" -C pkg
+          node scripts/assert-pack.mjs pkg/package
+
+      # The tarball crosses the job boundary as an artifact: the publishing job
+      # then needs no checkout of the sources and no dependency install.
+      # Always uploaded: an idempotent rerun skips the gate, and the release job
+      # still needs the version and the body to decide there is nothing to do.
+      # overwrite: a rerun of the same run re-uploads the same artifact name,
+      # and the default (false) would fail on the collision.
+      - name: Hand the tarball to the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarball
+          overwrite: true
+          path: |
+            release-state.env
+            release-notes.md
+            dsh-auth-gateway-*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+    # The one capability this job needs, declared here and nowhere else: no
+    # dependency code runs in this job. No id-token — npm is not published.
+    permissions:
+      contents: write   # push the release tag, create / edit the Release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-tarball
+
+      # No `cache: npm`: this job has no checkout and no lockfile. Node is
+      # needed for the state step's JSON parsing below.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      # Facts the gate already established, re-derived here so this job needs
+      # no checkout: which version, whether it is a prerelease, and what is
+      # still pending.
+      - id: state
+        name: Release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Without a checkout, gh resolves the repository from GH_REPO only
+          # (it does not read GITHUB_REPOSITORY outside a git directory).
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          . ./release-state.env
+          if ! printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::release state carries no release version ('$V')"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          # Same rule as the gate job's state step — re-checked here so a tag
+          # created or moved between the two jobs cannot slip through (the
+          # gate→release TOCTOU window): an existing tag is judged by the
+          # version inside the commit it points at.
+          if git ls-remote --exit-code --tags "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v$V" >/dev/null 2>&1; then
+            echo "tag=done" >> "$GITHUB_OUTPUT"
+            # No checkout here: read the file through the API at the tag ref.
+            # Failing to read it fails closed instead of releasing blind.
+            if TV=$(gh api "repos/${GITHUB_REPOSITORY}/contents/package.json?ref=v$V" --jq .content \
+                | base64 --decode \
+                | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))') \
+              && [ -n "$TV" ]; then
+              if [ "$TV" != "$V" ]; then
+                echo "::error::tag v$V points at a commit whose package.json version is '$TV', not '$V'"
+                exit 1
+              fi
+            else
+              echo "::error::could not read package.json from tag v$V — refusing to guess whether it was released"
+              exit 1
+            fi
+          fi
+          gh release view "v$V" >/dev/null 2>&1 && echo "gh=done" >> "$GITHUB_OUTPUT" || true
+
+      - name: Tag
+        if: steps.state.outputs.tag != 'done'
+        env:
+          V: ${{ steps.state.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init --quiet tagname
+          cd tagname
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --quiet --depth=1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${GITHUB_SHA}"
+          git tag -a "v$V" -m "v$V" FETCH_HEAD
+          # The token rides in this one push's URL; nothing is persisted.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v$V"
+
+      - name: GitHub Release
+        if: steps.state.outputs.gh != 'done'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # No checkout: gh resolves the repository from GH_REPO only.
+          GH_REPO: ${{ github.repository }}
+          V: ${{ steps.state.outputs.version }}
+          PRERELEASE: ${{ steps.state.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          ASSET="dsh-auth-gateway-$V.tgz"
+          if [ "$PRERELEASE" = "true" ]; then
+            CHANNEL=(--prerelease)
+          else
+            CHANNEL=(--latest)
+          fi
+          if gh release view "v$V" >/dev/null 2>&1; then
+            if [ "$PRERELEASE" = "true" ]; then
+              # A pre-release body is authored by hand once the page exists
+              # (docs/releases/ archives stable versions only), so a rerun must
+              # not clobber it with the placeholder.
+              gh release edit "v$V" --title "v$V" --prerelease
+            else
+              gh release edit "v$V" --title "v$V" --notes-file release-notes.md --latest
+            fi
+            # Idempotent rerun: make sure the tarball is attached even when the
+            # Release already existed (e.g. created by hand before the first
+            # automated run).
+            gh release upload "v$V" "$ASSET" --clobber
+          else
+            gh release create "v$V" "$ASSET" \
+              --title "v$V" --notes-file release-notes.md --verify-tag "${CHANNEL[@]}"
+          fi
+
+  # A workflow_dispatch from anything but main publishes nothing; without this
+  # the run would be green with both jobs silently skipped.
+  notice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref != 'refs/heads/main'
+    steps:
+      - run: echo "::notice::release runs on main only; ref ${GITHUB_REF} triggered no release action"

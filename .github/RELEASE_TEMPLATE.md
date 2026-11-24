@@ -8,7 +8,7 @@ This file is the single source of format for **stable** GitHub Release bodies. C
 - 两段都以 compare 链接收尾：`https://github.com/xbzbing/dsh-auth-gateway/compare/<PREV>...<TAG>`，`<PREV>` 是上一个**正式版** tag，跳过中间的 rc / alpha（`v0.9.0` 配 `v0.8.7`，不是配 `v0.9.0-rc.1`）——完整变更记录必须覆盖「上一次稳定版之后」的全部内容。
 - 不要保留 GitHub 自动生成的 `## What's Changed` 段落，它和这里的结构冲突；workflow 也不用 `--generate-notes`。
 - **归档只收正式版**：`docs/releases/` 只存正式版正文，rc / alpha 不写、也不留存正文文件。预发布的 Release 页面由 `.github/PRERELEASE_BODY.md` 的固定说明生成，发布后用 `gh release edit --notes-file <本地文件>` 补正文（本地文件放 `docs/local/`，已 gitignore），重跑 workflow 不会覆盖它。
-- **本仓库的 workflow 不发 npm**：Release 与 tgz 附件由 workflow 自动完成；若本版要让 npm 安装行可用，先手动 `npm publish --access public`，再推 version bump（见下方发布流程）。
+- **npm 由 workflow 经 OIDC 发布（仅正式版）**：Release、tgz 附件与 `npm publish --provenance` 都随 version bump 自动完成；一次性前提是先在 npmjs.com 把 `.github/workflows/release.yml` 注册为该包的 trusted publisher。预发布永远不发 npm。
 
 ## 写作规则
 
@@ -28,7 +28,7 @@ This file is the single source of format for **stable** GitHub Release bodies. C
 **安装**
 
 - 附件一条必给（workflow 随 Release 自动附上，钉到本版具体版本，不写 latest）。
-- npm 一条（`dsh-auth-gateway@<VERSION>`，不带 `@latest`）只在本版**已手动发布**后保留；未发布就删掉该行，不要留一个装不上的命令。
+- npm 一条（`dsh-auth-gateway@<VERSION>`，不带 `@latest`）：正式版由 workflow 经 OIDC 自动发布，正常保留；预发布删掉该行，不要留一个装不上的命令。
 - URL 里的 tag 用本版真实 tag；命令必须带 `--profile <profile>`，示例统一用 `web`。
 - 预发布不发 npm：它的正文是 `.github/PRERELEASE_BODY.md` 里的固定说明，只给附件一条。
 
@@ -57,7 +57,7 @@ This file is the single source of format for **stable** GitHub Release bodies. C
 # 同一版本的 GitHub Release 附件（含编译好的 client 产物）
 dsh plugin --profile web add https://github.com/xbzbing/dsh-auth-gateway/releases/download/<TAG>/dsh-auth-gateway-<VERSION>.tgz
 
-# npm（仅当本版已手动发布 npm 时保留本行）
+# npm（正式版由 workflow 经 OIDC 自动发布；预发布删掉本行）
 dsh plugin --profile web add dsh-auth-gateway@<VERSION>
 ```
 
@@ -83,7 +83,8 @@ dsh plugin --profile web add dsh-auth-gateway@<VERSION>
 # The same version as a GitHub Release asset (client bundle pre-built)
 dsh plugin --profile web add https://github.com/xbzbing/dsh-auth-gateway/releases/download/<TAG>/dsh-auth-gateway-<VERSION>.tgz
 
-# npm (keep this line only when this version was published to npm manually)
+# npm (published automatically by the workflow via OIDC for stable releases;
+# delete this line for a prerelease)
 dsh plugin --profile web add dsh-auth-gateway@<VERSION>
 ```
 
@@ -120,17 +121,15 @@ npm run check
 #    正式版用纯 semver（0.9.0）：照上面的骨架写正文 docs/releases/v<v>.md
 npm version <v> --no-git-tag-version
 
-# 2. （可选，仅正式版）npm 仍为手动发布：workflow 不发 npm。
-#    要让安装说明里的 npm 行可用，先发 npm，再推 version bump。
-npm publish --access public
-
-# 3. 正式版正文（预发布跳过这步）：和代码一起提交、一起 review
+# 2. 正式版正文（预发布跳过这步）：和代码一起提交、一起 review
 $EDITOR docs/releases/v<v>.md
 git add package.json package-lock.json docs/releases/v<v>.md && git commit -m "chore: release <v>"
 git push origin main
 ```
 
-合入 main 后 workflow 自动完成：门禁（`npm ci` + `npm run check` + `npm run build:check` + `npm pack` + `scripts/assert-pack.mjs`）→ 打 tag → GitHub Release（附 tgz；预发布带 `--prerelease`，正文先用 `.github/PRERELEASE_BODY.md` 的固定说明）。不要手工在 main 上打 tag。
+一次性前提：npmjs.com → 包设置 → Trusted Publishing 里把本仓库的 `.github/workflows/release.yml` 注册为 trusted publisher（此后发版不再需要任何 npm token/secret）。
+
+合入 main 后 workflow 自动完成：门禁（`npm ci` + `npm run check` + `npm run build:check` + `npm pack` + `scripts/assert-pack.mjs`）→ 打 tag →（仅正式版）OIDC 发布 npm（`--provenance`）→ GitHub Release（附 tgz；预发布带 `--prerelease`，正文先用 `.github/PRERELEASE_BODY.md` 的固定说明）。不要手工在 main 上打 tag。
 
 workflow 在动手之前先校验：正式版的 `docs/releases/v<v>.md` 必须存在、门禁必须全绿；任何一条不满足就停在发布之前。远端已有 tag、已有 Release 时相应步骤自动跳过（Release 改为更新正文并补传附件），所以失败后可以直接重跑：
 

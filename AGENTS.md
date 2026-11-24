@@ -110,7 +110,7 @@ DSH_HOME=/tmp/dsh-gw-home dsh --profile shots --port 8002 --no-open   # 初始�
 
 ## 发版
 
-`.github/workflows/release.yml` 在「version bump 合入 main」（package.json 变更）时执行，也可 `gh workflow run release.yml` 手动触发（仅 main 分支产生动作）：门禁（`npm ci` + `npm run check` + `npm run build:check` + `npm pack` + `scripts/assert-pack.mjs`）→ 打 tag `v<version>` → 创建 GitHub Release 并附 tgz 附件（完整编译包，可在 dsh 中直接粘贴下载地址安装）。**workflow 不发 npm**——npm 由维护者手动 `npm publish --access public`（要让正文里的 npm 安装行可用，先发 npm 再推 version bump）。
+`.github/workflows/release.yml` 在「version bump 合入 main」（package.json 变更）时执行，也可 `gh workflow run release.yml` 手动触发（仅 main 分支产生动作）：门禁（`npm ci` + `npm run check` + `npm run build:check` + `npm pack` + `scripts/assert-pack.mjs`）→ 打 tag `v<version>` →（**仅正式版**）经 **OIDC Trusted Publishing** 发布 npm（`npm publish --provenance --access public`，workflow 持 `id-token: write`、无任何 npm token/secret；一次性前提是把本 workflow 文件注册为 npmjs.com 上该包的 trusted publisher）→ 创建 GitHub Release 并附 tgz 附件（完整编译包，可在 dsh 中直接粘贴下载地址安装）。**预发布（版本号含 `-`）只发 GitHub，不发 npm**。
 
 - **Release 正文必须中英双语**：正式版写 `docs/releases/v<version>.md`、随发版提交入库，格式唯一来源是 `.github/RELEASE_TEMPLATE.md`（缺失则 workflow 在打 tag 之前失败）；预发布不入库，页面先由 `.github/PRERELEASE_BODY.md` 的固定说明生成（含本版附件 URL），发布后 `gh release edit --notes-file` 补正文，重跑不覆盖。
 - 预发布版本号含 `-`（如 `0.9.0-rc.1`）：GitHub 标 prerelease、`releases/latest` 不返回它，插件面板的「检查更新」不会提示升级到它。

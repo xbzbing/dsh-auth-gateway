@@ -8,10 +8,13 @@ name: release
 # download URL straight into dsh:
 #   dsh plugin --profile web add https://github.com/<repo>/releases/download/<tag>/<pkg>-<version>.tgz
 #
-# Deliberate difference from dsh-git-panel: this workflow NEVER publishes to
-# npm — npm stays a manual `npm publish` by the maintainer (0.8.x line). The
-# Release body is therefore the single source of install instructions for a
-# given version.
+# npm is published by this workflow for STABLE versions only, through OIDC
+# Trusted Publishing (`id-token: write`, no NPM_TOKEN): register this workflow
+# file as a trusted publisher for the package on npmjs.com once, and every
+# stable run publishes the same tarball the gate packed, with --provenance.
+# A version carrying a hyphen (0.9.0-rc.1) is a prerelease: GitHub only, npm
+# never — GitHub already excludes prereleases from releases/latest, so the
+# panel's update check never offers them.
 #
 # Both bodies are bilingual (Chinese first, English after `---`), never
 # --generate-notes: a stable body ships in docs/releases/v<version>.md with the
@@ -130,6 +133,13 @@ jobs:
             echo "tag v$V points at commit ${TAG_SHA:-unknown} (release commit $GITHUB_SHA)"
           fi
           gh release view "v$V" >/dev/null 2>&1 && echo "gh=done" >> "$GITHUB_OUTPUT" || true
+          # npm only participates in formal releases; prereleases never
+          # publish, so a stray npm hit would only confuse the skip logic.
+          if [ "${V#*-}" = "$V" ]; then
+            npm view "dsh-auth-gateway@$V" version >/dev/null 2>&1 && echo "npm=done" >> "$GITHUB_OUTPUT" || true
+          else
+            echo "npm=skipped" >> "$GITHUB_OUTPUT"
+          fi
 
       # A stable release ships its body in docs/releases/v<v>.md. A pre-release
       # page starts from the fixed notice here, which keeps the page valid even
@@ -160,7 +170,7 @@ jobs:
           echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Gate
-        if: steps.state.outputs.tag != 'done' || steps.state.outputs.gh != 'done'
+        if: steps.state.outputs.npm != 'done' || steps.state.outputs.tag != 'done' || steps.state.outputs.gh != 'done'
         env:
           V: ${{ steps.state.outputs.version }}
         run: |
@@ -198,20 +208,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.ref == 'refs/heads/main'
-    # The one capability this job needs, declared here and nowhere else: no
-    # dependency code runs in this job. No id-token — npm is not published.
+    # The two capabilities this job needs, declared here and nowhere else: no
+    # dependency code runs in this job. id-token is the OIDC identity npm's
+    # Trusted Publishing exchanges for a short-lived publish token — there is
+    # no NPM_TOKEN secret anywhere in this workflow.
     permissions:
       contents: write   # push the release tag, create / edit the Release
+      id-token: write   # npm provenance / Trusted Publishing (OIDC)
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: release-tarball
 
       # No `cache: npm`: this job has no checkout and no lockfile. Node is
-      # needed for the state step's JSON parsing below.
+      # needed for the state step's JSON parsing below. `registry-url` writes
+      # the npmrc line `npm publish` targets; authentication is OIDC (Trusted
+      # Publishing), so no token is ever placed in this job.
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
 
       # Facts the gate already established, re-derived here so this job needs
       # no checkout: which version, whether it is a prerelease, and what is
@@ -255,6 +271,12 @@ jobs:
             fi
           fi
           gh release view "v$V" >/dev/null 2>&1 && echo "gh=done" >> "$GITHUB_OUTPUT" || true
+          # Same split as the gate job: prereleases never touch npm.
+          if [ "${V#*-}" = "$V" ]; then
+            npm view "dsh-auth-gateway@$V" version >/dev/null 2>&1 && echo "npm=done" >> "$GITHUB_OUTPUT" || true
+          else
+            echo "npm=skipped" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Tag
         if: steps.state.outputs.tag != 'done'
@@ -271,6 +293,21 @@ jobs:
           git tag -a "v$V" -m "v$V" FETCH_HEAD
           # The token rides in this one push's URL; nothing is persisted.
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v$V"
+
+      # Trusted Publishing (OIDC) — no secret: npm exchanges this workflow's
+      # OIDC token for a short-lived publish token, and the package on
+      # npmjs.com must list this workflow file as a trusted publisher (one-time
+      # setup). It sits after the tag and before the stable Release — the only
+      # irreversible step, and the Release body's npm install line must be
+      # live the moment the page exists. Prereleases never reach this step; the
+      # tarball is the same one the gate packed and asserted.
+      - name: Publish to npm
+        if: steps.state.outputs.prerelease != 'true' && steps.state.outputs.npm != 'done'
+        env:
+          V: ${{ steps.state.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm publish "dsh-auth-gateway-$V.tgz" --provenance --access public
 
       - name: GitHub Release
         if: steps.state.outputs.gh != 'done'

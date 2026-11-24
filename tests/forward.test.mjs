@@ -20,7 +20,7 @@ import { createForwarder, stripResponseHopByHop, isLoopbackAuthority } from '../
 // ── unit: isLoopbackAuthority ───────────────────────────────────────────
 
 test('isLoopbackAuthority: accepts exactly the loopback hostnames dsh loginOrigin accepts', () => {
-  for (const host of ['localhost:3080', '127.0.0.1:8080', '[::1]:3080', 'LocalHost:1', 'localhost']) {
+  for (const host of ['localhost:3080', '127.0.0.1:8080', '[::1]:3080', 'LocalHost:1', 'localhost', 'localhost:65535', '127.0.0.1:1']) {
     assert.equal(isLoopbackAuthority(host), true, host)
   }
   for (const host of [
@@ -30,6 +30,9 @@ test('isLoopbackAuthority: accepts exactly the loopback hostnames dsh loginOrigi
     // like dsh's loginOrigin (the Host is forwarded verbatim).
     '127.1:3080', '0x7f.0.0.1:3080', '2130706433:80', '[0:0:0:0:0:0:0:1]:3080', 'local%68ost:3080', 'localhost.:3080',
     'localhost:', 'localhost:123456',
+    // Port bounds: loginOrigin requires a non-zero port and URL parsing
+    // rejects anything above 65535, so these can never be a real origin.
+    'localhost:0', '127.0.0.1:0', '[::1]:0', 'localhost:99999', '127.0.0.1:65536',
   ]) {
     assert.equal(isLoopbackAuthority(host), false, String(host))
   }

@@ -23,11 +23,22 @@ dsh plugin --profile web add dsh-auth-gateway
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
 
 # pinned version / branch / commit
-dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.8.7
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.9.0
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main
 ```
 
-### 1.3 From a local development directory
+### 1.3 From a GitHub Release asset
+
+Every stable and pre-release ships a pre-built tgz (client bundle included) on [GitHub Releases](https://github.com/xbzbing/dsh-auth-gateway/releases); paste the download URL straight into dsh to install — the pre-release page body carries this exact command:
+
+```bash
+# Replace <tag> and <version> with real values, e.g. v0.9.0 / 0.9.0
+dsh plugin --profile web add https://github.com/xbzbing/dsh-auth-gateway/releases/download/<tag>/dsh-auth-gateway-<version>.tgz
+```
+
+The URL is pinned to a tag and version, matching that release's notes one-to-one; to upgrade, swap the tag/version in the URL for the new release and add again.
+
+### 1.4 From a local development directory
 
 ```bash
 dsh plugin --profile web add file:/path/to/dsh-auth-gateway
@@ -35,7 +46,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 
 > **Note**: a `file:` dependency is **snapshotted at install time** — later changes to the local source do not take effect automatically; you need remove + add to refresh (see section 3).
 
-### 1.4 Verify the installation
+### 1.5 Verify the installation
 
 ```bash
 # 1) Confirm dsh-auth-gateway appears in the composition tree and the

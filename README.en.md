@@ -35,7 +35,7 @@ This project supports `0.1.5-rc.2 <= dsh <= 0.2.3-alpha.2`; `0.2.2-rc.2` and `0.
 
 ```bash
 # Install (from npm registry)
-dsh plugin --profile web add dsh-auth-gateway
+dsh plugin --profile web add dsh-auth-gateway@latest
 
 # Start (external port 8080, internal webserver auto-moves to 8081; --no-open stops dsh opening a browser)
 dsh web --port 8080 --no-open
@@ -45,7 +45,7 @@ dsh web --port 8080 --no-open
 dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-- Supports installation from GitHub / local directory — see [docs/en/INSTALL.md](docs/en/INSTALL.md);
+- Supports installation from a GitHub Release asset (tgz — paste the download URL straight into dsh), the GitHub repository, or a local directory — see [docs/en/INSTALL.md](docs/en/INSTALL.md);
 - Forgot your password? Use `dsh-auth-gateway-reset` to reset (restart prints a new initial password to the console);
 - Deployment guide: [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)
 

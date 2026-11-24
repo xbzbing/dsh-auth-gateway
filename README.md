@@ -35,7 +35,7 @@
 
 ```bash
 # 安装（从 npm registry）
-dsh plugin --profile web add dsh-auth-gateway
+dsh plugin --profile web add dsh-auth-gateway@latest
 
 # 启动（对外端口 8080，内部 webserver 自动挪到 8081；--no-open 让 dsh 不自己开浏览器）
 dsh web --port 8080 --no-open
@@ -45,7 +45,7 @@ dsh web --port 8080 --no-open
 dsh plugin --profile web remove dsh-auth-gateway
 ```
 
-- 支持从 GitHub / 本地目录安装，见 [docs/zh/INSTALL.md](docs/zh/INSTALL.md)；
+- 支持从 GitHub Release 附件（tgz，下载地址可直接粘贴进 dsh）、GitHub 仓库 / 本地目录安装，见 [docs/zh/INSTALL.md](docs/zh/INSTALL.md)；
 - 忘记密码用 `dsh-auth-gateway-reset` 重置（重启后控制台打印新初始密码）；
 - 部署指南：[docs/zh/DEPLOYMENT.md](docs/zh/DEPLOYMENT.md)
 

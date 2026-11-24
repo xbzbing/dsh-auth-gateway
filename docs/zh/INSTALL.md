@@ -23,11 +23,22 @@ dsh plugin --profile web add dsh-auth-gateway
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway
 
 # 指定版本 / 分支 / 提交
-dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.8.7
+dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#v0.9.0
 dsh plugin --profile web add github:xbzbing/dsh-auth-gateway#main
 ```
 
-### 1.3 从本地开发目录安装
+### 1.3 从 GitHub Release 附件安装
+
+每个正式版与预发布都在 [GitHub Releases](https://github.com/xbzbing/dsh-auth-gateway/releases) 附带编译好的 tgz（含 client 构建产物），可直接把下载地址粘贴进 dsh 安装（预发布页正文里就有这条命令）：
+
+```bash
+# <tag> 与 <version> 换成实际值，如 v0.9.0 / 0.9.0
+dsh plugin --profile web add https://github.com/xbzbing/dsh-auth-gateway/releases/download/<tag>/dsh-auth-gateway-<version>.tgz
+```
+
+地址按 tag 与版本钉死，附件与该版本的 Release 正文一一对应；升级时把地址里的 tag / version 换成新版本重新 add。
+
+### 1.4 从本地开发目录安装
 
 ```bash
 dsh plugin --profile web add file:/path/to/dsh-auth-gateway
@@ -35,7 +46,7 @@ dsh plugin --profile web add file:/path/to/dsh-auth-gateway
 
 > **注意**：`file:` 依赖是**安装时快照**——之后修改本地源码不会自动生效，需要 remove + add 刷新（见第 3 节）。
 
-### 1.4 验证安装
+### 1.5 验证安装
 
 ```bash
 # 1) 确认组合树中出现 dsh-auth-gateway，且 webserver 绑定在回环地址

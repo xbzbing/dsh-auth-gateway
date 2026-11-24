@@ -59,7 +59,13 @@ test('hasAuthenticationRegistry: true only when the registry exposes register()'
 
 /** Fake gateway ctx: `plugin()` runs the child apply against a scope holding both services. */
 function fakeCtx({ throwOnRegister = false, deferApply = false } = {}) {
-  const state = { providers: [], peers: [], plugin: undefined, run: undefined }
+  const state = { providers: [], peers: [], plugin: undefined, run: undefined, disposeScope: undefined }
+  // Scope-owned effects: ConnectionAuthentication.register resolves
+  // `this.ctx` to the CALLING scope (Cordis service tracker), so a real
+  // registration is withdrawn when that scope unloads. Mirror it here so
+  // disposeScope() models the child-scope lifecycle instead of only
+  // collecting the plugin definition.
+  const scopeEffects = []
   const scope = {
     connection: {
       createPeer(options) {
@@ -72,9 +78,17 @@ function fakeCtx({ throwOnRegister = false, deferApply = false } = {}) {
       register(provider) {
         if (throwOnRegister) throw new Error('registry disposed')
         state.providers.push(provider)
-        return async () => {}
+        const withdraw = () => {
+          const index = state.providers.indexOf(provider)
+          if (index >= 0) state.providers.splice(index, 1)
+        }
+        scopeEffects.push(withdraw)
+        return async () => { withdraw() }
       },
     },
+  }
+  state.disposeScope = async () => {
+    for (const dispose of scopeEffects.splice(0).reverse()) await dispose()
   }
   const ctx = {
     plugin(def) {
@@ -104,14 +118,28 @@ test('registerGatewayProvider: a child plugin injecting both services owns the p
 
 test('registerGatewayProvider: resolves false on timeout and rejects when registration throws', async () => {
   const deferred = fakeCtx({ deferApply: true })
-  let late = 0
-  assert.equal(await registerGatewayProvider(deferred.ctx, createGatewayCredential(),
-    { timeoutMs: 20, onLateRegistration: () => { late++ } }), false)
+  assert.equal(await registerGatewayProvider(deferred.ctx, createGatewayCredential(), { timeoutMs: 20 }), false)
   deferred.state.run()
-  assert.equal(late, 1, 'a registration landing after the timeout is reported once')
-  assert.equal(deferred.state.providers.length, 1)
+  assert.equal(deferred.state.providers.length, 1,
+    'a registration landing after the timeout still completes — the caller has already failed startup')
   const failing = fakeCtx({ throwOnRegister: true })
   await assert.rejects(registerGatewayProvider(failing.ctx, createGatewayCredential()), /registry disposed/)
+})
+
+test('registerGatewayProvider: the provider belongs to the child scope — dispose withdraws it', async () => {
+  const { ctx, state } = fakeCtx()
+  const credential = createGatewayCredential()
+  assert.equal(await registerGatewayProvider(ctx, credential), true)
+  const headers = {}
+  credential.attach(headers)
+  const [provider] = state.providers
+  assert.equal(provider.authenticate({ headers }), state.peers[0], 'while the child scope lives, the Peer answers')
+  await state.disposeScope()
+  assert.equal(state.providers.length, 0, 'child-scope unload withdraws the registration (ADR-0001)')
+  // ConnectionAuthentication.authenticate only reaches providers still in the
+  // registry's set — model that iteration: nothing live answers anymore.
+  const admitted = state.providers.map((entry) => entry.authenticate({ headers })).find((peer) => peer !== undefined)
+  assert.equal(admitted, undefined, 'a withdrawn provider no longer returns a Peer')
 })
 
 // ── integration: LoginGateway in provider mode ─────────────────────────

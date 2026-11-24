@@ -163,7 +163,12 @@ test('the console URL line falls back to the loopback address without --public-u
 test('dsh >= 0.2.3: a present registry selects provider mode and never reads the dsh secret', async () => {
   const providers = []
   const capture = await captureIndexTransform({}, { describe: () => [] }, {
-    registry: { register: (provider) => { providers.push(provider); return async () => {} } },
+    registry: {
+      register: (provider) => {
+        providers.push(provider)
+        return () => { providers.splice(providers.indexOf(provider), 1) }
+      },
+    },
   })
   try {
     assert.equal(capture.children.length, 1, 'the provider is registered from one child plugin')
@@ -172,6 +177,11 @@ test('dsh >= 0.2.3: a present registry selects provider mode and never reads the
     assert.ok(!capture.readKeys.includes('client-connection/browser-session'),
       `provider mode must not read the dsh browser-session secret, read: ${capture.readKeys.join(', ')}`)
     assert.ok(capture.infos.some((line) => line.includes('官方认证提供者')), capture.infos.join(' | '))
+    // The registration belongs to the child scope (ConnectionAuthentication
+    // resolves `this.ctx` to the calling scope), so unloading the gateway
+    // must withdraw it — see ADR-0001.
+    await capture.disposeChildScopes()
+    assert.equal(providers.length, 0, 'disposing the child scope withdraws the provider')
   } finally {
     await capture.cleanup()
   }
@@ -201,6 +211,7 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
   const infos = []
   const readKeys = []
   const children = []
+  const childScopeDisposers = []
   // Services a real Cordis Context resolves through get(); the plugin reads
   // webStartup that way (the patch row declares inject: [webStartup]), and
   // probes the dsh >= 0.2.3 `connection.authentication` registry the same way.
@@ -240,11 +251,26 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
     emit() {},
     // Child plugins (the provider registration): run apply against a scope
     // holding the injected services, as Cordis does once they are available.
+    // `connection.authentication.register` ties the registration to that
+    // scope (ConnectionAuthentication resolves `this.ctx` to the calling
+    // scope through the service tracker), so `disposeChildScopes()` models
+    // the gateway unloading instead of only collecting the definition.
     plugin(def) {
       children.push(def)
-      def.apply({
+      const scopeEffects = []
+      const scope = {
         connection: { createPeer: (options) => ({ options, signal: new AbortController().signal }) },
-        'connection.authentication': registry,
+        'connection.authentication': {
+          register(provider) {
+            const dispose = registry.register(provider)
+            scopeEffects.push(dispose)
+            return dispose
+          },
+        },
+      }
+      def.apply(scope)
+      childScopeDisposers.push(async () => {
+        for (const dispose of scopeEffects.splice(0).reverse()) await dispose()
       })
     },
     effect(factory) {
@@ -274,7 +300,19 @@ async function captureIndexTransform(extraConfig = {}, settings = { describe: ()
   }
 
   assert.equal(taps.length, 1, 'plugin installs exactly one index transform')
-  return { transform: taps[0], warnings, infos, readKeys, children, listenPort, cleanup }
+  return {
+    transform: taps[0],
+    warnings,
+    infos,
+    readKeys,
+    children,
+    listenPort,
+    cleanup,
+    /** Unload every child scope the plugin created (models Cordis disposal). */
+    disposeChildScopes: async () => {
+      for (const dispose of childScopeDisposers.splice(0).reverse()) await dispose()
+    },
+  }
 
   async function cleanup() {
     for (const dispose of disposers.reverse()) {

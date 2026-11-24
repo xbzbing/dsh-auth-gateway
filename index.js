@@ -123,20 +123,22 @@ export async function apply(ctx, config) {
   const packageMeta = readPackageMeta()
   // Settle upstream authentication BEFORE the gateway listens: the first
   // forwarded request must never race ahead of it (that would cost one
-  // visible upstream 401). Provider mode waits for the registration; cookie
-  // mode populates the secret cache — a failed or absent read still
-  // resolves, and the upstream answers 401 until the record appears.
+  // visible upstream 401). Provider mode waits for the registration and
+  // FAILS LOUD on timeout — starting anyway would serve a login page whose
+  // every forward is 401'd upstream ("started fine, completely broken" is
+  // the hardest state to diagnose). Cookie mode populates the secret cache;
+  // a failed or absent read still resolves, and the upstream answers 401
+  // until the record appears.
   if (upstreamCredential !== undefined) {
-    const registered = await registerGatewayProvider(ctx, upstreamCredential, {
-      onLateRegistration: () => {
-        ctx.logger.info('[dsh-auth-gateway] 认证提供者已在超时后完成注册，转发恢复正常')
-      },
-    })
-    if (registered) {
-      ctx.logger.info('[dsh-auth-gateway] 上游认证：官方认证提供者（connection.authentication）')
-    } else {
-      ctx.logger.warn('[dsh-auth-gateway] 认证提供者注册超时；注册完成前转发请求会被上游判 401')
+    const registered = await registerGatewayProvider(ctx, upstreamCredential)
+    if (!registered) {
+      throw new Error(
+        'dsh-auth-gateway: connection.authentication provider registration timed out (10s) — on dsh >= 0.2.3 '
+        + 'every forwarded request would be rejected 401 by the upstream, so the gateway refuses to start in '
+        + 'that state. Check that Connection is loaded and healthy, then restart.',
+      )
     }
+    ctx.logger.info('[dsh-auth-gateway] 上游认证：官方认证提供者（connection.authentication）')
   } else {
     await upstream?.warm()
     ctx.logger.info('[dsh-auth-gateway] 上游认证：签发 BrowserAuth cookie（dsh <= 0.2.2 回退路径）')

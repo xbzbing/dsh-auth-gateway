@@ -19,6 +19,7 @@
 1. **0.2.3 起注册官方提供者。** 网关在 `apply` 中用 `ctx.get('connection.authentication')` 探测注册表。存在时：
    - 以子插件（`inject: ['connection', 'connection.authentication']`）注册提供者，并用 `connection.createPeer({ principal: { kind: 'owner' } })` 创建网关自己的共享 Peer。子插件的作用域随网关卸载，提供者与 Peer 一同撤销；
    - 插件每次激活（含重载）生成一枚 32 字节随机凭据，只存在于内存。认证门放行后的每个转发请求（HTTP 与 WS 升级）带请求头 `x-dsh-auth-gateway-credential: <凭据>`，提供者用恒定时间比较认出它并返回网关的 Peer；
+   - 注册在网关监听之前 `await` 完成；默认 10s 超时未完成即**抛错终止启动**（fail loud），不进入「启动成功、转发全 401」的降级态——那种状态比启动失败更难排查；
    - 不读取 `client-connection/browser-session`，不签发 dsh 格式的 cookie。
 2. **0.2.2 及更早保留原路径。** 注册表不存在时，行为与 0.8.x 完全一致：读取签名密钥、签发 v1 cookie。两条路径在启动时二选一，运行期不切换、不混用。
 3. **任何转发都先删除浏览器发来的同名请求头**，包括认证前的公开资产与 `publicPaths` 握手转发，防止伪造；匿名转发不附加凭据。
@@ -38,7 +39,7 @@
 - 0.2.3 起，网关不再依赖 Token 的密钥记录与 cookie 格式；Token 包的格式演进不会再让转发全部 401。
 - 浏览器经网关访问时，dsh 看到的是网关自己的 owner Peer，与 Token 的浏览器 Peer、API Peer 分开。卸载网关会关闭这个 Peer 上的连接，不影响 Token 连接。
 - 凭据只在进程内存与回环一跳上出现，插件每次激活都换新；能读到它的只有能检查 dsh 进程内存或监听回环流量的本机用户，这类用户本来就在信任边界内。
-- 网关新增注入 `connection`，生命周期随 Connection：Connection 重载（例如它的配置变化）会让网关一同重启，内存会话表清空、所有用户需要重新登录。Connection 的配置（`trustedHosts`）来自 CLI，运行期很少变化，风险可接受。
+- 网关新增注入 `connection`，生命周期随 Connection：Connection 重载（例如它的配置变化）会让网关一同重启，内存会话表清空、所有用户需要重新登录。Connection 的配置（`trustedHosts`）来自 CLI，运行期很少变化，风险可接受。该注入在支持区间下限即成立：0.1.5-rc.2 的 `@deepseek-ai/dsh-web-app` bundle patch 已启用 `@deepseek-ai/dsh-client-connection`，其 lib 以 `super(ctx, 'connection')` 提供该服务。
 - 两条路径要一起维护和测试，直到支持区间下限越过 0.2.3。届时删除 `lib/upstream-auth.js` 与回退分支，并在本 ADR 末尾补记。
 
 ## 被否决的方案

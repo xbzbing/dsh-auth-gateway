@@ -74,6 +74,8 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 网关转发前将 `Host`/`Origin` 改写为回环地址：内部 trust fence 的 LAN 信任列表基于 webserver 监听地址采样，而本插件把 webserver 绑定在 `127.0.0.1`，若不改写则 LAN 访问会被内部 403。改写是安全的——fence 的远程可达性防护职责已由网关 Cookie 门禁接管（跨站/DNS-rebinding 请求无会话 Cookie，在网关即被拒绝）。
 
+唯一的例外是 `publicPaths` 握手转发：浏览器的 Host 是回环地址（`localhost` / `127.0.0.1` / `[::1]`）时原样保留，见下一节。每一次转发（含认证前的公开资产与握手路径）都会先删除浏览器自带的 `x-dsh-auth-gateway-credential` 请求头，再按需附加网关自己的上游凭据，见「与 dsh 内置浏览器认证的关系」。
+
 ### 匿名可达的上游握手路径
 
 有一条**上游握手**路径**不经过认证门**：`publicPaths`（默认 `/oauth/callback`，精确匹配、仅 GET）。原因不是图省事，而是它**只能匿名到达**——dsh 0.2.1-alpha.3 起提供的「登录 DeepSeek 账号」，最后由开放平台把浏览器**顶层导航**回 `http://localhost:<端口>/oauth/callback`。这是从 `platform.deepseek.com` 发起的**跨站**导航，浏览器不会携带网关的 `SameSite=Strict` 会话 Cookie（也因此，靠"把 Strict 放宽成 Lax"之类改 Cookie 的方式解决，会把会话 Cookie 一并暴露在跨站顶层导航上，面更大）。
@@ -82,7 +84,8 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 - **只有这一条精确路径的一次 GET**：同一路径的其它方法、任何前缀相似的路径（`/oauth/callback-x`）仍按普通页面路径 302 到登录页；不接受通配符或查询串配置；
 - **条目按 basePath 剥离后的路径匹配**：与上游注册路径同一坐标系，所以子路径部署（如 `basePath: '/dsh'`）**不要**给条目加前缀——写成 `/dsh/oauth/callback` 会永不命中，豁免静默失效（账号登录永久停在「等待登录」，且没有任何告警）；
-- **不附带上游 bearer**：转发显式不铸 upstream BrowserAuth cookie——与公开静态资产同一口径（匿名流量不携带全权 cookie）。上游只对 index、`/api`、`/connect` 三处自行启用该门禁，**其它 named route 默认无鉴权**，这个回调端点不在门禁之内；
+- **不附带上游 bearer**：转发显式不附加上游凭据（既不铸 BrowserAuth cookie，也不带提供者请求头）——与公开静态资产同一口径（匿名流量不携带全权凭据）。dsh ≤ 0.2.2 的回调是一条不设浏览器认证的精确路由；0.2.3 起改为在路由准入**之前**执行的 `webserver/request` 监听器，同样不需要凭据；
+- **保留回环 Host**（dsh ≥ 0.2.3 必需）：0.2.3 的回调监听器只认 `Host === 发起登录时的浏览器 origin`（如 SSH 转发的 `127.0.0.1:8080`），按常规改写成内部端口会让回调永远错过。因此这条转发在浏览器 Host 是 `localhost` / `127.0.0.1` / `[::1]` 时原样保留；其它 Host 照旧改写——非回环 Host 本来就不可能是合法的回调 origin（上游 `loginOrigin` 只接受回环），在 0.2.3 上不会进入回调监听器，而是落进普通路由（探针得到 404，浏览器的跨站导航被来源检查判 403）。dsh ≤ 0.2.2 的回调路由不读 Host，保留与否行为一致；
 - **安全由上游自己负责**：dsh 对该回调用 `state` + PKCE 校验，且只接受自己发起、仍在有效期内的一次性 `authorize_id`；网关不参与校验、不为该路径保留任何状态、也不因它记录会话；
 - **不合意可以关**：`publicPaths: []` 完全关闭放行，代价是该部署的 dsh 账号登录不可用（只能继续用 API Key 通道）；注意账号登录另有「浏览器 origin 必须是带显式端口的回环 http」这一前置条件，非回环入口本来就不在可用范围内，见下。
 
@@ -92,7 +95,20 @@ TOTP secret 是第二因素的根密钥：拿到它就能生成任意有效验�
 
 ### 与 dsh 内置浏览器认证的关系（dsh ≥ 0.1.2）
 
-dsh 0.1.2 起，内部 webserver 自身启用 BrowserAuth：index 页与 `/api` 要求进程启动 token（一次性 `?token=` 交换）或一枚绑定 authority 的持久签名 cookie。浏览器只持有网关会话 cookie，无法完成 upstream 的 token 交换——网关若不处理，所有转发请求都会被 upstream 判 401。网关的补齐方式：
+dsh 0.1.2 起，内部 webserver 自身启用 BrowserAuth：index 页与 `/api` 要求进程启动 token（一次性 `?token=` 交换）或一枚绑定 authority 的持久签名 cookie。浏览器只持有网关会话 cookie，无法完成 upstream 的 token 交换——网关若不处理，所有转发请求都会被 upstream 判 401。网关按 dsh 版本二选一（启动时决定，运行期不切换，决策见 [ADR-0001](adr/0001-official-authentication-provider.md)）：
+
+#### dsh ≥ 0.2.3-alpha.1：官方认证提供者
+
+dsh 0.2.3 为 Connection 新增认证提供者注册表 `connection.authentication`，官方 Token 与 remote-connection 都经它接入。网关在启动时探测到注册表后：
+
+- **注册自己的提供者**：由一个注入 `connection` 与 `connection.authentication` 的子插件注册，并用 `connection.createPeer({ principal: { kind: 'owner' } })` 创建网关专属的 owner Peer；网关卸载时提供者与 Peer 随子插件一同撤销；
+- **进程内随机凭据**：插件每次激活（含重载）生成 32 字节随机值，只在内存中。通过密码/OTP 门禁的转发（HTTP 与 WS 升级）携带 `x-dsh-auth-gateway-credential` 请求头，提供者用恒定时间比较认出它并返回网关的 Peer；
+- **防伪造**：每次转发都先删除浏览器自带的同名请求头；匿名转发（公开资产、`publicPaths`）不附加凭据；
+- **不再读取 dsh 密钥**：不读 `client-connection/browser-session`，不铸 dsh 格式的 cookie，因此不再依赖 Token 包的私有 cookie 格式。
+
+Host/Origin 改写与 LAN trust 不变：Connection 的来源检查仍看 Host，客户端的 `isLoopback` 仍只看页面地址。
+
+#### dsh ≤ 0.2.2：铸造 BrowserAuth cookie（回退路径）
 
 - **密钥经官方通道读取**：通过注入的 `credentials` 服务读取官方 record `client-connection/browser-session`（与 dsh 自身 BrowserAuth 读写的是同一条 `ctx.credentials.readRecord` 通道；`kind: grant`、payload `version: 1`、32 字节密钥，与 dsh 的 `storedSecret` 同一校验口径）。不依赖 `.credentials.yaml` 的私有文件形态；record 不存在（dsh ≤ 0.1.1）时静默退化为逐字转发，行为与旧版一致。缓存语义：**从未读到过密钥时**（全新部署，record 由 dsh 的 Connection 激活时创建、可能晚于网关启动）按 2s 快速重试并在后台轮询，record 一出现转发即携带铸出的 cookie；**读到过密钥后**按 60s 异步刷新跟随轮换。转发请求只走同步快路径。
 - **cookie 仅存在于回环一跳**：网关用该密钥为改写后的回环 authority（`127.0.0.1:<内部端口>`，与 dsh 从 Host 头派生 authority 的口径一致）铸造与 dsh 自身签发同构的 cookie（`dsh-auth-<b64url(sha256(authority))>` = `v1.<payload>.<HMAC-SHA256>`，24h TTL，短于 dsh 默认 30 天上限），只附加在已通过密码/OTP 门禁的转发请求（HTTP 与 WS 升级）上，绝不 Set-Cookie 给浏览器；认证前的公开静态资产转发（manifest/favicon/assets）也不携带。

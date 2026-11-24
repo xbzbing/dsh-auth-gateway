@@ -12,7 +12,8 @@ lib/
   gateway-otp.js OTP 路由 handler（自 gateway.js 拆分，经 priv 桥接访问网关私有方法）
   gateway-panel-api.js 设置面板 API（/login-api/*，含 cookieSecure 运行时覆盖）
   forward.js    HTTP/WS 转发管道：Host/Origin 回环改写、upgrade 双向管道、lanAddresses
-  upstream-auth.js 上游 BrowserAuth cookie 铸造（credentials record 读密钥 + 缓存）
+  upstream-auth.js 上游 BrowserAuth cookie 铸造（credentials record 读密钥 + 缓存；dsh <= 0.2.2 回退路径）
+  upstream-provider.js 上游官方认证提供者（dsh >= 0.2.3：connection.authentication + 进程内随机凭据请求头，见 docs/zh/adr/0001）
   rate-limit.js 三层防爆破状态机（全局限流 / 按地址锁定 / OTP 窗口）
   auth.js       内存会话表（256-bit token）+ Cookie 编解码
   audit-log.js  审计日志文件 sink（JSONL，$DSH_HOME/auth-gateway/log/audit.log，按天轮转、保留 90 天）
@@ -37,7 +38,7 @@ locale/          插件管理页展示用的标题/描述字典（zh.json / en.j
 scripts/        deploy.sh 同步流水线；verify.sh/e2e.mjs 实机验证；
                 reset.mjs/uninstall.mjs 凭据命令（bin）；screenshots.mjs README 截图
 tests/          node:test 单测（文件清单见 package.json 的 test script）
-docs/           zh/ 与 en/ 双语文档目录
+docs/           zh/ 与 en/ 双语文档目录（架构决策记录在 zh|en/adr/）
 .github/        GitHub Actions CI（workflows/ci.yml）：check 矩阵（Node 20/22/24）+ client 产物新鲜度 + lock 源检查
 ```
 

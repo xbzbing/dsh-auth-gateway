@@ -12,7 +12,8 @@ host (zero build, node:crypto / node:http)
 ├── lib/gateway-otp.js # OTP route handlers (/otp/setup|enable|verify-setup|verify|verify-backup|disable, split out of gateway.js)
 ├── lib/gateway-panel-api.js # Settings-panel API (/login-api/*: settings, session probe, cookie-secure runtime override, version)
 ├── lib/forward.js    # HTTP/WS forwarding plumbing (loopback Host/Origin rewrite, upgrade piping, lanAddresses)
-├── lib/upstream-auth.js # dsh ≥ 0.1.2 upstream browser-auth bridge (secret via the credentials service, minted loopback-hop cookie; record-late fast retry / background probing and rotation re-mint)
+├── lib/upstream-auth.js # dsh 0.1.2–0.2.2 upstream browser-auth bridge (secret via the credentials service, minted loopback-hop cookie; record-late fast retry / background probing and rotation re-mint)
+├── lib/upstream-provider.js # dsh ≥ 0.2.3 official upstream authentication provider (connection.authentication registration, gateway owner Peer, per-process random credential header; see adr/0001)
 ├── lib/auth.js       # Session table & cookies: in-memory 256-bit tokens, onboarding/OTP state flags, revocation on password change
 ├── lib/rate-limit.js # Three-layer brute-force state machine (global window / per-address lockout / OTP window)
 ├── lib/paths.js      # $DSH_HOME path resolution (credential dir, audit-log dir)
@@ -99,6 +100,7 @@ This project was developed and tested by **DeepSeek Harness (dsh)**. The early d
 
 ## Version history
 
+- `0.9.0`: from dsh 0.2.3 the gateway authenticates upstream through the official `connection.authentication` provider (forwards carry a per-process random credential header; no dsh secret is read and no cookie minted; 0.2.2 and earlier keep the cookie-minting fallback — decision in [ADR-0001](adr/0001-official-authentication-provider.md)); `publicPaths` forwards keep a loopback browser Host, fixing account sign-in stalling at "waiting for sign-in" on dsh 0.2.3; the bundle patch disables dsh 0.2.3's remote-connection; support range raised to 0.2.3-alpha.2;
 - `0.8.7`: `publicPaths` exempts `GET /oauth/callback` anonymously (the dsh account-sign-in callback) with hardened boundaries; docs on the remote account-sign-in limit; Chromium discovery follows Playwright semantics;
 - `0.8.6`: support dsh `--public-url` and align the console URL line; declare dsh 0.2.1-alpha.3 support;
 - `0.8.5`: support range tracks dsh 0.2.x; NGINX docs clarify it does not rely on dsh's native `--public-url`; update-check result moves beside the button;

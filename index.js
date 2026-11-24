@@ -17,6 +17,7 @@ import { hasPassword, setPassword, generateInitialPassword } from './lib/store.j
 import { hasOTP, getOTPStatus } from './lib/otp-store.js'
 import { buildLanTrustScript } from './lib/lan-trust-script.js'
 import { createCachedSecretReader } from './lib/upstream-auth.js'
+import { createGatewayCredential, hasAuthenticationRegistry, registerGatewayProvider } from './lib/upstream-provider.js'
 import { readPackageMeta } from './lib/version.js'
 import { createUpdateChecker } from './lib/update-check.js'
 import { localePreference } from './lib/locale.js'
@@ -28,9 +29,13 @@ export { Config }
 /**
  * The gateway needs the real web server running (its port is the upstream).
  * `credentials` is the official record service for the upstream
- * `client-connection/browser-session` signing secret.
+ * `client-connection/browser-session` signing secret (dsh <= 0.2.2) and the
+ * panel's cookieSecure override. `connection` orders the gateway after
+ * Connection: on dsh >= 0.2.3 Connection exists only once its
+ * `connection.authentication` registry does, so the upstream-auth mode is
+ * settled when apply runs (docs/zh/adr/0001).
  */
-export const inject = ['webServer', 'credentials', 'settings']
+export const inject = ['webServer', 'credentials', 'settings', 'connection']
 
 /** The credential record dsh persists its upstream browser-session secret in. */
 const UPSTREAM_RECORD_KEY = 'client-connection/browser-session'
@@ -97,7 +102,15 @@ function cookieSecureOverrideStore(ctx) {
  * @param {object} [config] - plugin config from the composition
  */
 export async function apply(ctx, config) {
-  const upstream = upstreamSecretReader(ctx)
+  // Upstream authentication, chosen once at startup (docs/zh/adr/0001):
+  //   dsh >= 0.2.3 — register the gateway's own provider on the official
+  //     `connection.authentication` registry; forwards carry a per-process
+  //     header credential and no dsh secret is ever read;
+  //   dsh <= 0.2.2 — no registry: read the browser-session secret and mint
+  //     dsh's BrowserAuth cookie on the loopback hop (lib/upstream-auth.js).
+  const providerMode = hasAuthenticationRegistry(ctx)
+  const upstreamCredential = providerMode ? createGatewayCredential() : undefined
+  const upstream = providerMode ? undefined : upstreamSecretReader(ctx)
   // The panel override of the cookie Secure policy, persisted through the
   // credential record; read BEFORE the gateway listens so the first login
   // already applies it (empty record → the composition value rules).
@@ -108,16 +121,33 @@ export async function apply(ctx, config) {
   // compares against them. Read once per apply — a deploy replaces both the
   // code and its metadata together.
   const packageMeta = readPackageMeta()
-  // Populate the upstream browser-auth secret cache BEFORE the gateway
-  // listens: the first forwarded request must never race ahead of the read
-  // (fire-and-forget warm-up could cost one visible upstream 401). A failed
-  // or absent read still resolves; without a secret the upstream answers
-  // 401 until the record appears.
-  await upstream.warm()
+  // Settle upstream authentication BEFORE the gateway listens: the first
+  // forwarded request must never race ahead of it (that would cost one
+  // visible upstream 401). Provider mode waits for the registration and
+  // FAILS LOUD on timeout — starting anyway would serve a login page whose
+  // every forward is 401'd upstream ("started fine, completely broken" is
+  // the hardest state to diagnose). Cookie mode populates the secret cache;
+  // a failed or absent read still resolves, and the upstream answers 401
+  // until the record appears.
+  if (upstreamCredential !== undefined) {
+    const registered = await registerGatewayProvider(ctx, upstreamCredential)
+    if (!registered) {
+      throw new Error(
+        'dsh-auth-gateway: connection.authentication provider registration timed out (10s) — on dsh >= 0.2.3 '
+        + 'every forwarded request would be rejected 401 by the upstream, so the gateway refuses to start in '
+        + 'that state. Check that Connection is loaded and healthy, then restart.',
+      )
+    }
+    ctx.logger.info('[dsh-auth-gateway] 上游认证：官方认证提供者（connection.authentication）')
+  } else {
+    await upstream?.warm()
+    ctx.logger.info('[dsh-auth-gateway] 上游认证：签发 BrowserAuth cookie（dsh <= 0.2.2 回退路径）')
+  }
   // `onError` is assigned just below; LoginGateway only ever reads it through
   // an optional call, so an unwired sink is a no-op.
   const gateway = createGateway(config, {
-    upstreamSecretReader: upstream.secret,
+    upstreamSecretReader: upstream?.secret,
+    upstreamCredential,
     localePreference: () => localePreference(ctx.settings),
     versionInfo: packageMeta,
     cookieSecureOverride,

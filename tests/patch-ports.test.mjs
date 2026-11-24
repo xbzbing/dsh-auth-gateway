@@ -105,3 +105,14 @@ test('webserver row: whole-config replacement must restate the compression defau
   assert.ok(row.includes('compressionLevel: 1'))
   assert.ok(row.includes('compressionThresholdBytes: 1024'))
 })
+
+test('remote-connection row: disabled by a field-level override only', () => {
+  const patchLines = patch.split('\n')
+  const at = patchLines.indexOf('- id: remote-connection')
+  assert.ok(at !== -1, 'patch must disable dsh 0.2.3 remote-connection (remote access is the gateway\'s job)')
+  const block = patchLines.slice(at + 1, patchLines.indexOf('- insert:'))
+    .filter((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))
+  // No `config:` (whole-object replacement) and no `name:` (a renamed package
+  // would make the loader skip the patch with a name-mismatch warning).
+  assert.deepEqual(block.map((line) => line.trim()), ['disabled: true'])
+})

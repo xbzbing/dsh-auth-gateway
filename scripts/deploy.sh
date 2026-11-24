@@ -41,6 +41,7 @@ JS_FILES=(
   lib/store.js
   lib/totp.js
   lib/upstream-auth.js
+  lib/upstream-provider.js
   lib/update-check.js
   lib/version.js
 )

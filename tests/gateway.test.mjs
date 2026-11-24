@@ -1422,11 +1422,14 @@ test('anonymous handshake path: GET /oauth/callback reaches the upstream, POST a
   seenRequests.length = 0
   await setPassword('GoodPass1')
 
-  const anonymous = await request('/oauth/callback?code=abc&state=xyz')
+  const anonymous = await request('/oauth/callback?code=abc&state=xyz', { headers: { host: '127.0.0.1:8080' } })
   assert.equal(anonymous.status, 200, 'the callback must be forwarded, not redirected to /login')
   assert.equal(seenRequests.length, 1, 'the handshake request must reach the upstream')
   assert.equal(seenRequests[0].url, '/oauth/callback?code=abc&state=xyz', 'query string forwarded verbatim')
-  assert.equal(seenRequests[0].host, `127.0.0.1:${upstreamPort}`, 'Host still rewritten to the loopback upstream')
+  // dsh >= 0.2.3-alpha.1 matches the callback by Host === the browser origin
+  // that started the login (an SSH local forward such as 127.0.0.1:8080);
+  // rewriting it to the upstream authority would make every callback miss.
+  assert.equal(seenRequests[0].host, '127.0.0.1:8080', 'a loopback browser Host survives on the handshake path')
 
   // Only GET is exempted: the callback is a browser navigation, so a write on the
   // same path must keep passing through the gate.
@@ -1440,6 +1443,26 @@ test('anonymous handshake path: GET /oauth/callback reaches the upstream, POST a
   assert.equal(lookalike.status, 302)
   assert.equal(lookalike.headers.location, '/login')
   assert.equal(seenRequests.length, 1)
+})
+
+test('anonymous handshake path: only a loopback Host is preserved; other forwards keep the rewrite', async () => {
+  seenRequests.length = 0
+  await setPassword('GoodPass1')
+  for (const host of ['localhost:3080', '[::1]:3080', 'LOCALHOST:3080']) {
+    await request('/oauth/callback?code=abc&state=xyz', { headers: { host } })
+    assert.equal(seenRequests.at(-1).host, host, `loopback Host ${host} must reach the callback verbatim`)
+  }
+  // A non-loopback Host can never be a valid callback origin (dsh's
+  // loginOrigin accepts loopback only), so it keeps the upstream rewrite —
+  // on 0.2.3 it then misses the callback listener and falls into ordinary
+  // routing (404 for a probe, 403 for a browser's cross-site navigation).
+  for (const host of ['dsh.example.com', '192.168.1.5:3080', 'evil@127.0.0.1', '127.0.0.1.nip.io:3080']) {
+    await request('/oauth/callback?code=abc&state=xyz', { headers: { host } })
+    assert.equal(seenRequests.at(-1).host, `127.0.0.1:${upstreamPort}`, `non-loopback Host ${host} is rewritten`)
+  }
+  // The anonymous static assets keep the rewrite even with a loopback Host.
+  await request('/favicon.svg', { headers: { host: '127.0.0.1:8080' } })
+  assert.equal(seenRequests.at(-1).host, `127.0.0.1:${upstreamPort}`, 'public assets are not handshake paths')
 })
 
 test('anonymous handshake path: an empty publicPaths closes the exemption again', async () => {

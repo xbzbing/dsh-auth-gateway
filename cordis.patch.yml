@@ -59,6 +59,20 @@
     publicUrl: !!js ctx.webStartup.publicUrl
     trustedHosts: !!js ctx.webStartup.trustedHosts
 
+# dsh >= 0.2.3-alpha.1 mounts remote-connection (QR login, credential link,
+# device pairing). Behind this gateway it cannot work and only adds surface:
+#   - QR redemption is bound to `Host === publicUrl authority`, which the
+#     gateway's loopback Host rewrite always breaks;
+#   - its anonymous routes (`/pairing/*`, the QR POST on `/`) sit behind the
+#     gateway's own auth gate, so a remote browser can never reach them;
+#   - its settings card would display the process launch token.
+# Remote access is this gateway's job (docs/zh/adr/0001). `disabled` is a
+# field-level override — no config is replaced. On dsh <= 0.2.2 the row does
+# not exist and the loader only logs `patch: entry remote-connection not
+# found` (a warning, never an error).
+- id: remote-connection
+  disabled: true
+
 - insert:
     - id: dsh-auth-gateway
       name: dsh-auth-gateway

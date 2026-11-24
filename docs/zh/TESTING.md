@@ -18,13 +18,14 @@ npm test
 | `tests/locale.test.mjs` | 页面语言解析（preference > Accept-Language > zh） |
 | `tests/policy.test.mjs` | 密码强度策略矩阵 |
 | `tests/config.test.mjs` | 配置 Schema 校验（默认值、非法值、边界） |
-| `tests/plugin-contract.test.mjs` | Cordis 插件契约（loader normalize、Config 校验） |
-| `tests/patch-ports.test.mjs` | bundle patch 端口表达式推导（`--port` 跟随） |
+| `tests/plugin-contract.test.mjs` | Cordis 插件契约（loader normalize、Config 校验、上游认证模式选择：有注册表走提供者且不读 dsh 密钥，无注册表走 cookie 回退） |
+| `tests/patch-ports.test.mjs` | bundle patch 端口表达式推导（`--port` 跟随）、remote-connection 行只按字段禁用 |
 | `tests/client-contract.test.mjs` | client bundle 契约（loader 注册、inject 对齐、api inject face、无 ctx、external） |
 | `tests/audit-log.test.mjs` | 审计日志文件 sink（JSONL 追加、按天轮转、同日重启接管、重启接管陈旧文件、90 天清理、归档名冲突后缀、写失败隔离、flush 排空、权限 0600/0700 与启动收紧） |
 | `tests/auth.test.mjs` | 会话 Cookie 基础件：`requestIsSecure`（TLS / X-Forwarded-Proto）、Cookie 属性、token 解析 |
-| `tests/forward.test.mjs` | 转发响应逐跳头剥离（含 nginx 间歇空 400 回归）与响应中继 |
-| `tests/upstream-auth.test.mjs` | BrowserAuth record 校验、cookie 铸造与轮换、无密钥降级，以及 HTTP/WS 回环一跳端到端 |
+| `tests/forward.test.mjs` | 转发响应逐跳头剥离（含 nginx 间歇空 400 回归）与响应中继、`isLoopbackAuthority` 字面量回环判定 |
+| `tests/upstream-auth.test.mjs` | BrowserAuth record 校验、cookie 铸造与轮换、无密钥降级，以及 HTTP/WS 回环一跳端到端（dsh ≤ 0.2.2 路径） |
+| `tests/upstream-provider.test.mjs` | dsh ≥ 0.2.3 官方认证提供者：随机凭据比较、伪造头剥离、注册表探测、子插件注册与超时，以及 HTTP/WS 转发端到端（不铸 cookie、匿名转发不带凭据） |
 | `tests/rate-limit.test.mjs` | 三层防爆破状态机：全局窗口、按地址锁定、OTP 窗口与过期清理 |
 | `tests/cookie-secure.test.mjs` | `cookieSecure` auto/true/false 的策略归一化与有效性推导（面板覆盖用例在 `tests/gateway.test.mjs`） |
 | `tests/paths.test.mjs` | `$DSH_HOME` 路径解析与目录创建 |

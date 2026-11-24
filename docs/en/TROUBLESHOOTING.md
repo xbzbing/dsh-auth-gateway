@@ -77,7 +77,7 @@ As long as the process is alive and the session valid, the gateway forwards byte
 |---|---|---|
 | 0.1.0-rc.7 / rc.8 | Flat: `KEY: value` | Top-level keys must be non-empty strings |
 | 0.1.1-rc.1 / rc.2 | `version: 1` + `refs:` / `records:` | Flat files are migrated automatically on boot (**one-way**) |
-| 0.1.2-rc.1+ | Same as 0.1.1, plus the `client-connection/browser-session` record | The internal webserver gains browser authentication (BrowserAuth); this plugin adapts automatically by reading that record through the official `credentials` service — no manual action needed |
+| 0.1.2-rc.1+ | Same as 0.1.1, plus the `client-connection/browser-session` record | The internal webserver gains browser authentication (BrowserAuth); on **dsh ≤ 0.2.2** this plugin adapts automatically by reading that record through the official `credentials` service (from 0.2.3 it uses the official authentication provider instead, see [ADR-0001](adr/0001-official-authentication-provider.md)) — no manual action needed |
 
 **Symptom**: after switching versions, `dsh web` exits at startup with `credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a string`; nothing listens on the external port, and the browser shows a white page or the section-3 loader error.
 
@@ -107,7 +107,7 @@ gzip_min_length 1024;
 
 **Symptom**: logging into the gateway succeeds, but pages and `/api` answer `dsh web authentication required; reopen the URL printed by dsh web.` That text is the BrowserAuth 401 of the dsh ≥ 0.1.2 internal webserver — the request already crossed the gateway and reached the internal server, but carried no valid upstream cookie.
 
-**Background**: since dsh 0.1.2 the internal server enforces browser authentication on the index page and `/api`; the gateway must read the `client-connection/browser-session` secret through the official `credentials` service and mint an identical cookie for the loopback hop (see SECURITY.md). The cookie is missing in these scenarios:
+**Background**: since dsh 0.1.2 the internal server enforces browser authentication on the index page and `/api`; on **dsh ≤ 0.2.2** the gateway reads the `client-connection/browser-session` secret through the official `credentials` service and mints an identical cookie for the loopback hop (see SECURITY.md; from 0.2.3 it authenticates through the official provider instead and mints no cookie — see [ADR-0001](adr/0001-official-authentication-provider.md)). The cookie is missing in these scenarios:
 
 | Scenario | Symptom | Fix |
 |---|---|---|
@@ -220,7 +220,8 @@ map $http_upgrade $connection_upgrade {
    - `publicPaths: []` closes the exemption entirely (the default is `['/oauth/callback']`);
    - entries match the **basePath-stripped** path, so a sub-path deployment that writes `/dsh/oauth/callback` will **never** match — it must be `/oauth/callback`;
    - reserved paths (`/`, `/api*`, `/connect`, …) are refused at load, so account sign-in may only use upstream handshake endpoints;
-3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect.
+3. Confirm the exemption is live with an anonymous probe: request `http://<gateway host>:<port>/oauth/callback?code=x&state=y` — with **no sign-in in flight** the upstream answers 404 (which proves the request crossed the gateway); a 302 to `/login` means the exemption is not in effect;
+4. **On dsh ≥ 0.2.3, confirm the gateway is ≥ 0.9.0**: the 0.2.3 callback matches by `Host === the browser origin that started the login`, and gateway ≤ 0.8.7 rewrites Host to the internal port, so the callback never matches — with exactly the symptom of this section (the probe still answers 404 and cannot tell the two apart). From 0.9.0 the `publicPaths` forward keeps the browser's loopback Host; see [SECURITY.md](SECURITY.md#anonymous-upstream-handshake-paths).
 
 **Fix**: correct `publicPaths` and **start a fresh sign-in** — a consumed `authorize_id` cannot be reused.
 

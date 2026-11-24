@@ -77,7 +77,7 @@ curl -skI https://<域名>/                    # 全链路(未登录应 302 → 
 |---|---|---|
 | 0.1.0-rc.7 / rc.8 | 平铺：`KEY: value` | 顶层键必须为非空字符串 |
 | 0.1.1-rc.1 / rc.2 | `version: 1` + `refs:`/`records:` | 启动时自动把平铺文件迁移为新格式（**单向**） |
-| 0.1.2-rc.1+ | 同 0.1.1 格式，新增 `client-connection/browser-session` record | 内部 webserver 新增浏览器认证（BrowserAuth）；本插件经官方 `credentials` 服务读取该 record 自动适配，无需手工操作 |
+| 0.1.2-rc.1+ | 同 0.1.1 格式，新增 `client-connection/browser-session` record | 内部 webserver 新增浏览器认证（BrowserAuth）；本插件在 **dsh ≤ 0.2.2** 经官方 `credentials` 服务读取该 record 自动适配（0.2.3 起改走官方认证提供者，见 [ADR-0001](adr/0001-official-authentication-provider.md)），无需手工操作 |
 
 **症状**：切换版本后 `dsh web` 启动即退出，报 `credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a string`；对外端口无人监听，浏览器表现为白屏或第 3 节的 loader 错误。
 
@@ -107,7 +107,7 @@ gzip_min_length 1024;
 
 **症状**：登录网关成功，但页面与 `/api` 报文本 `dsh web authentication required; reopen the URL printed by dsh web.`。该文本是 dsh 0.1.2+ 内部 webserver 的 BrowserAuth 401——请求已穿过网关到达内部服务器，但没带有效的上游 cookie。
 
-**背景**：dsh 0.1.2 起内部服务器对 index 与 `/api` 强制浏览器认证；网关需经官方 `credentials` 服务读取 `client-connection/browser-session` 密钥，为回环一跳铸造同构 cookie（机制见 SECURITY.md）。下列场景会缺失该 cookie：
+**背景**：dsh 0.1.2 起内部服务器对 index 与 `/api` 强制浏览器认证；**dsh ≤ 0.2.2** 上网关经官方 `credentials` 服务读取 `client-connection/browser-session` 密钥，为回环一跳铸造同构 cookie（机制见 SECURITY.md；0.2.3 起改走官方认证提供者、不再铸 cookie，见 [ADR-0001](adr/0001-official-authentication-provider.md)）。下列场景会缺失该 cookie：
 
 | 场景 | 现象 | 修复 |
 |---|---|---|
